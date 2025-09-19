@@ -1,8 +1,11 @@
 from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy 
+from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+
+CORS(app, origins=["http://localhost:5173"])
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/SPM'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # suppress warning msgs
@@ -26,6 +29,7 @@ def login():
     data = request.json
     email = data.get('email')
     password = data.get('password')
+
 
     employee = Employee.query.filter_by(email=email).first()
 

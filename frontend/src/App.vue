@@ -1,12 +1,13 @@
 
-<!-- src/App.vue -->
 <script setup>
-import { RouterView, RouterLink } from 'vue-router'
+import { RouterView, RouterLink, useRoute } from 'vue-router'
+
+const route = useRoute()
 </script>
 
 <template>
-  <header class="site-nav">
-    <RouterLink to="/">Home</RouterLink>
+  <header v-if="route.name !== 'login'" class="site-nav">
+    <RouterLink to="/home">Home</RouterLink>
     <RouterLink to="/tasks">Tasks</RouterLink>
     <RouterLink to="/reports">Reports</RouterLink>
   </header>
@@ -24,4 +25,3 @@ import { RouterView, RouterLink } from 'vue-router'
 a { text-decoration: none; }
 a.router-link-exact-active { font-weight: 700; }
 </style>
-
