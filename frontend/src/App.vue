@@ -10,6 +10,7 @@ const route = useRoute()
     <RouterLink to="/home">Home</RouterLink>
     <RouterLink to="/tasks">Tasks</RouterLink>
     <RouterLink to="/reports">Reports</RouterLink>
+    <RouterLink to="/projects">Projects</RouterLink>
   </header>
 
   <RouterView />

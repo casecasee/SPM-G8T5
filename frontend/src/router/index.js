@@ -3,6 +3,8 @@ import TasksView from '../views/TasksView.vue'
 import ReportsView from '../views/ReportsView.vue'
 import LoginPage from '../views/LoginPage.vue'
 import HomeView from '../views/HomeView.vue' 
+import ProjectsView from '../views/ProjectsView.vue' 
+
 
 const routes = [
   {
@@ -24,6 +26,11 @@ const routes = [
     path: '/reports',
     name: 'reports',
     component: ReportsView,
+  },
+  {
+    path: '/projects',
+    name: 'projects',
+    component: ProjectsView,
   },
 ]
 
