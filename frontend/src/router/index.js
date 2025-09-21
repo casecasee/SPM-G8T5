@@ -39,4 +39,17 @@ const router = createRouter({
   routes,
 })
 
+router.beforeEach((to, from, next) => {
+  // Check if the user is logged in by verifying the presence of employee_id in sessionStorage
+  const isLoggedIn = sessionStorage.getItem("employee_id") !== null
+  
+  // Allow the login page to be accessed without coming from another route
+  if (to.name !== 'login' && !isLoggedIn) {
+    next({ name: 'login' })
+  } else {
+    next()
+  }
+})
+
+
 export default router
