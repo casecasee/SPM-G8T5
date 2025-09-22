@@ -1,4 +1,0 @@
-INSERT INTO `employee` (`employee_id`, `employee_name`, `email`, `department`, `role`, `password`) VALUES
-(1, 'mee', 'test1@gmail.com', 'finance', 'staff', 'scrypt:32768:8:1$p3nNkL8MNI65avpy$01fd8b72845a1343c5e10022ba29f94d8e1e0443f55b7a43c28f5022d4a0c382e9b8a6096f6a2d57eade1d3e1f225e4db1c19919d3b37c42be50aa437c7c9a5f'),
-(2, 'mee2', 'test2@gmail.com', 'finance', 'staff', 'scrypt:32768:8:1$LOA2cMDKDw4TpHOz$e314e8865f57489180a79fd3d96193ed300f088e825e3ddff93e16997c5cac6d8df5e9b65aa6d5ff0cfb6ad4bfebaafc309bae393505c98e6ca28feb23f8e54a'),
-(3, 'mee3', 'test3@gmail.com', 'finance', 'manager', 'scrypt:32768:8:1$9wo5v7rZetdaZJzA$b1572883447f75b041c5e277147f1b460ae90c49cc9c8c7c94dc43c6b88228cfcf885f7f671e65c0b04bc3c75ef429a37309be4530b3591eb17094f2afe20103');
