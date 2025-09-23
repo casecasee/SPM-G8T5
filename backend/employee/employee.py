@@ -2,10 +2,13 @@ from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy 
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
+# from invokes import invoke_http
 
 app = Flask(__name__)
 
 CORS(app, origins=["http://localhost:5173"])
+
+# task_url = "http://localhost:5001/task/get_tasks_by_eid"
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/SPM'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # suppress warning msgs
@@ -36,7 +39,10 @@ class Staff(db.Model):
     
     def get_tasks(self):
         # call task endpoint to get tasks by eid
-        # TODO
+        # tasks = invoke_http(task_url, method='GET', params={"employee_id": self.employee_id})
+        # return tasks
+    
+        # TODO: uncomment after task endpoint is implemented
         pass
 
 class Manager(Staff):
@@ -47,7 +53,16 @@ class Manager(Staff):
     def get_tasks(self):
         # get team members under this manager
         # for each member, get their tasks (call task endpoint)
-        # TODO
+        # team_members = Staff.query.filter_by(team=self.team).all()
+        # tasks = []
+        # for member in team_members:
+        #     member_tasks = invoke_http(task_url, method='GET', json={"employee_id": member.employee_id})
+        #     for item in member_tasks:
+        #         if item not in tasks:
+        #             tasks.append(item)
+        # return tasks
+
+        # # TODO
         pass
 
 class Director(Staff):
