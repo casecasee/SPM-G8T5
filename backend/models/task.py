@@ -1,0 +1,65 @@
+from models.extensions import db
+
+Task_Collaborators = db.Table(
+    'Task_Collaborators',
+    db.Column('task_id', db.Integer, db.ForeignKey('Task.task_id', ondelete='CASCADE'), primary_key=True),
+    db.Column('staff_id', db.Integer, db.ForeignKey('Staff.employee_id', ondelete='CASCADE'), primary_key=True),
+    mysql_engine="InnoDB"
+)
+
+class Task(db.Model):
+    __tablename__ = 'Task'
+
+    task_id        = db.Column(db.Integer, primary_key=True)
+    title          = db.Column(db.String(255), nullable=False)
+    description    = db.Column(db.Text, nullable=False)
+    attachment     = db.Column(db.String(512), nullable=True) # TODO: aws s3 link
+
+    # dates / status
+    start_date     = db.Column(db.DateTime, nullable=True) # TODO: logic for setting start_date when status changes to IN_PROGRESS
+    deadline       = db.Column(db.DateTime, nullable=True, index=True)
+    completed_date = db.Column(db.DateTime, nullable=True) # TODO: logic for setting completed_date when status changes to DONE
+    status         = db.Column(db.String(32), nullable=False)  # TODO: set status based on role of person who created it
+
+    # owner & project (FKs to other services' tables)
+    owner          = db.Column(db.Integer, db.ForeignKey('Staff.employee_id', ondelete='RESTRICT'), nullable=False, index=True)
+    # project_id     = db.Column(db.Integer, db.ForeignKey('Project.project_id', ondelete='SET NULL'), nullable=True, index=True)
+
+    # self-referential unary relationship for one-level subtasks
+    parent_id      = db.Column(db.Integer, db.ForeignKey('Task.task_id', ondelete='CASCADE'), nullable=True)
+
+    # relationship wiring: parent <-> subtasks
+    parent   = db.relationship('Task',
+                               remote_side=[task_id],
+                               backref=db.backref('subtasks', cascade='all, delete-orphan', lazy='dynamic'),
+                               foreign_keys=[parent_id],
+                               passive_deletes=True)
+
+    # collaborators many-to-many
+    collaborators = db.relationship(
+    'Staff',
+    secondary=Task_Collaborators,
+    lazy='dynamic'
+)
+
+    # __table_args__ = (
+        # prevent self-loop: a task cannot be its own parent
+        # CheckConstraint('parent_id IS NULL OR parent_id <> task_id', name='ck_task_no_self_parent'),)
+    
+    def __init__(self, title, description, deadline, status, owner, collaborators, start_date=None, attachment=None, project_id=None, completed_date=None, parent_id=None):
+        self.title = title
+        self.description = description
+        self.deadline = deadline
+        self.status = status
+        self.owner = owner
+        self.start_date = start_date
+        self.attachment = attachment 
+        self.project_id = project_id
+        self.completed_date = completed_date 
+        self.parent_id = parent_id
+        self.collaborators = collaborators
+
+    
+    # TODO: one layer of subtasks only
+
+

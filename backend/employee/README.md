@@ -1,6 +1,4 @@
-1. pip install werkzeug (actl idt u needa do this but sure)
-2. run login.py (python login.py) --> creates employee table in mysql
-3. populate employee table on phpmyadmin using employee_db.sql
+1. (run from backend) python -m employee.employee
 
 Users:
 {
