@@ -19,7 +19,7 @@ class Task(db.Model):
     start_date     = db.Column(db.DateTime, nullable=True) # TODO: logic for setting start_date when status changes to IN_PROGRESS
     deadline       = db.Column(db.DateTime, nullable=True, index=True)
     completed_date = db.Column(db.DateTime, nullable=True) # TODO: logic for setting completed_date when status changes to DONE
-    status         = db.Column(db.String(32), nullable=False)  # TODO: set status based on role of person who created it
+    status         = db.Column(db.String(32), nullable=False)
 
     # owner & project (FKs to other services' tables)
     owner          = db.Column(db.Integer, db.ForeignKey('Staff.employee_id', ondelete='RESTRICT'), nullable=False, index=True)

@@ -38,10 +38,11 @@ def create_task():
     data = request.json
 
     # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[]}
-    # send list of collaborators ids, no need include owner id in collaborators
 
     status = 'ongoing' if data['role'] == 'Staff' else 'unassigned' # set status by role of person creating it
-    collaborators = Staff.query.filter(Staff.employee_id.in_(data.get('collaborators', []))).all()
+    ppl = data.get('collaborators', [])
+    ppl.append(data['employee_id']) # add owner to collaborators (no need check duplicates because frontend should handle it)
+    collaborators = Staff.query.filter(Staff.employee_id.in_(ppl)).all()
 
     new_task = Task(
         title=data['title'],
