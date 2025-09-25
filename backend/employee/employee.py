@@ -60,7 +60,7 @@ def login():
     if not employee.check_password(password):
         return {"error": "Incorrect password"}, 401
 
-    return {"employee_id": employee.employee_id, "role": employee.role} # TODO: RETURN EVERYTHING
+    return {"employee_id": employee.employee_id, "role": employee.role, "employee_name": employee.employee_name} # include name for UI
 
 
 @app.route('/reset', methods=['POST'])

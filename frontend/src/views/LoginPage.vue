@@ -80,6 +80,9 @@ export default {
         if (response.ok) {
           sessionStorage.setItem("employee_id", data.employee_id);
           sessionStorage.setItem("role", data.role);
+          if (data.employee_name) {
+            sessionStorage.setItem("employee_name", data.employee_name);
+          }
           this.$router.push("/home");
         } else {
           this.errorMessage = data.error || "Login failed";

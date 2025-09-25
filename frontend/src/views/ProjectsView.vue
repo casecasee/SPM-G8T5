@@ -45,17 +45,18 @@
                         <th>Owner</th>
                         <th>Status</th>
                         <th>Tasks</th>
+                        <th>Members</th>
                         <th>Last Updated</th>
                     </tr>
                 </thead>
 
                 <tbody>
                     <tr v-if="loading">
-                        <td colspan="5">Loading…</td>
+                        <td colspan="6">Loading…</td>
                     </tr>
 
                     <tr v-else-if="!loading && filteredAndSorted.length === 0">
-                        <td colspan="5">No projects found.</td>
+                        <td colspan="6">No projects found.</td>
                     </tr>
 
                     <tr v-for="p in filteredAndSorted" :key="p.id">
@@ -67,6 +68,7 @@
                             </span>
                         </td>
                         <td>{{ p.tasksDone }} / {{ p.tasksTotal }}</td>
+                        <td>{{ (p.memberNames && p.memberNames.length) ? p.memberNames.join(', ') : '-' }}</td>
                         <td>{{ fromNow(p.updatedAt) }}</td>
                     </tr>
                 </tbody>
@@ -89,7 +91,7 @@
 
                     <label>
                         Owner
-                        <input v-model="form.owner" />
+                        <input v-model="form.owner" disabled />
                     </label>
 
                     <label>
@@ -109,6 +111,11 @@
                             <input type="number" min="0" v-model.number="form.tasksTotal" />
                         </label>
                     </div>
+
+                    <label>
+                        Members (IDs, comma-separated)
+                        <input v-model="form.members" placeholder="e.g. 1,2,3" />
+                    </label>
 
                     <div class="actions">
                         <button type="button" class="btn" @click="cancelCreate">Cancel</button>
@@ -216,11 +223,12 @@ const form = reactive({
     status: 'Active',
     tasksDone: 0,
     tasksTotal: 0,
+    members: '',
 })
 
 function openCreate() {
     form.name = ''
-    form.owner = ''
+    form.owner = sessionStorage.getItem('employee_name') || 'Unassigned'
     form.status = 'Active'
     form.tasksDone = 0
     form.tasksTotal = 0
@@ -242,9 +250,14 @@ async function submitCreate() {
         const payload = {
             name: form.name.trim(),
             owner: form.owner || 'Unassigned',
+            ownerId: Number(sessionStorage.getItem('employee_id')) || null,
             status: form.status,
             tasksDone: Number(form.tasksDone) || 0,
             tasksTotal: Number(form.tasksTotal) || 0,
+            members: (form.members || '')
+                .split(',')
+                .map(s => parseInt(s.trim(), 10))
+                .filter(n => Number.isFinite(n)),
         }
         const created = await createProject(payload)
         projects.value.unshift(created)

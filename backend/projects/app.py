@@ -3,8 +3,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-
-from models import db, Project
+from models import db, Project, Staff
 
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5173","http://127.0.0.1:5173"])
@@ -28,12 +27,16 @@ def create_project():
     p = Project(
         name=data.get("name", "Untitled Project"),
         owner=data.get("owner", "Unassigned"),
+        owner_id=data.get("ownerId"),
         status=data.get("status", "Active"),
         tasks_done=data.get("tasksDone", 0),
         tasks_total=data.get("tasksTotal", 0),
         updated_at=datetime.utcnow(),
     )
     db.session.add(p)
+    members = data.get("members") or []
+    if members:
+        p.members = Staff.query.filter(Staff.employee_id.in_(members)).all()
     db.session.commit()
     return jsonify(p.to_dict()), 201
 

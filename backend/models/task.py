@@ -3,7 +3,7 @@ from models.extensions import db
 Task_Collaborators = db.Table(
     'Task_Collaborators',
     db.Column('task_id', db.Integer, db.ForeignKey('Task.task_id', ondelete='CASCADE'), primary_key=True),
-    db.Column('staff_id', db.Integer, db.ForeignKey('Staff.employee_id', ondelete='CASCADE'), primary_key=True),
+    db.Column('staff_id', db.Integer, db.ForeignKey('staff.employee_id', ondelete='CASCADE'), primary_key=True),
     mysql_engine="InnoDB"
 )
 
@@ -22,7 +22,7 @@ class Task(db.Model):
     status         = db.Column(db.String(32), nullable=False)
 
     # owner & project (FKs to other services' tables)
-    owner          = db.Column(db.Integer, db.ForeignKey('Staff.employee_id', ondelete='RESTRICT'), nullable=False, index=True)
+    owner          = db.Column(db.Integer, db.ForeignKey('staff.employee_id', ondelete='RESTRICT'), nullable=False, index=True)
     # project_id     = db.Column(db.Integer, db.ForeignKey('Project.project_id', ondelete='SET NULL'), nullable=True, index=True)
 
     # self-referential unary relationship for one-level subtasks
