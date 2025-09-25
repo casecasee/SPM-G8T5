@@ -4,6 +4,8 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
+from models import db, Project
+
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5173","http://127.0.0.1:5173"])
 
@@ -12,28 +14,8 @@ CORS(app, origins=["http://localhost:5173","http://127.0.0.1:5173"])
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/SPM'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
+db.init_app(app)
 
-class Project(db.Model):
-    __tablename__ = 'projects'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    name = db.Column(db.String(255), nullable=False)
-    owner = db.Column(db.String(255))
-    status = db.Column(db.String(50), nullable=False, default='Active')  # or ENUM
-    tasks_done = db.Column(db.Integer, nullable=False, default=0)
-    tasks_total = db.Column(db.Integer, nullable=False, default=0)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "owner": self.owner,
-            "status": self.status,
-            "tasksDone": self.tasks_done,
-            "tasksTotal": self.tasks_total,
-            "updatedAt": self.updated_at.isoformat(timespec="milliseconds") + "Z",
-        }
 
 @app.get('/projects')
 def list_projects():
