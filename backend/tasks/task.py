@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy 
 from flask_cors import CORS
 
@@ -32,6 +32,18 @@ def get_collaborators(collaborator_ids):
             collaborators.append(staff)
     return collaborators
 
+def update_stuff_by_status(curr_task, new_status):
+    from datetime import datetime
+    if curr_task.status == 'unassigned' and new_status == 'ongoing':
+        curr_task.start_date = datetime.now()
+    elif curr_task.status == 'ongoing' and new_status == 'done':
+        curr_task.completed_date = datetime.now()
+    # elif curr_task.status == 'ongoing' and new_status == 'under review':
+    #     pass
+    # elif curr_task.status == 'under review' and new_status == 'done':
+    #     curr_task.completed_date = datetime.now()
+    curr_task.status = new_status
+
 
 @app.route('/tasks', methods=['POST'])
 def create_task():
@@ -58,6 +70,43 @@ def create_task():
     db.session.add(new_task)
     db.session.commit()
     return {"message": "Task created", "task_id": new_task.task_id}, 201
+
+
+@app.route("/task/status/<int:task_id>", methods=["PATCH"])
+def update_task_status(task_id):
+    
+    # input {status, eid}
+
+    data = request.json
+    new_status = data.get("status")
+    eid = data.get("eid")
+    curr_task = Task.query.get(task_id)
+
+    if curr_task is None: # check if task exists 
+        return {"message": "Task not found"}, 404
+
+    # check if employee is a collaborator
+    if curr_task.collaborators.filter_by(employee_id=eid).first() is None:
+        return {"message": "You are not a collaborator of this task"}, 403
+    
+    # update status and other fields accordingly
+    # if status from unassigned -> ongoing, set start_date
+
+
+
+    # unassigned -> under review ?
+
+
+    # if status from ongoing -> done, set completed_date
+
+
+@app.route("/tasks", methods=["GET"])
+def get_all_tasks():
+    tasks = Task.query.all()
+    tasks_list = [task.to_dict() for task in tasks]
+    return jsonify({"tasks": tasks_list}), 200
+    
+
 
 if __name__ == "__main__":
     with app.app_context():

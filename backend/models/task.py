@@ -23,7 +23,7 @@ class Task(db.Model):
 
     # owner & project (FKs to other services' tables)
     owner          = db.Column(db.Integer, db.ForeignKey('staff.employee_id', ondelete='RESTRICT'), nullable=False, index=True)
-    # project_id     = db.Column(db.Integer, db.ForeignKey('Project.project_id', ondelete='SET NULL'), nullable=True, index=True)
+    project_id     = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='SET NULL'), nullable=True, index=True)
 
     # self-referential unary relationship for one-level subtasks
     parent_id      = db.Column(db.Integer, db.ForeignKey('Task.task_id', ondelete='CASCADE'), nullable=True)
@@ -61,5 +61,20 @@ class Task(db.Model):
 
     
     # TODO: one layer of subtasks only
+
+    def to_dict(self):
+        return {
+            "task_id": self.task_id,
+            "title": self.title,
+            "description": self.description,
+            "attachment": self.attachment,
+            "deadline": self.deadline.isoformat(),
+            "status": self.status,
+            "owner": self.owner,
+            "project_id": self.project_id,
+            "parent_id": self.parent_id,
+            "collaborators": [collaborator.employee_id for collaborator in self.collaborators],
+            "subtasks": [subtask.task_id for subtask in self.subtasks]
+        }
 
 
