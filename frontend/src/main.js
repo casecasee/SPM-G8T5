@@ -4,6 +4,9 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import PrimeVue from 'primevue/config'
 import 'primeicons/primeicons.css'
+import 'primevue/resources/themes/nova/theme.css' // or any other theme 
+import 'primevue/resources/primevue.css'
+import './assets/global.css'
 
 import App from './App.vue'
 import router from './router'

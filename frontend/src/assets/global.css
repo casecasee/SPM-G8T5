@@ -1,0 +1,17 @@
+/* Blurred backdrop */
+.p-component-overlay {
+  backdrop-filter: blur(6px);
+  background-color: rgba(0, 0, 0, 0.55);
+}
+
+/* Dialog container */
+.p-dialog {
+  border-radius: 12px !important;
+  border: 1px solid #ddd !important;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.25) !important;
+}
+
+/* Dialog content padding */
+.p-dialog .p-dialog-content {
+  padding: 1.5rem !important;
+}
