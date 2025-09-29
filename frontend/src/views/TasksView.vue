@@ -73,15 +73,31 @@ async function saveTask() {
     status: taskForm.value.status,
     parent_id: null,
     employee_id: currentEmployeeId,
-    collaborators: taskForm.value.collaborators.map(c => c.employee_id), // TODO
+    collaborators: taskForm.value.collaborators.map(c => c.employee_id),
     role: currentRole
   }
 
   try {
-    await axios.post("http://localhost:5002/tasks", payload)
+    if (taskForm.value.id) {
+      // Editing existing task → PUT
+      await axios.patch(`http://localhost:5002/tasks/${taskForm.value.id}`, payload)
+    } else {
+      // Creating new task → POST
+      await axios.post("http://localhost:5002/tasks", payload)
+    }
+
+    // Refresh tasks from backend
     await fetchTasks()
+
+    // Update selectedTask so UI reflects changes immediately
+    if (taskForm.value.id) {
+      selectedTask.value = tasks.value.find(t => t.id === taskForm.value.id)
+    }
+
+    // Close modal and reset form
     showModal.value = false
     taskForm.value = resetForm()
+    isEditing.value = false
   } catch (err) {
     console.error("Error saving task:", err)
   }
@@ -102,8 +118,16 @@ function openAdd() {
 function openDetails(task) {
   selectedTask.value = task
   isEditing.value = false
-  // Use full objects for MultiSelect
-  taskForm.value = { ...task }
+  taskForm.value = {
+    id: task.id,  // <-- important
+    name: task.name,
+    description: task.description,
+    due_date: task.due_date,
+    status: task.status,
+    owner: task.owner,
+    collaborators: task.collaborators || [],
+    attachments: task.attachments || []
+  }
   showModal.value = true
 }
 
@@ -127,10 +151,10 @@ function removeAttachment(index) {
 
 function getStatusClass(status) {
   switch (status) {
-    case 'ongoing': return 'status-ongoing'
-    case 'under review': return 'status-review'
-    case 'done': return 'status-completed'
-    default: return 'status-default'
+    case 'ongoing': return 'status-pill status-ongoing'
+    case 'under review': return 'status-pill status-review'
+    case 'done': return 'status-pill status-completed'
+    default: return 'status-pill status-default'
   }
 }
 
@@ -143,9 +167,15 @@ onMounted(() => {
 <template>
 <div class="tasks-page">
   <div class="tasks-header">
-    <h2>My Tasks</h2>
+  <h2>My Tasks</h2>
+  <div class="header-buttons">
+    <!-- Minimalistic Filter Button -->
+    <Button icon="pi pi-filter" label="Filter" class="filter-btn" text />
+
+    <!-- Primary Add Task Button -->
     <Button label="+ Add Task" class="add-top-btn" @click="openAdd" />
   </div>
+</div>
 
   <div class="tasks-grid">
     <Card v-for="task in tasks" :key="task.id" class="task-card" @click="openDetails(task)">
@@ -154,7 +184,7 @@ onMounted(() => {
         <p class="desc">{{ task.description }}</p>
         <p class="meta">📅 {{ formatDate(task.due_date) }}</p>
         <p class="status" :class="getStatusClass(task.status)">
-          Status: <b>{{ task.status }}</b>
+          {{ task.status }}
         </p>
         <p class="meta">Owner: <b>{{ task.owner_name || currentEmployeeName }}</b></p>
         <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) }}</b></p>
@@ -290,7 +320,7 @@ onMounted(() => {
   background: #fff;
   border-radius: 12px;
   padding: 1.2rem;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .task-card:hover { transform: translateY(-3px); }
@@ -329,6 +359,29 @@ onMounted(() => {
 :deep(.p-dialog-mask) {
   padding: 1.5rem;
   box-sizing: border-box;
+}
+
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem; /* space between filter and add task */
+}
+
+/* Minimalistic Filter Button */
+.filter-btn {
+  border: 1px solid #3b82f6;
+  background: none;
+  color: #3b82f6;
+  font-size: 0.95rem;
+  padding: 0.6rem 1rem;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-btn:hover {
+  background-color: #3b82f6;
+  color: #fff;
 }
 
 .modal-content {
@@ -401,4 +454,32 @@ onMounted(() => {
   color: red;
   font-size: 0.8rem;
 }
+.status-pill {
+  display: inline-block;
+  padding: 0.25rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: #fff;
+  min-width: 70px;
+  text-align: center;
+}
+
+.status-ongoing {
+  background-color: #3b82f6; 
+}
+
+.status-review {
+  background-color: #f59e0b; 
+}
+
+.status-completed {
+  background-color: #10b981; 
+}
+
+.status-default {
+  background-color: #6b7280;
+}
+
 </style>
