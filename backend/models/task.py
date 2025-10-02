@@ -14,6 +14,7 @@ class Task(db.Model):
     title          = db.Column(db.String(255), nullable=False)
     description    = db.Column(db.Text, nullable=False)
     attachment     = db.Column(db.String(512), nullable=True) # TODO: aws s3 link
+    priority       = db.Column(db.Integer, nullable=True)  # 1-10
 
     # dates / status
     start_date     = db.Column(db.DateTime, nullable=True) # TODO: logic for setting start_date when status changes to IN_PROGRESS
@@ -46,18 +47,20 @@ class Task(db.Model):
         # prevent self-loop: a task cannot be its own parent
         # CheckConstraint('parent_id IS NULL OR parent_id <> task_id', name='ck_task_no_self_parent'),)
     
-    def __init__(self, title, description, deadline, status, owner, collaborators, start_date=None, attachment=None, project_id=None, completed_date=None, parent_id=None):
+    def __init__(self, title, description, deadline, status, owner, collaborators, priority, start_date=None, attachment=None, project_id=None, completed_date=None, parent_id=None):
         self.title = title
         self.description = description
         self.deadline = deadline
         self.status = status
         self.owner = owner
         self.start_date = start_date
+        self.priority = priority
         self.attachment = attachment 
         self.project_id = project_id
         self.completed_date = completed_date 
         self.parent_id = parent_id
         self.collaborators = collaborators
+
 
     
     # TODO: one layer of subtasks only
@@ -73,6 +76,7 @@ class Task(db.Model):
             "owner": self.owner,
             "project_id": self.project_id,
             "parent_id": self.parent_id,
+            "priority": self.priority,
             "collaborators": [collaborator.employee_id for collaborator in self.collaborators],
             "subtasks": [subtask.task_id for subtask in self.subtasks]
         }

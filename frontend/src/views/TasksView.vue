@@ -46,7 +46,7 @@ function resetForm() {
 // ----------------- Functions -----------------
 async function fetchTasks() {
   try {
-    const res = await axios.get("http://localhost:5002/tasks")
+    const res = await axios.get("http://localhost:5002/tasks", { withCredentials: true })
     tasks.value = res.data.tasks.map(t => ({
       id: t.task_id,
       name: t.title,

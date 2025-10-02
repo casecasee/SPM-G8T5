@@ -1,12 +1,15 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 # from werkzeug.security import generate_password_hash, check_password_hash
 
 from models import db, Staff, Task
 
 app = Flask(__name__)
+app.secret_key = "issa_secret_key"
+app.config["SESSION_COOKIE_SAMESITE"] = "None"
+app.config["SESSION_COOKIE_SECURE"] = True  
 
-CORS(app, origins=["http://localhost:5173"])
+CORS(app, supports_credentials=True, origins=["http://localhost:5173"])
 
 # task_url = "http://localhost:5001/task/get_tasks_by_eid"
 
@@ -59,6 +62,9 @@ def login():
         return {"error": "Employee does not exist"}, 404
     if not employee.check_password(password):
         return {"error": "Incorrect password"}, 401
+    
+    session['employee_id'] = employee.employee_id
+    session['role'] = employee.role
 
     return {"employee_id": employee.employee_id, "role": employee.role, "employee_name": employee.employee_name} # include name for UI
 
@@ -67,7 +73,30 @@ def login():
 def reset():
     pass
 
+@app.route('/employees/<department>', methods=['GET'])
+def get_employees_by_department(department):
+    # used for create task - collaborators are employees in the same department
+    employees = Staff.query.filter_by(department=department).all()
+    result = []
+    for emp in employees:
+        emp_data = {
+            "employee_id": emp.employee_id,
+            "employee_name": emp.employee_name,
+            "email": emp.email,
+            "department": emp.department,
+            "role": emp.role,
+            "team": emp.team
+        }
+        result.append(emp_data)
+    return jsonify(result), 200
+
+
+
+
+
+
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-    app.run()
+    app.run(debug=True, port=5000)

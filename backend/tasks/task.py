@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from flask_sqlalchemy import SQLAlchemy 
 from flask_cors import CORS
 
@@ -7,10 +7,12 @@ from models.task import Task
 from models.staff import Staff
 
 app = Flask(__name__)
+app.secret_key = "issa_secret_key" 
+app.config["SESSION_COOKIE_SAMESITE"] = "None"
+app.config["SESSION_COOKIE_SECURE"] = True  
 
-CORS(app, origins=["http://localhost:5173"])
 
-# task_url = "http://localhost:5001/task/get_tasks_by_eid"
+CORS(app, supports_credentials=True, origins=["http://localhost:5173"])
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/SPM'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # suppress warning msgs
@@ -49,7 +51,7 @@ def update_stuff_by_status(curr_task, new_status):
 def create_task():
     data = request.json
 
-    # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[]}
+    # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority}
 
     status = 'ongoing' if data['role'] == 'Staff' else 'unassigned' # set status by role of person creating it
     ppl = data.get('collaborators', [])
@@ -65,7 +67,8 @@ def create_task():
         project_id=data.get('project_id'),
         parent_id=data.get('parent_id'),
         owner=data['employee_id'], 
-        collaborators=collaborators
+        collaborators=collaborators,
+        priority=data.get('priority') 
     )
     db.session.add(new_task)
     db.session.commit()
@@ -104,6 +107,10 @@ def update_task_status(task_id):
 def get_all_tasks():
     tasks = Task.query.all()
     tasks_list = [task.to_dict() for task in tasks]
+    print(session)
+    print(session.keys())
+
+
     return jsonify({"tasks": tasks_list}), 200
     
 
