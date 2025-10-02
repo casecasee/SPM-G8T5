@@ -82,11 +82,29 @@ def get_employees_by_department(department):
         emp_data = {
             "employee_id": emp.employee_id,
             "employee_name": emp.employee_name,
+            # "email": emp.email,
+            "department": emp.department,
+            "role": emp.role,
+            "team": emp.team
+        } # frontend asked for id and name, dept, role and team returned jic
+        result.append(emp_data)
+    return jsonify(result), 200
+
+
+@app.route('/employee/<int:project_id>', methods=['GET'])
+def get_employees_by_project(project_id):
+    # used for create task within project - task collaborators are a subset of project collaborators 
+    employees = Staff.query.filter(Staff.projects.any(project_id=project_id)).all() 
+    result = []
+    for emp in employees:
+        emp_data = {
+            "employee_id": emp.employee_id,
+            "employee_name": emp.employee_name,
             "email": emp.email,
             "department": emp.department,
             "role": emp.role,
             "team": emp.team
-        }
+        } #TODO: return only necessary fields (based on what UI needs)
         result.append(emp_data)
     return jsonify(result), 200
 
