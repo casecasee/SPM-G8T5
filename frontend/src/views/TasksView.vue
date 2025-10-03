@@ -340,7 +340,7 @@ onUnmounted(() => {
       <div class="field-row">
         <label>Name:</label>
         <template v-if="isEditing || !selectedTask">
-          <InputText v-model="taskForm.name" class="input-field" :disabled="selectedTask && isStaff() && taskForm.owner === currentEmployeeId" />
+          <InputText v-model="taskForm.name" class="input-field" :disabled="selectedTask && isCollaboratorOnly(selectedTask)" />
         </template>
         <template v-else>
           <span class="text-field">{{ taskForm.name }}</span>
@@ -350,7 +350,7 @@ onUnmounted(() => {
       <div class="field-row">
         <label>Description:</label>
         <template v-if="isEditing || !selectedTask">
-          <Textarea v-model="taskForm.description" rows="4" class="input-field" maxlength="100" :disabled="selectedTask && isStaff() && taskForm.owner === currentEmployeeId" />
+          <Textarea v-model="taskForm.description" rows="4" class="input-field" maxlength="100" :disabled="selectedTask && isCollaboratorOnly(selectedTask)" />
         </template>
         <template v-else>
           <span class="text-field">{{ taskForm.description }}</span>
@@ -432,7 +432,7 @@ onUnmounted(() => {
       </div>
 
       <div class="save-btn-container">
-        <template v-if="selectedTask && !isEditing">
+        <template v-if="selectedTask && !isEditing && !isCollaboratorOnly(selectedTask)">
           <Button label="Edit" class="save-task-btn" @click="startEditing" />
         </template>
         <Button label="Save" class="save-task-btn" @click="saveTask" v-if="isEditing || !selectedTask" :disabled="selectedTask && isCollaboratorOnly(selectedTask)"/>

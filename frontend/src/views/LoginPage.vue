@@ -119,7 +119,7 @@ html, body {
   justify-content: center;
   flex-direction: column;
   align-items: center;
-  background-color: rgba(176,196,222, 0.5);
+  background-color: rgb(245, 246, 246);
 }
 
 .login-container {
@@ -221,8 +221,8 @@ html, body {
 }
 .btn-primary {
   font-family: 'Inter', sans-serif;
-  background: #F0D486;
-  color: #032A42;
+  background: #337587;
+  color: #ffffff;
   font-weight: 600;
   border: none;
   border-radius: 6px;
