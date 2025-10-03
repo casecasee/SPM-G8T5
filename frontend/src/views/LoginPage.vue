@@ -84,6 +84,9 @@ export default {
           if (data.employee_name) {
             sessionStorage.setItem("employee_name", data.employee_name);
           }
+          if (data.department) {
+            sessionStorage.setItem("department", data.department);
+          }
           this.$router.push("/home");
         } else {
           this.errorMessage = data.error || "Login failed";

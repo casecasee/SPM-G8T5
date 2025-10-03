@@ -9,9 +9,7 @@ app.secret_key = "issa_secret_key"
 app.config["SESSION_COOKIE_SAMESITE"] = "None"
 app.config["SESSION_COOKIE_SECURE"] = True  
 
-CORS(app, supports_credentials=True, origins=["http://localhost:5173"])
-
-# task_url = "http://localhost:5001/task/get_tasks_by_eid"
+CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://localhost:5174"])
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/SPM'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # suppress warning msgs
@@ -66,7 +64,7 @@ def login():
     session['employee_id'] = employee.employee_id
     session['role'] = employee.role
 
-    return {"employee_id": employee.employee_id, "role": employee.role, "employee_name": employee.employee_name} # include name for UI
+    return {"employee_id": employee.employee_id, "role": employee.role, "employee_name": employee.employee_name, "department": employee.department} # include name and department for UI
 
 
 @app.route('/reset', methods=['POST'])
@@ -87,6 +85,22 @@ def get_employees_by_department(department):
             "role": emp.role,
             "team": emp.team
         } # frontend asked for id and name, dept, role and team returned jic
+        result.append(emp_data)
+    return jsonify(result), 200
+
+@app.route('/employees/all', methods=['GET'])
+def get_all_employees():
+    # used for HR and Senior Manager - can see all employees
+    employees = Staff.query.all()
+    result = []
+    for emp in employees:
+        emp_data = {
+            "employee_id": emp.employee_id,
+            "employee_name": emp.employee_name,
+            "department": emp.department,
+            "role": emp.role,
+            "team": emp.team
+        }
         result.append(emp_data)
     return jsonify(result), 200
 

@@ -12,8 +12,7 @@ app.config["SESSION_COOKIE_SAMESITE"] = "None"
 app.config["SESSION_COOKIE_SECURE"] = True  
 
 
-CORS(app, supports_credentials=True, origins=["http://localhost:5173"])
-
+CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://localhost:5174"])
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/SPM'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # suppress warning msgs
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299} # do not timeout
@@ -53,7 +52,7 @@ def create_task():
 
     # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority}
 
-    status = 'ongoing' if data['role'] == 'Staff' else 'unassigned' # set status by role of person creating it
+    status = 'ongoing' if data['role'] == 'staff' else 'unassigned' # set status by role of person creating it
     ppl = data.get('collaborators', [])
     ppl.append(data['employee_id']) # add owner to collaborators (no need check duplicates because frontend should handle it)
     collaborators = Staff.query.filter(Staff.employee_id.in_(ppl)).all()
