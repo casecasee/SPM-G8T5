@@ -370,7 +370,7 @@ function isCollaboratorOnly(task) {
 
 async function updateTaskStatus(task, newStatus) {
   try {
-    await axios.put(`http://localhost:5002/task/${task.id}`, { status: newStatus, employee_id: currentEmployeeId })
+    await axios.patch(`http://localhost:5002/task/status/${task.id}`, { status: newStatus, employee_id: currentEmployeeId }, { withCredentials: true })
     task.status = newStatus
     if (openStatusFor.value === task.id) openStatusFor.value = null
   } catch (err) {

@@ -35,6 +35,13 @@ class Task(db.Model):
                                backref=db.backref('subtasks', cascade='all, delete-orphan', lazy='dynamic'),
                                foreign_keys=[parent_id],
                                passive_deletes=True)
+    
+    # staff owner relationship
+    owner_staff = db.relationship(
+        'Staff',
+        foreign_keys=[owner],
+        backref='owned_tasks'
+    )
 
     # collaborators many-to-many
     collaborators = db.relationship(

@@ -97,25 +97,47 @@ def create_task():
 def update_task_status(task_id):
     
     # input {status, eid}
+    print('hereee')
 
     data = request.json
     new_status = data.get("status")
-    eid = data.get("eid")
+    eid = session['employee_id']
     curr_task = Task.query.get(task_id)
+
+    print('hereee2')
 
     if curr_task is None: # check if task exists 
         return {"message": "Task not found"}, 404
+    
+    print('hereee3')
 
     # check if employee is a collaborator
+    # print(curr_task.collaborators)
+    # print(eid)
+    print(curr_task.collaborators.filter_by(employee_id=eid).first())
     if curr_task.collaborators.filter_by(employee_id=eid).first() is None:
+        print('not collab')
         return {"message": "You are not a collaborator of this task"}, 403
     
+    print('hereee4')
+    
     # update status and other fields accordingly
+    # tasks will always pass through ongoing (either by default or after assignment), tasks may or may not pass through under review, tasks will always end at done
     # if status from unassigned -> ongoing, set start_date
+    if curr_task.status == 'unassigned' and new_status == 'ongoing':
+        curr_task.start_date = time.strftime('%Y-%m-%d %H:%M:%S')
 
     # unassigned -> under review ?
 
     # if status from ongoing -> done, set completed_date
+    # regardless of start state, if status is done, set completed_date
+    elif new_status == 'done':
+        curr_task.completed_date = time.strftime('%Y-%m-%d %H:%M:%S')
+    
+    curr_task.status = new_status
+    db.session.commit()
+    return {"message": "Task status updated"}, 200
+
 
 
 @app.route("/task/<int:task_id>", methods=["PUT"])
@@ -158,7 +180,8 @@ def update_task(task_id):
         new_owner = Staff.query.get(data['owner'])
         if new_owner is None:
             return {"message": "New owner not found"}, 404
-        curr_task.owner = new_owner
+        curr_task.owner_staff = new_owner
+        # TODO: need to update status here
     elif data['owner'] == 'staff':
         return {"message": "Only a manager can assign tasks"}, 403
 
