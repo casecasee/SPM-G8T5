@@ -20,7 +20,6 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299} # do not timeout
 db.init_app(app) # initialise connection to db
 
 def convert_datetime(input_str: str):
-    # TODO: convert html input type = date (YYYY-MM-DD) to sql datetime format
     from datetime import datetime
     dt = datetime.fromisoformat(input_str)
     return dt
@@ -50,21 +49,16 @@ def update_stuff_by_status(curr_task, new_status):
 def create_task():
     data = request.json
 
-    # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority, owner}
+    # input {title, description, attachment(o), deadline, status, project_id, parent_id, collaborators[], priority, owner}
 
-    status = 'ongoing' if data['role'] == 'staff' else 'unassigned' # set status by role of person creating it
-    requester_role = data.get('role', 'staff')
-    
-    # Determine the owner - staff can only assign to themselves, managers can assign to others
-    if requester_role == 'staff':
-        owner_id = data['employee_id']  # Staff can only assign to themselves
-    else:
-        owner_id = data.get('owner', data['employee_id'])  # Managers can assign to others
+    role = session['role']
+    eid = session['employee_id']
+
+    status = 'ongoing' if role == 'staff' else 'unassigned' # set status by role of person creating it
     
     ppl = data.get('collaborators', [])
-    # Remove the owner from collaborators list (owner shouldn't be in collaborators)
-    ppl = [pid for pid in ppl if pid != owner_id]
-    collaborators = Staff.query.filter(Staff.employee_id.in_(ppl)).all()
+    ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
+    collaborators = get_collaborators(ppl)
 
     # TODO: validate deadline (not before today) - frontend job?
 
@@ -73,12 +67,12 @@ def create_task():
         description=data['description'],
         attachment=data.get('attachment'),
         deadline=convert_datetime(data['deadline']), # datetime is required
-        status=status,
-        project_id=data.get('project_id'),
-        parent_id=data.get('parent_id'),
-        owner=owner_id, 
+        status=status, # calculated above
+        project_id=data.get('project_id'), # o
+        parent_id=data.get('parent_id'), # o
+        owner=eid, 
         collaborators=collaborators,
-        priority=data.get('priority') 
+        priority=data['priority'] # required 
     )
     db.session.add(new_task)
     db.session.commit()
@@ -106,7 +100,6 @@ def update_task_status(task_id):
     # if status from unassigned -> ongoing, set start_date
 
 
-
     # unassigned -> under review ?
 
 
@@ -116,21 +109,20 @@ def update_task_status(task_id):
 @app.route("/task/<int:task_id>", methods=["PUT"])
 def update_task(task_id):
 
-    # Update task metadata including owner assignment
+    # Update task metadata (not status), frontend sends whole task object
+    # This method is not for assigning tasks aka editing owner
+
     # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority, owner}
     data = request.json
     curr_task = Task.query.get(task_id)
+    eid = session['employee_id']
+    role = session['role']
 
     if curr_task is None: # check if task exists 
         return {"message": "Task not found"}, 404
 
-    eid = data.get("employee_id")
-    requester_role = data.get("role", "staff")
-    
-    # Check permissions: only managers/HR can assign tasks to others, or owner can update their own task
-    new_owner = data.get('owner', curr_task.owner)
-    if new_owner != curr_task.owner and requester_role == 'staff':
-        return {"message": "Staff cannot assign tasks to others"}, 403
+    if curr_task.owner != eid: # only owner can update task
+        return {"message": "Only the owner can update the task"}, 403
 
     # update fields
     curr_task.title = data.get('title', curr_task.title)
@@ -141,22 +133,22 @@ def update_task(task_id):
     curr_task.project_id = data.get('project_id', curr_task.project_id) #TODO: deal with it when doing projects
     curr_task.parent_id = data.get('parent_id', curr_task.parent_id) #TODO: deal with it when doing subtasks
     curr_task.priority = data.get('priority', curr_task.priority)
-    
-    # Update owner if provided and requester has permission
-    if 'owner' in data and requester_role != 'staff':
-        # If owner is changing, update status to ongoing
-        if curr_task.owner != new_owner:
-            curr_task.status = 'ongoing'
-        curr_task.owner = new_owner
 
     if 'status' in data: #TODO: idk if frontend will send status here
         new_status = data['status']
         update_stuff_by_status(curr_task, new_status)
 
+    if data['owner'] != curr_task.owner and role == 'manager': # owner changed, and only manager can change it
+        new_owner = Staff.query.get(data['owner'])
+        if new_owner is None:
+            return {"message": "New owner not found"}, 404
+        curr_task.owner = new_owner
+    elif data['owner'] == 'staff':
+        return {"message": "Only a manager can assign tasks"}, 403
+
     if 'collaborators' in data: # update collaborators, dont need to check same depertment etc because frontend should handle it
         ppl = data['collaborators']
-        # Remove the owner from collaborators list (owner shouldn't be in collaborators)
-        ppl = [pid for pid in ppl if pid != curr_task.owner]
+        ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
         collaborators = Staff.query.filter(Staff.employee_id.in_(ppl)).all()
         curr_task.collaborators = collaborators
 
@@ -170,10 +162,7 @@ def get_all_tasks():
     print(session)
     print(session.keys())
 
-
     return jsonify({"tasks": tasks_list}), 200
-    
-
 
 if __name__ == "__main__":
     with app.app_context():

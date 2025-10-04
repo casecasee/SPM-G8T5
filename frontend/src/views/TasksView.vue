@@ -316,9 +316,9 @@ async function saveTask() {
 
   try {
     if (taskForm.value.id) {
-      await axios.put(`http://localhost:5002/task/${taskForm.value.id}`, payload)
+      await axios.put(`http://localhost:5002/task/${taskForm.value.id}`, payload, { withCredentials: true })
     } else {
-      await axios.post("http://localhost:5002/tasks", payload)
+      await axios.post("http://localhost:5002/tasks", payload, { withCredentials: true })
     }
 
     // Refresh tasks to get updated data from backend
