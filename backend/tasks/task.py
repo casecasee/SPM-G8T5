@@ -1,11 +1,11 @@
 import os
 import time
+import json
 from werkzeug.utils import secure_filename
 
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, send_from_directory
 from flask_sqlalchemy import SQLAlchemy 
 from flask_cors import CORS
-from flask import Flask, request, jsonify, session, send_from_directory
 
 from models.extensions import db
 from models.task import Task
@@ -23,13 +23,12 @@ app.config["SESSION_COOKIE_SAMESITE"] = "None"
 app.config["SESSION_COOKIE_SECURE"] = True  
 app.config['UPLOAD_FOLDER'] = 'uploads/attachments'
 
-
 CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://localhost:5174"])
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/SPM'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # suppress warning msgs
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299} # do not timeout
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299}
 
-db.init_app(app) # initialise connection to db
+db.init_app(app)
 
 def convert_datetime(input_str: str):
     # TODO: convert html input type = date (YYYY-MM-DD) to sql datetime format
@@ -80,10 +79,13 @@ def create_task():
 
     # TODO: validate deadline (not before today) - frontend job?
 
+    # Convert attachments array to JSON string
+    attachments_json = json.dumps(data.get('attachments', []))
+
     new_task = Task(
         title=data['title'],
         description=data['description'],
-        attachment=data.get('attachment'),
+        attachment=attachments_json,  # Store as JSON string
         deadline=convert_datetime(data['deadline']), # datetime is required
         status=status,
         project_id=data.get('project_id'),
@@ -117,10 +119,7 @@ def update_task_status(task_id):
     # update status and other fields accordingly
     # if status from unassigned -> ongoing, set start_date
 
-
-
     # unassigned -> under review ?
-
 
     # if status from ongoing -> done, set completed_date
 
@@ -147,7 +146,11 @@ def update_task(task_id):
     # update fields
     curr_task.title = data.get('title', curr_task.title)
     curr_task.description = data.get('description', curr_task.description)
-    curr_task.attachment = data.get('attachment', curr_task.attachment)
+    
+    # Handle attachments as JSON array
+    if 'attachments' in data:
+        curr_task.attachment = json.dumps(data['attachments'])
+    
     if 'deadline' in data:
         curr_task.deadline = convert_datetime(data['deadline'])
     curr_task.project_id = data.get('project_id', curr_task.project_id) #TODO: deal with it when doing projects
@@ -198,7 +201,7 @@ def upload_attachment():
         
         return jsonify({
             'message': 'File uploaded successfully',
-            'file_path': unique_filename,  # Return only filename, not full path
+            'file_path': unique_filename,
             'filename': unique_filename
         }), 200
     
@@ -208,17 +211,11 @@ def upload_attachment():
 def get_all_tasks():
     tasks = Task.query.all()
     tasks_list = [task.to_dict() for task in tasks]
-    print(session)
-    print(session.keys())
-
-
     return jsonify({"tasks": tasks_list}), 200
     
 @app.route('/attachments/<path:filename>')
 def serve_attachment(filename):
     """Serve uploaded files"""
-    import os
-    # Get absolute path to uploads folder
     base_dir = os.path.dirname(os.path.abspath(__file__))
     upload_folder = os.path.join(base_dir, '..', 'uploads', 'attachments')
     return send_from_directory(upload_folder, filename)

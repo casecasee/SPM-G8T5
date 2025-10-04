@@ -13,7 +13,7 @@ import axios from 'axios'
 
 // ----------------- State -----------------
 const tasks = ref([])
-const currentTab = ref('my') // 'my' | 'team' | 'departments'
+const currentTab = ref('my')
 const teamSearch = ref('')
 const teamSelectedEmployeeId = ref(null)
 const selectedTask = ref(null)
@@ -74,37 +74,31 @@ function resetForm() {
   }
 }
 
-// Determines if the current user can edit a task
 function canEdit(task) {
   if (!task) return true 
   
-  // If viewing someone else's task in department view, don't allow editing
   if (currentTab.value === 'departments' && task.owner !== currentEmployeeId) {
     return false
   }
   
-  // If viewing someone else's task in team view, don't allow editing
   if (currentTab.value === 'team' && task.owner !== currentEmployeeId) {
     return false
   }
   
-  if (isManagerRole.value) return true // managers can always edit their own tasks
-  return isOwner(task) // staff can edit if owner 
+  if (isManagerRole.value) return true
+  return isOwner(task)
 }
 
-// Determines if the current user can assign tasks to others
 function canAssignTasks() {
-  return isManagerRole.value // only managers, HR, senior managers can assign tasks
+  return isManagerRole.value
 }
 
-// Derived role helpers
 const isManagerRole = computed(() => (currentRole || '').toLowerCase() !== 'staff')
 const isSeniorManagerOrHR = computed(() => {
   const role = (currentRole || '').toLowerCase()
   return role === 'senior manager' || role === 'hr'
 })
 
-// ---------- Computed task lists ----------
 const myTasks = computed(() => {
   const collabIncludes = (task) => Array.isArray(task.collaborators) && task.collaborators.includes(currentEmployeeId)
   return (tasks.value || []).filter(task => task.owner === currentEmployeeId || collabIncludes(task))
@@ -124,19 +118,16 @@ const displayTasks = computed(() => {
     if (targetId === currentEmployeeId) return []
     filteredTasks = (tasks.value || []).filter(t => t.owner === targetId || (Array.isArray(t.collaborators) && t.collaborators.includes(targetId)))
   } else {
-    // default to my tasks on 'my' tab
     filteredTasks = myTasks.value
   }
   
-  // Sort by priority (highest to lowest)
   return filteredTasks.sort((a, b) => {
     const priorityA = a.priority || 5
     const priorityB = b.priority || 5
-    return priorityB - priorityA // Higher priority first
+    return priorityB - priorityA
   })
 })
 
-// Organize tasks by priority groups
 const tasksByPriority = computed(() => {
   const tasks = displayTasks.value
   const groups = {
@@ -159,20 +150,15 @@ const tasksByPriority = computed(() => {
   return groups
 })
 
-// Determine when to show "No tasks found" message
 const shouldShowNoTasksMessage = computed(() => {
-  // Don't show if there are tasks
   if (displayTasks.value.length > 0) return false
   
-  // For 'my' tab, always show if no tasks
   if (currentTab.value === 'my') return true
   
-  // For 'team' tab, only show if an employee is selected but no tasks found
   if (currentTab.value === 'team') {
     return teamSelectedEmployeeId.value !== null
   }
   
-  // For 'departments' tab, only show if both department and employee are selected but no tasks found
   if (currentTab.value === 'departments') {
     return selectedDepartment.value !== null && departmentSelectedEmployeeId.value !== null
   }
@@ -183,7 +169,7 @@ const shouldShowNoTasksMessage = computed(() => {
 const filteredEmployeesForTeam = computed(() => {
   const q = (teamSearch.value || '').trim().toLowerCase()
   const list = (Array.isArray(availableEmployees.value) ? availableEmployees.value : [])
-    .filter(e => e.employee_id !== currentEmployeeId) // exclude self from team search
+    .filter(e => e.employee_id !== currentEmployeeId)
   if (q.length < 2) return []
   return list.filter(e => (e.employee_name || '').toLowerCase().startsWith(q))
 })
@@ -191,7 +177,7 @@ const filteredEmployeesForTeam = computed(() => {
 const filteredEmployeesForDepartment = computed(() => {
   const q = (departmentSearch.value || '').trim().toLowerCase()
   const list = (Array.isArray(departmentEmployees.value) ? departmentEmployees.value : [])
-    .filter(e => e.employee_id !== currentEmployeeId) // exclude self from department search
+    .filter(e => e.employee_id !== currentEmployeeId)
   if (q.length < 2) return []
   return list.filter(e => (e.employee_name || '').toLowerCase().startsWith(q))
 })
@@ -221,13 +207,11 @@ async function fetchEmployees() {
   try {
     let list = []
     if (currentRole === 'staff') {
-      // Staff: only same department & staff role
       const depRaw = sessionStorage.getItem("department") || ""
       const res = await axios.get(`http://localhost:5000/employees/${encodeURIComponent(depRaw)}`, { withCredentials: true })
       const byDept = Array.isArray(res.data) ? res.data : []
       list = byDept.filter(e => (e.role || '').toLowerCase() === 'staff')
     } else if (isManagerRole.value) {
-      // Manager: only employees in same department & team
       const dep = sessionStorage.getItem("department") || ""
       const team = sessionStorage.getItem("team") || ""
       const res = await axios.get(
@@ -236,7 +220,6 @@ async function fetchEmployees() {
       )
       list = Array.isArray(res.data) ? res.data : []
     } else {
-      // fallback for senior managers/HR if needed
       const res = await axios.get("http://localhost:5000/employees/all", { withCredentials: true })
       list = Array.isArray(res.data) ? res.data : []
     }
@@ -245,8 +228,6 @@ async function fetchEmployees() {
     console.error("Error fetching employees:", err)
     availableEmployees.value = []
   }
-  console.log("sessionStorage team:", sessionStorage.getItem("team"))
-
 }
 
 async function fetchTasks() {
@@ -258,20 +239,37 @@ async function fetchTasks() {
         role: currentRole
       }
     })
-    const fetchedTasks = res.data.tasks.map(t => ({
-      id: t.task_id,
-      name: t.title,
-      description: t.description,
-      due_date: t.deadline,
-      status: t.status,
-      priority: t.priority || 5,
-      owner: t.owner,
-      collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)).filter(id => id !== t.owner) : [],
-      attachments: t.attachment ? [{ 
-        name: t.attachment.split(/[/\\]/).pop() || "File",
-        url: `http://localhost:5002/attachments/${t.attachment.split(/[/\\]/).pop()}`
-      }] : []
-    }))
+    const fetchedTasks = res.data.tasks.map(t => {
+      // Parse attachments from JSON string
+      let attachments = []
+      if (t.attachment) {
+        try {
+          const parsed = JSON.parse(t.attachment)
+          attachments = Array.isArray(parsed) ? parsed.map(filename => ({
+            name: filename.split(/[/\\]/).pop() || "File",
+            url: `http://localhost:5002/attachments/${filename}`
+          })) : []
+        } catch (e) {
+          // If it's not JSON, handle old single file format
+          attachments = [{
+            name: t.attachment.split(/[/\\]/).pop() || "File",
+            url: `http://localhost:5002/attachments/${t.attachment}`
+          }]
+        }
+      }
+      
+      return {
+        id: t.task_id,
+        name: t.title,
+        description: t.description,
+        due_date: t.deadline,
+        status: t.status,
+        priority: t.priority || 5,
+        owner: t.owner,
+        collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)).filter(id => id !== t.owner) : [],
+        attachments: attachments
+      }
+    })
 
     if (currentRole === 'staff') {
       tasks.value = fetchedTasks.filter(task => {
@@ -291,29 +289,32 @@ async function fetchTasks() {
 
 async function saveTask() {
   try {
-    let uploadedAttachmentPath = null
+    let uploadedAttachments = []
 
-    // Upload file first if there's a new file
-    if (taskForm.value.attachments.length > 0 && taskForm.value.attachments[0].file) {
-      const formData = new FormData()
-      formData.append('attachment', taskForm.value.attachments[0].file)
+    // Upload all new files
+    for (const attachment of taskForm.value.attachments) {
+      if (attachment.file) {
+        // New file to upload
+        const formData = new FormData()
+        formData.append('attachment', attachment.file)
 
-      // Upload file to backend
-      const uploadRes = await axios.post('http://localhost:5002/upload-attachment', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        withCredentials: true
-      })
-      
-      uploadedAttachmentPath = uploadRes.data.file_path
-    } else if (taskForm.value.attachments.length > 0 && taskForm.value.attachments[0].url) {
-      // Use existing attachment URL if editing
-      uploadedAttachmentPath = taskForm.value.attachments[0].url
+        const uploadRes = await axios.post('http://localhost:5002/upload-attachment', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          withCredentials: true
+        })
+        
+        uploadedAttachments.push(uploadRes.data.file_path)
+      } else if (attachment.url) {
+        // Existing file - extract filename from URL
+        const urlParts = attachment.url.split('/')
+        uploadedAttachments.push(urlParts[urlParts.length - 1])
+      }
     }
 
     const payload = {
       title: taskForm.value.name,
       description: taskForm.value.description,
-      attachment: uploadedAttachmentPath,  // Use uploaded file path
+      attachments: uploadedAttachments,  // Array of filenames
       deadline: taskForm.value.due_date
         ? new Date(taskForm.value.due_date).toISOString()
         : new Date().toISOString(),
@@ -321,6 +322,7 @@ async function saveTask() {
       priority: taskForm.value.priority,
       parent_id: null,
       employee_id: currentEmployeeId,
+      owner: taskForm.value.owner,
       collaborators: (() => {
         const selected = Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : []
         if (currentRole === 'staff') {
@@ -380,7 +382,6 @@ function toggleStatusMenu(task) {
   openStatusFor.value = openStatusFor.value === task.id ? null : task.id
 }
 
-// ----------------- Helper Functions -----------------
 function findEmployeeNameById(id) {
   const emp = (availableEmployees.value || []).find(e => e.employee_id === id)
   return emp ? emp.employee_name : ''
@@ -418,7 +419,7 @@ function openDetails(task) {
     status: task.status,
     priority: task.priority || 5,
     owner: task.owner,
-    collaborators: (task.collaborators || []).filter(id => id !== task.owner), // Remove owner from collaborators
+    collaborators: (task.collaborators || []).filter(id => id !== task.owner),
     attachments: task.attachments || []
   }
   showModal.value = true
@@ -442,7 +443,6 @@ function handleAttachment(event) {
   }))
   taskForm.value.attachments.push(...newFiles)
   
-  // Clear the component reference
   if (fileUploadRef.value && typeof fileUploadRef.value.clear === 'function') {
     fileUploadRef.value.clear()
   }
@@ -467,7 +467,6 @@ function getPriorityClass(priority) {
   return 'priority-low'
 }
 
-// Department view functions
 async function selectDepartment(department) {
   selectedDepartment.value = department
   departmentSelectedEmployeeId.value = null
@@ -478,19 +477,16 @@ function selectDepartmentEmployee(employeeId) {
   departmentSelectedEmployeeId.value = employeeId
 }
 
-// ----------------- Lifecycle -----------------
 const refreshIntervalMs = 30000
 let refreshTimer = null
 
 onMounted(() => {
   fetchEmployees().finally(() => fetchTasks())
   
-  // Fetch departments for Senior Managers and HR
   if (isSeniorManagerOrHR.value) {
     fetchDepartments()
   }
   
-  // Auto-refresh
   refreshTimer = setInterval(fetchTasks, refreshIntervalMs)
   window.addEventListener('focus', fetchTasks)
 })
@@ -828,7 +824,7 @@ onUnmounted(() => {
           ref="fileUploadRef"
           mode="basic" 
           accept=".pdf" 
-          :multiple="false"
+          :multiple="true"
           chooseLabel="Upload" 
           :auto="false" 
           :customUpload="true" 
