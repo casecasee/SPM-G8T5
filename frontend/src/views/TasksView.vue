@@ -20,6 +20,7 @@ const selectedTask = ref(null)
 const showModal = ref(false)
 const isEditing = ref(false)
 const availableEmployees = ref([])
+const fileUploadRef = ref(null)
 
 // Department view state
 const departments = ref([])
@@ -266,7 +267,10 @@ async function fetchTasks() {
       priority: t.priority || 5,
       owner: t.owner,
       collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)).filter(id => id !== t.owner) : [],
-      attachments: t.attachment ? [{ name: "File", url: t.attachment }] : []
+      attachments: t.attachment ? [{ 
+        name: t.attachment.split(/[/\\]/).pop() || "File",
+        url: `http://localhost:5002/attachments/${t.attachment.split(/[/\\]/).pop()}`
+      }] : []
     }))
 
     if (currentRole === 'staff') {
@@ -286,49 +290,66 @@ async function fetchTasks() {
 }
 
 async function saveTask() {
-  const selected = Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : []  
-  const newOwnerId = canAssignTasks() ? (taskForm.value.owner || currentEmployeeId) : currentEmployeeId   // Staff can only assign tasks to themselves
-
-  const payload = {
-    title: taskForm.value.name,
-    description: taskForm.value.description,
-    attachment: taskForm.value.attachments.length ? taskForm.value.attachments[0].url : null,
-    deadline: taskForm.value.due_date
-      ? new Date(taskForm.value.due_date).toISOString()
-      : new Date().toISOString(),
-    status: taskForm.value.status,
-    priority: taskForm.value.priority,
-    parent_id: null,
-    employee_id: currentEmployeeId, // creator
-    owner: newOwnerId,
-    collaborators: (() => {
-      if (currentRole === 'staff') {
-        const allowedIds = (availableEmployees.value || []).map(e => e.employee_id)
-        return selected.filter(id => allowedIds.includes(id))
-      }
-      return selected
-    })(),
-    role: currentRole
-  }
-
-  // Remove the owner from collaborators list (owner shouldn't be in collaborators)
-  payload.collaborators = payload.collaborators.filter(id => id !== newOwnerId)
-
   try {
-    if (taskForm.value.id) {
-      await axios.put(`http://localhost:5002/task/${taskForm.value.id}`, payload)
-    } else {
-      await axios.post("http://localhost:5002/tasks", payload)
+    let uploadedAttachmentPath = null
+
+    // Upload file first if there's a new file
+    if (taskForm.value.attachments.length > 0 && taskForm.value.attachments[0].file) {
+      const formData = new FormData()
+      formData.append('attachment', taskForm.value.attachments[0].file)
+
+      // Upload file to backend
+      const uploadRes = await axios.post('http://localhost:5002/upload-attachment', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        withCredentials: true
+      })
+      
+      uploadedAttachmentPath = uploadRes.data.file_path
+    } else if (taskForm.value.attachments.length > 0 && taskForm.value.attachments[0].url) {
+      // Use existing attachment URL if editing
+      uploadedAttachmentPath = taskForm.value.attachments[0].url
     }
 
-    // Refresh tasks to get updated data from backend
+    const payload = {
+      title: taskForm.value.name,
+      description: taskForm.value.description,
+      attachment: uploadedAttachmentPath,  // Use uploaded file path
+      deadline: taskForm.value.due_date
+        ? new Date(taskForm.value.due_date).toISOString()
+        : new Date().toISOString(),
+      status: taskForm.value.status,
+      priority: taskForm.value.priority,
+      parent_id: null,
+      employee_id: currentEmployeeId,
+      collaborators: (() => {
+        const selected = Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : []
+        if (currentRole === 'staff') {
+          const allowedIds = (availableEmployees.value || []).map(e => e.employee_id)
+          return selected.filter(id => allowedIds.includes(id))
+        }
+        return selected
+      })(),
+      role: currentRole
+    }
+
+    if (taskForm.value.id) {
+      await axios.put(`http://localhost:5002/task/${taskForm.value.id}`, payload, { withCredentials: true })
+    } else {
+      await axios.post("http://localhost:5002/tasks", payload, { withCredentials: true })
+    }
+
     await fetchTasks()
+
+    if (taskForm.value.id) {
+      selectedTask.value = tasks.value.find(t => t.id === taskForm.value.id)
+    }
 
     showModal.value = false
     taskForm.value = resetForm()
     isEditing.value = false
   } catch (err) {
     console.error("Error saving task:", err)
+    alert('Error saving task. Please check the console for details.')
   }
 }
 
@@ -414,8 +435,17 @@ function formatDate(date) {
 }
 
 function handleAttachment(event) {
-  const newFiles = event.files.map(file => ({ name: file.name, url: file.name }))
+  const newFiles = event.files.map(file => ({ 
+    name: file.name, 
+    file: file,
+    url: null
+  }))
   taskForm.value.attachments.push(...newFiles)
+  
+  // Clear the component reference
+  if (fileUploadRef.value && typeof fileUploadRef.value.clear === 'function') {
+    fileUploadRef.value.clear()
+  }
 }
 
 function removeAttachment(index) {
@@ -794,7 +824,17 @@ onUnmounted(() => {
       <div class="field-row">
         <label>Attachments:</label>
         <template v-if="isEditing || !selectedTask">
-          <FileUpload mode="basic" accept=".pdf" :multiple="true" choose-label="Upload" :auto="false" :customUpload="true" @select="handleAttachment" :disabled="!canEdit(selectedTask)" />
+        <FileUpload 
+          ref="fileUploadRef"
+          mode="basic" 
+          accept=".pdf" 
+          :multiple="false"
+          chooseLabel="Upload" 
+          :auto="false" 
+          :customUpload="true" 
+          @select="handleAttachment"
+          :disabled="selectedTask && isCollaboratorOnly(selectedTask)" 
+        />
           <ul class="file-list">
             <li v-for="(file, index) in taskForm.attachments" :key="index">
               <a :href="file.url" target="_blank">{{ file.name }}</a>

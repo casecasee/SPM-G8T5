@@ -1,15 +1,27 @@
+import os
+import time
+from werkzeug.utils import secure_filename
+
 from flask import Flask, request, jsonify, session
 from flask_sqlalchemy import SQLAlchemy 
 from flask_cors import CORS
+from flask import Flask, request, jsonify, session, send_from_directory
 
 from models.extensions import db
 from models.task import Task
 from models.staff import Staff
 
+ALLOWED_EXTENSIONS = {'pdf'}
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 app = Flask(__name__)
 app.secret_key = "issa_secret_key" 
 app.config["SESSION_COOKIE_SAMESITE"] = "None"
 app.config["SESSION_COOKIE_SECURE"] = True  
+app.config['UPLOAD_FOLDER'] = 'uploads/attachments'
 
 
 CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://localhost:5174"])
@@ -163,6 +175,35 @@ def update_task(task_id):
     db.session.commit()
     return {"message": "Task updated"}, 200
 
+@app.route('/upload-attachment', methods=['POST'])
+def upload_attachment():
+    """Handle file uploads separately"""
+    if 'attachment' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['attachment']
+    
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        unique_filename = f"{int(time.time())}_{filename}"
+        
+        upload_dir = app.config['UPLOAD_FOLDER']
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        filepath = os.path.join(upload_dir, unique_filename)
+        file.save(filepath)
+        
+        return jsonify({
+            'message': 'File uploaded successfully',
+            'file_path': unique_filename,  # Return only filename, not full path
+            'filename': unique_filename
+        }), 200
+    
+    return jsonify({'error': 'Invalid file type'}), 400
+
 @app.route("/tasks", methods=["GET"])
 def get_all_tasks():
     tasks = Task.query.all()
@@ -173,7 +214,14 @@ def get_all_tasks():
 
     return jsonify({"tasks": tasks_list}), 200
     
-
+@app.route('/attachments/<path:filename>')
+def serve_attachment(filename):
+    """Serve uploaded files"""
+    import os
+    # Get absolute path to uploads folder
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    upload_folder = os.path.join(base_dir, '..', 'uploads', 'attachments')
+    return send_from_directory(upload_folder, filename)
 
 if __name__ == "__main__":
     with app.app_context():
