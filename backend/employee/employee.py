@@ -64,7 +64,10 @@ def login():
     session['employee_id'] = employee.employee_id
     session['role'] = employee.role
 
-    return {"employee_id": employee.employee_id, "role": employee.role, "employee_name": employee.employee_name, "department": employee.department} # include name and department for UI
+    dept = (employee.department or "").strip()
+    team = (employee.team or "").strip()
+
+    return {"employee_id": employee.employee_id, "role": employee.role, "employee_name": employee.employee_name, "department": employee.department, "team": employee.team} 
 
 
 @app.route('/reset', methods=['POST'])
@@ -104,6 +107,13 @@ def get_all_employees():
         result.append(emp_data)
     return jsonify(result), 200
 
+@app.route('/departments', methods=['GET'])
+def get_all_departments():
+    # used for HR and Senior Manager - get all unique departments
+    departments = db.session.query(Staff.department).distinct().all()
+    result = [dept[0] for dept in departments if dept[0]]  # Filter out None values
+    return jsonify(result), 200
+
 
 @app.route('/employee/<int:project_id>', methods=['GET'])
 def get_employees_by_project(project_id):
@@ -122,11 +132,29 @@ def get_employees_by_project(project_id):
         result.append(emp_data)
     return jsonify(result), 200
 
+@app.route('/employees/department/<department>/team/<team>', methods=['GET'])
+def get_employees_by_department_and_team(department, team):
+    """Return all employees in the same department and team (case-insensitive)."""
+    department = (department or "").strip()
+    team = (team or "").strip()
 
+    employees = Staff.query.filter(
+        Staff.department.ilike(department),
+        Staff.team.ilike(team)
+    ).all()
 
+    result = [
+        {
+            "employee_id": emp.employee_id,
+            "employee_name": emp.employee_name,
+            "department": emp.department,
+            "role": emp.role,
+            "team": emp.team,
+        }
+        for emp in employees
+    ]
 
-
-
+    return jsonify(result), 200
 
 if __name__ == "__main__":
     with app.app_context():

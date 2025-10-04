@@ -60,3 +60,14 @@ class Director(Staff):
         # for each employee, get their tasks (call task endpoint)
         # TODO
         pass
+
+class SeniorManager(Staff):
+    __mapper_args__ = {
+        "polymorphic_identity": "senior manager",
+    }
+
+    def get_tasks(self):
+        # get all employees in this department
+        # for each employee, get their tasks (call task endpoint)
+        # TODO
+        pass

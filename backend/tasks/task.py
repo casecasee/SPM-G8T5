@@ -50,11 +50,20 @@ def update_stuff_by_status(curr_task, new_status):
 def create_task():
     data = request.json
 
-    # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority}
+    # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority, owner}
 
     status = 'ongoing' if data['role'] == 'staff' else 'unassigned' # set status by role of person creating it
+    requester_role = data.get('role', 'staff')
+    
+    # Determine the owner - staff can only assign to themselves, managers can assign to others
+    if requester_role == 'staff':
+        owner_id = data['employee_id']  # Staff can only assign to themselves
+    else:
+        owner_id = data.get('owner', data['employee_id'])  # Managers can assign to others
+    
     ppl = data.get('collaborators', [])
-    ppl.append(data['employee_id']) # add owner to collaborators (no need check duplicates because frontend should handle it)
+    # Remove the owner from collaborators list (owner shouldn't be in collaborators)
+    ppl = [pid for pid in ppl if pid != owner_id]
     collaborators = Staff.query.filter(Staff.employee_id.in_(ppl)).all()
 
     # TODO: validate deadline (not before today) - frontend job?
@@ -67,7 +76,7 @@ def create_task():
         status=status,
         project_id=data.get('project_id'),
         parent_id=data.get('parent_id'),
-        owner=data['employee_id'], 
+        owner=owner_id, 
         collaborators=collaborators,
         priority=data.get('priority') 
     )
@@ -107,10 +116,8 @@ def update_task_status(task_id):
 @app.route("/task/<int:task_id>", methods=["PUT"])
 def update_task(task_id):
 
-    # Update task metadata (not status), frontend sends whole task object
-    # This method is not for assigning tasks aka editing owner
-
-    # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority}
+    # Update task metadata including owner assignment
+    # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority, owner}
     data = request.json
     curr_task = Task.query.get(task_id)
 
@@ -118,8 +125,12 @@ def update_task(task_id):
         return {"message": "Task not found"}, 404
 
     eid = data.get("employee_id")
-    if curr_task.owner != eid: # only owner can update task
-        return {"message": "Only the owner can update the task"}, 403
+    requester_role = data.get("role", "staff")
+    
+    # Check permissions: only managers/HR can assign tasks to others, or owner can update their own task
+    new_owner = data.get('owner', curr_task.owner)
+    if new_owner != curr_task.owner and requester_role == 'staff':
+        return {"message": "Staff cannot assign tasks to others"}, 403
 
     # update fields
     curr_task.title = data.get('title', curr_task.title)
@@ -130,6 +141,13 @@ def update_task(task_id):
     curr_task.project_id = data.get('project_id', curr_task.project_id) #TODO: deal with it when doing projects
     curr_task.parent_id = data.get('parent_id', curr_task.parent_id) #TODO: deal with it when doing subtasks
     curr_task.priority = data.get('priority', curr_task.priority)
+    
+    # Update owner if provided and requester has permission
+    if 'owner' in data and requester_role != 'staff':
+        # If owner is changing, update status to ongoing
+        if curr_task.owner != new_owner:
+            curr_task.status = 'ongoing'
+        curr_task.owner = new_owner
 
     if 'status' in data: #TODO: idk if frontend will send status here
         new_status = data['status']
@@ -137,7 +155,8 @@ def update_task(task_id):
 
     if 'collaborators' in data: # update collaborators, dont need to check same depertment etc because frontend should handle it
         ppl = data['collaborators']
-        ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
+        # Remove the owner from collaborators list (owner shouldn't be in collaborators)
+        ppl = [pid for pid in ppl if pid != curr_task.owner]
         collaborators = Staff.query.filter(Staff.employee_id.in_(ppl)).all()
         curr_task.collaborators = collaborators
 

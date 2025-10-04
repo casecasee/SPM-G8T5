@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
@@ -13,15 +13,27 @@ import axios from 'axios'
 
 // ----------------- State -----------------
 const tasks = ref([])
+const currentTab = ref('my') // 'my' | 'team' | 'departments'
+const teamSearch = ref('')
+const teamSelectedEmployeeId = ref(null)
 const selectedTask = ref(null)
 const showModal = ref(false)
 const isEditing = ref(false)
-const availableEmployees = ref([]) // For collaborators
+const availableEmployees = ref([])
+
+// Department view state
+const departments = ref([])
+const selectedDepartment = ref(null)
+const departmentEmployees = ref([])
+const departmentSearch = ref('')
+const departmentSelectedEmployeeId = ref(null) 
 
 // Logged-in user info
 const currentEmployeeId = Number(sessionStorage.getItem("employee_id"))
 const currentRole = sessionStorage.getItem("role")
 const currentEmployeeName = sessionStorage.getItem("employee_name")
+const currentDep = sessionStorage.getItem("department")
+const currentTeam = sessionStorage.getItem("team")
 
 const statusOptions = [
   { label: 'Ongoing', value: 'ongoing' },
@@ -55,33 +67,187 @@ function resetForm() {
     due_date: null,
     status: defaultStatus,
     priority: 5, 
-    owner: currentEmployeeId,
+    owner: currentEmployeeId, 
     collaborators: [], 
     attachments: []
   }
 }
 
+// Determines if the current user can edit a task
+function canEdit(task) {
+  if (!task) return true 
+  
+  // If viewing someone else's task in department view, don't allow editing
+  if (currentTab.value === 'departments' && task.owner !== currentEmployeeId) {
+    return false
+  }
+  
+  // If viewing someone else's task in team view, don't allow editing
+  if (currentTab.value === 'team' && task.owner !== currentEmployeeId) {
+    return false
+  }
+  
+  if (isManagerRole.value) return true // managers can always edit their own tasks
+  return isOwner(task) // staff can edit if owner 
+}
+
+// Determines if the current user can assign tasks to others
+function canAssignTasks() {
+  return isManagerRole.value // only managers, HR, senior managers can assign tasks
+}
+
+// Derived role helpers
+const isManagerRole = computed(() => (currentRole || '').toLowerCase() !== 'staff')
+const isSeniorManagerOrHR = computed(() => {
+  const role = (currentRole || '').toLowerCase()
+  return role === 'senior manager' || role === 'hr'
+})
+
+// ---------- Computed task lists ----------
+const myTasks = computed(() => {
+  const collabIncludes = (task) => Array.isArray(task.collaborators) && task.collaborators.includes(currentEmployeeId)
+  return (tasks.value || []).filter(task => task.owner === currentEmployeeId || collabIncludes(task))
+})
+
+const displayTasks = computed(() => {
+  let filteredTasks = []
+  
+  if (currentTab.value === 'team') {
+    if (!teamSelectedEmployeeId.value) return []
+    const targetId = Number(teamSelectedEmployeeId.value)
+    if (targetId === currentEmployeeId) return []
+    filteredTasks = (tasks.value || []).filter(t => t.owner === targetId || (Array.isArray(t.collaborators) && t.collaborators.includes(targetId)))
+  } else if (currentTab.value === 'departments') {
+    if (!departmentSelectedEmployeeId.value) return []
+    const targetId = Number(departmentSelectedEmployeeId.value)
+    if (targetId === currentEmployeeId) return []
+    filteredTasks = (tasks.value || []).filter(t => t.owner === targetId || (Array.isArray(t.collaborators) && t.collaborators.includes(targetId)))
+  } else {
+    // default to my tasks on 'my' tab
+    filteredTasks = myTasks.value
+  }
+  
+  // Sort by priority (highest to lowest)
+  return filteredTasks.sort((a, b) => {
+    const priorityA = a.priority || 5
+    const priorityB = b.priority || 5
+    return priorityB - priorityA // Higher priority first
+  })
+})
+
+// Organize tasks by priority groups
+const tasksByPriority = computed(() => {
+  const tasks = displayTasks.value
+  const groups = {
+    high: [],
+    medium: [],
+    low: []
+  }
+  
+  tasks.forEach(task => {
+    const priority = task.priority || 5
+    if (priority >= 8) {
+      groups.high.push(task)
+    } else if (priority >= 5) {
+      groups.medium.push(task)
+    } else {
+      groups.low.push(task)
+    }
+  })
+  
+  return groups
+})
+
+// Determine when to show "No tasks found" message
+const shouldShowNoTasksMessage = computed(() => {
+  // Don't show if there are tasks
+  if (displayTasks.value.length > 0) return false
+  
+  // For 'my' tab, always show if no tasks
+  if (currentTab.value === 'my') return true
+  
+  // For 'team' tab, only show if an employee is selected but no tasks found
+  if (currentTab.value === 'team') {
+    return teamSelectedEmployeeId.value !== null
+  }
+  
+  // For 'departments' tab, only show if both department and employee are selected but no tasks found
+  if (currentTab.value === 'departments') {
+    return selectedDepartment.value !== null && departmentSelectedEmployeeId.value !== null
+  }
+  
+  return false
+})
+
+const filteredEmployeesForTeam = computed(() => {
+  const q = (teamSearch.value || '').trim().toLowerCase()
+  const list = (Array.isArray(availableEmployees.value) ? availableEmployees.value : [])
+    .filter(e => e.employee_id !== currentEmployeeId) // exclude self from team search
+  if (q.length < 2) return []
+  return list.filter(e => (e.employee_name || '').toLowerCase().startsWith(q))
+})
+
+const filteredEmployeesForDepartment = computed(() => {
+  const q = (departmentSearch.value || '').trim().toLowerCase()
+  const list = (Array.isArray(departmentEmployees.value) ? departmentEmployees.value : [])
+    .filter(e => e.employee_id !== currentEmployeeId) // exclude self from department search
+  if (q.length < 2) return []
+  return list.filter(e => (e.employee_name || '').toLowerCase().startsWith(q))
+})
+
 // ----------------- Functions -----------------
+async function fetchDepartments() {
+  try {
+    const res = await axios.get("http://localhost:5000/departments", { withCredentials: true })
+    departments.value = Array.isArray(res.data) ? res.data : []
+  } catch (err) {
+    console.error("Error fetching departments:", err)
+    departments.value = []
+  }
+}
+
+async function fetchDepartmentEmployees(department) {
+  try {
+    const res = await axios.get(`http://localhost:5000/employees/${encodeURIComponent(department)}`, { withCredentials: true })
+    departmentEmployees.value = Array.isArray(res.data) ? res.data : []
+  } catch (err) {
+    console.error("Error fetching department employees:", err)
+    departmentEmployees.value = []
+  }
+}
+
 async function fetchEmployees() {
   try {
     let list = []
     if (currentRole === 'staff') {
+      // Staff: only same department & staff role
       const depRaw = sessionStorage.getItem("department") || ""
       const res = await axios.get(`http://localhost:5000/employees/${encodeURIComponent(depRaw)}`, { withCredentials: true })
       const byDept = Array.isArray(res.data) ? res.data : []
-      // Staff can only pick other STAFF in their department
       list = byDept.filter(e => (e.role || '').toLowerCase() === 'staff')
+    } else if (isManagerRole.value) {
+      // Manager: only employees in same department & team
+      const dep = sessionStorage.getItem("department") || ""
+      const team = sessionStorage.getItem("team") || ""
+      const res = await axios.get(
+        `http://localhost:5000/employees/department/${encodeURIComponent(dep)}/team/${encodeURIComponent(team)}`,
+        { withCredentials: true }
+      )
+      list = Array.isArray(res.data) ? res.data : []
     } else {
+      // fallback for senior managers/HR if needed
       const res = await axios.get("http://localhost:5000/employees/all", { withCredentials: true })
       list = Array.isArray(res.data) ? res.data : []
-      // Managers/HR/Senior Manager can pick everyone
     }
     availableEmployees.value = list
   } catch (err) {
     console.error("Error fetching employees:", err)
     availableEmployees.value = []
   }
+  console.log("sessionStorage team:", sessionStorage.getItem("team"))
+
 }
+
 async function fetchTasks() {
   try {
     const res = await axios.get("http://localhost:5002/tasks", {
@@ -97,9 +263,9 @@ async function fetchTasks() {
       description: t.description,
       due_date: t.deadline,
       status: t.status,
-      priority: t.priority || 5, // Use priority from backend, default to 5
+      priority: t.priority || 5,
       owner: t.owner,
-      collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)) : [],
+      collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)).filter(id => id !== t.owner) : [],
       attachments: t.attachment ? [{ name: "File", url: t.attachment }] : []
     }))
 
@@ -120,6 +286,9 @@ async function fetchTasks() {
 }
 
 async function saveTask() {
+  const selected = Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : []  
+  const newOwnerId = canAssignTasks() ? (taskForm.value.owner || currentEmployeeId) : currentEmployeeId   // Staff can only assign tasks to themselves
+
   const payload = {
     title: taskForm.value.name,
     description: taskForm.value.description,
@@ -130,9 +299,9 @@ async function saveTask() {
     status: taskForm.value.status,
     priority: taskForm.value.priority,
     parent_id: null,
-    employee_id: currentEmployeeId,
+    employee_id: currentEmployeeId, // creator
+    owner: newOwnerId,
     collaborators: (() => {
-      const selected = Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : []
       if (currentRole === 'staff') {
         const allowedIds = (availableEmployees.value || []).map(e => e.employee_id)
         return selected.filter(id => allowedIds.includes(id))
@@ -142,6 +311,9 @@ async function saveTask() {
     role: currentRole
   }
 
+  // Remove the owner from collaborators list (owner shouldn't be in collaborators)
+  payload.collaborators = payload.collaborators.filter(id => id !== newOwnerId)
+
   try {
     if (taskForm.value.id) {
       await axios.put(`http://localhost:5002/task/${taskForm.value.id}`, payload)
@@ -149,11 +321,8 @@ async function saveTask() {
       await axios.post("http://localhost:5002/tasks", payload)
     }
 
+    // Refresh tasks to get updated data from backend
     await fetchTasks()
-
-    if (taskForm.value.id) {
-      selectedTask.value = tasks.value.find(t => t.id === taskForm.value.id)
-    }
 
     showModal.value = false
     taskForm.value = resetForm()
@@ -164,7 +333,9 @@ async function saveTask() {
 }
 
 function isStaff() { return currentRole === 'staff' }
-function isOwner(task) { return !!task && task.owner === currentEmployeeId }
+function isOwner(task) { 
+  return !!task && task.owner === currentEmployeeId 
+}
 function isCollaborator(task) {
   if (!task) return false
   const collabIds = Array.isArray(task.collaborators) ? task.collaborators : []
@@ -226,7 +397,7 @@ function openDetails(task) {
     status: task.status,
     priority: task.priority || 5,
     owner: task.owner,
-    collaborators: task.collaborators || [],
+    collaborators: (task.collaborators || []).filter(id => id !== task.owner), // Remove owner from collaborators
     attachments: task.attachments || []
   }
   showModal.value = true
@@ -266,12 +437,29 @@ function getPriorityClass(priority) {
   return 'priority-low'
 }
 
+// Department view functions
+async function selectDepartment(department) {
+  selectedDepartment.value = department
+  departmentSelectedEmployeeId.value = null
+  await fetchDepartmentEmployees(department)
+}
+
+function selectDepartmentEmployee(employeeId) {
+  departmentSelectedEmployeeId.value = employeeId
+}
+
 // ----------------- Lifecycle -----------------
 const refreshIntervalMs = 30000
 let refreshTimer = null
 
 onMounted(() => {
   fetchEmployees().finally(() => fetchTasks())
+  
+  // Fetch departments for Senior Managers and HR
+  if (isSeniorManagerOrHR.value) {
+    fetchDepartments()
+  }
+  
   // Auto-refresh
   refreshTimer = setInterval(fetchTasks, refreshIntervalMs)
   window.addEventListener('focus', fetchTasks)
@@ -286,61 +474,241 @@ onUnmounted(() => {
 <template>
 <div class="tasks-page">
   <div class="tasks-header">
-  <h2>My Tasks</h2>
-  <div class="header-buttons">
-    <Button icon="pi pi-filter" label="Filter" class="filter-btn" text />
-    <Button label="+ Add Task" class="add-top-btn" @click="openAdd" />
-  </div>
-</div>
-
-  <div class="tasks-grid">
-    <Card v-for="task in tasks" :key="task.id" class="task-card" @click="openDetails(task)">
-      <template #title>
-        <div class="task-title-row">
-          <span>{{ task.name }}</span>
-          <span class="priority-badge" :class="getPriorityClass(task.priority)">
-            {{ task.priority }}
-          </span>
-        </div>
-      </template>
-      <template #content>
-        <p class="desc">{{ task.description }}</p>
-        <p class="meta">📅 {{ formatDate(task.due_date) }}</p>
-        <p class="status" :class="getStatusClass(task.status)" v-if="!(isStaff() && isOwner(task))">
-          {{ task.status }}
-        </p>
-        <span
-          v-else
-          class="status-pill status-clickable"
-          :class="getStatusClass(task.status)"
-          @click.stop="toggleStatusMenu(task)"
-          title="Change status"
-        >{{ task.status }}</span>
-        <div v-if="openStatusFor === task.id" class="status-menu-inline" @click.stop>
-          <span
-            v-for="opt in statusOptions"
-            :key="opt.value"
-            class="status-pill status-option"
-            :class="getStatusClass(opt.value) + (task.status===opt.value ? ' status-selected' : '')"
-            @click.stop="updateTaskStatus(task, opt.value)"
-          >{{ opt.label }}</span>
-        </div>
-        <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
-        <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) }}</b></p>
-      </template>
-    </Card>
+    <h2>Tasks</h2>
+    <div class="header-buttons" v-if="currentTab === 'my'">
+      <Button icon="pi pi-filter" label="Filter" class="filter-btn" text />
+      <Button label="+ Add Task" class="add-top-btn" @click="openAdd" />
+    </div>
   </div>
 
-  
+  <!-- Tabs visible to managers; staff always see 'My' implicitly -->
+  <div class="tabs" v-if="isManagerRole">
+    <button :class="['tab', currentTab==='my' ? 'active' : '']" @click="currentTab='my'">My Tasks</button>
+    <button :class="['tab', currentTab==='team' ? 'active' : '']" @click="currentTab='team'" v-if="!isSeniorManagerOrHR">Team's Tasks</button>
+    <button :class="['tab', currentTab==='departments' ? 'active' : '']" @click="currentTab='departments'" v-if="isSeniorManagerOrHR">All Departments</button>
+  </div>
+
+  <!-- Team search bar -->
+    <div v-if="isManagerRole && currentTab==='team'" class="team-search-section">
+      <!-- Search bar -->
+      <InputText v-model="teamSearch" placeholder="Search employee by name" class="input-field" />
+
+      <!-- Employee grid -->
+      <div class="employee-grid">
+        <div
+          v-for="emp in filteredEmployeesForTeam.length ? filteredEmployeesForTeam : availableEmployees.filter(e => e.employee_id !== currentEmployeeId)"
+          :key="emp.employee_id"
+          class="employee-card"
+          :class="teamSelectedEmployeeId === emp.employee_id ? 'selected' : ''"
+          @click="teamSelectedEmployeeId = emp.employee_id"
+        >
+          <div class="employee-avatar">
+            <i class="pi pi-user" style="font-size:1.2rem;"></i>
+          </div>
+          <div class="employee-name">{{ emp.employee_name }}</div>
+          <div class="employee-role">{{ emp.role }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Department selection for Senior Managers and HR -->
+  <div v-if="isSeniorManagerOrHR && currentTab==='departments'" class="department-section">
+    <!-- Department selection -->
+    <div class="department-selection">
+      <h3>Select Department</h3>
+      <div class="department-grid">
+        <div
+          v-for="dept in departments"
+          :key="dept"
+          class="department-card"
+          :class="selectedDepartment === dept ? 'selected' : ''"
+          @click="selectDepartment(dept)"
+        >
+          <div class="department-icon">
+            <i class="pi pi-building" style="font-size:1.5rem;"></i>
+          </div>
+          <div class="department-name">{{ dept }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Employee selection within department -->
+    <div v-if="selectedDepartment" class="employee-selection">
+      <h3>{{ selectedDepartment }} Employees</h3>
+      <!-- Search bar -->
+      <InputText v-model="departmentSearch" placeholder="Search employee by name" class="input-field" />
+
+      <!-- Employee grid -->
+      <div class="employee-grid">
+        <div
+          v-for="emp in filteredEmployeesForDepartment.length ? filteredEmployeesForDepartment : departmentEmployees.filter(e => e.employee_id !== currentEmployeeId)"
+          :key="emp.employee_id"
+          class="employee-card"
+          :class="departmentSelectedEmployeeId === emp.employee_id ? 'selected' : ''"
+          @click="selectDepartmentEmployee(emp.employee_id)"
+        >
+          <div class="employee-avatar">
+            <i class="pi pi-user" style="font-size:1.2rem;"></i>
+          </div>
+          <div class="employee-name">{{ emp.employee_name }}</div>
+          <div class="employee-role">{{ emp.role }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tasks-container">
+    <!-- High Priority Tasks -->
+    <div v-if="tasksByPriority.high.length > 0" class="priority-section">
+      <div class="priority-header high-priority">
+        <i class="pi pi-exclamation-triangle"></i>
+        <span>High Priority</span>
+        <span class="task-count">{{ tasksByPriority.high.length }}</span>
+      </div>
+      <div class="tasks-grid">
+        <Card v-for="task in tasksByPriority.high" :key="task.id" class="task-card" @click="openDetails(task)">
+          <template #title>
+            <div class="task-title-row">
+              <span>{{ task.name }}</span>
+            </div>
+          </template>
+          <template #content>
+            <p class="desc">{{ task.description }}</p>
+            <p class="meta">📅 {{ formatDate(task.due_date) }}</p>
+            <span
+              v-if="(isStaff() && isOwner(task)) || (isManagerRole && isOwner(task))"
+              class="status-pill status-clickable"
+              :class="getStatusClass(task.status)"
+              @click.stop="toggleStatusMenu(task)"
+              title="Change status"
+            >
+              {{ task.status }}
+            </span>
+            <p v-else class="status" :class="getStatusClass(task.status)">
+              {{ task.status }}
+            </p>
+            <div v-if="openStatusFor === task.id" class="status-menu-inline" @click.stop>
+              <span
+                v-for="opt in statusOptions"
+                :key="opt.value"
+                class="status-pill status-option"
+                :class="getStatusClass(opt.value) + (task.status===opt.value ? ' status-selected' : '')"
+                @click.stop="updateTaskStatus(task, opt.value)"
+              >{{ opt.label }}</span>
+            </div>
+            <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
+            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) }}</b></p>
+          </template>
+        </Card>
+      </div>
+    </div>
+
+    <!-- Medium Priority Tasks -->
+    <div v-if="tasksByPriority.medium.length > 0" class="priority-section">
+      <div class="priority-header medium-priority">
+        <i class="pi pi-clock"></i>
+        <span>Medium Priority</span>
+        <span class="task-count">{{ tasksByPriority.medium.length }}</span>
+      </div>
+      <div class="tasks-grid">
+        <Card v-for="task in tasksByPriority.medium" :key="task.id" class="task-card" @click="openDetails(task)">
+          <template #title>
+            <div class="task-title-row">
+              <span>{{ task.name }}</span>
+            </div>
+          </template>
+          <template #content>
+            <p class="desc">{{ task.description }}</p>
+            <p class="meta">📅 {{ formatDate(task.due_date) }}</p>
+            <span
+              v-if="(isStaff() && isOwner(task)) || (isManagerRole && isOwner(task))"
+              class="status-pill status-clickable"
+              :class="getStatusClass(task.status)"
+              @click.stop="toggleStatusMenu(task)"
+              title="Change status"
+            >
+              {{ task.status }}
+            </span>
+            <p v-else class="status" :class="getStatusClass(task.status)">
+              {{ task.status }}
+            </p>
+            <div v-if="openStatusFor === task.id" class="status-menu-inline" @click.stop>
+              <span
+                v-for="opt in statusOptions"
+                :key="opt.value"
+                class="status-pill status-option"
+                :class="getStatusClass(opt.value) + (task.status===opt.value ? ' status-selected' : '')"
+                @click.stop="updateTaskStatus(task, opt.value)"
+              >{{ opt.label }}</span>
+            </div>
+            <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
+            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) }}</b></p>
+          </template>
+        </Card>
+      </div>
+    </div>
+
+    <!-- Low Priority Tasks -->
+    <div v-if="tasksByPriority.low.length > 0" class="priority-section">
+      <div class="priority-header low-priority">
+        <i class="pi pi-check-circle"></i>
+        <span>Low Priority</span>
+        <span class="task-count">{{ tasksByPriority.low.length }}</span>
+      </div>
+      <div class="tasks-grid">
+        <Card v-for="task in tasksByPriority.low" :key="task.id" class="task-card" @click="openDetails(task)">
+          <template #title>
+            <div class="task-title-row">
+              <span>{{ task.name }}</span>
+            </div>
+          </template>
+          <template #content>
+            <p class="desc">{{ task.description }}</p>
+            <p class="meta">📅 {{ formatDate(task.due_date) }}</p>
+            <span
+              v-if="(isStaff() && isOwner(task)) || (isManagerRole && isOwner(task))"
+              class="status-pill status-clickable"
+              :class="getStatusClass(task.status)"
+              @click.stop="toggleStatusMenu(task)"
+              title="Change status"
+            >
+              {{ task.status }}
+            </span>
+            <p v-else class="status" :class="getStatusClass(task.status)">
+              {{ task.status }}
+            </p>
+            <div v-if="openStatusFor === task.id" class="status-menu-inline" @click.stop>
+              <span
+                v-for="opt in statusOptions"
+                :key="opt.value"
+                class="status-pill status-option"
+                :class="getStatusClass(opt.value) + (task.status===opt.value ? ' status-selected' : '')"
+                @click.stop="updateTaskStatus(task, opt.value)"
+              >{{ opt.label }}</span>
+            </div>
+            <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
+            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) }}</b></p>
+          </template>
+        </Card>
+      </div>
+    </div>
+
+    <!-- No tasks message -->
+    <div v-if="shouldShowNoTasksMessage" class="no-tasks">
+      <i class="pi pi-inbox"></i>
+      <p>No tasks found</p>
+    </div>
+  </div>
 
   <Dialog v-model:visible="showModal" modal 
-          :header="isEditing && !selectedTask ? 'New Task' : (isEditing ? 'Edit Task' : 'Task Details')" 
-          class="page-style-modal">
+        :header="isEditing && !selectedTask ? 'New Task' : (isEditing ? 'Edit Task' : 'Task Details')" 
+        class="page-style-modal">
     <div class="modal-content">
       <div class="field-row">
         <label>Name:</label>
         <template v-if="isEditing || !selectedTask">
-          <InputText v-model="taskForm.name" class="input-field" :disabled="selectedTask && isCollaboratorOnly(selectedTask)" />
+          <InputText v-model="taskForm.name" class="input-field" :disabled="!canEdit(selectedTask)" />
         </template>
         <template v-else>
           <span class="text-field">{{ taskForm.name }}</span>
@@ -350,7 +718,7 @@ onUnmounted(() => {
       <div class="field-row">
         <label>Description:</label>
         <template v-if="isEditing || !selectedTask">
-          <Textarea v-model="taskForm.description" rows="4" class="input-field" maxlength="100" :disabled="selectedTask && isCollaboratorOnly(selectedTask)" />
+          <Textarea v-model="taskForm.description" rows="4" class="input-field" maxlength="100" :disabled="!canEdit(selectedTask)" />
         </template>
         <template v-else>
           <span class="text-field">{{ taskForm.description }}</span>
@@ -361,7 +729,7 @@ onUnmounted(() => {
         <div>
           <label>Due Date:</label>
           <template v-if="isEditing || !selectedTask">
-            <Calendar v-model="taskForm.due_date" class="input-field" :minDate="new Date()" :disabled="selectedTask && isCollaboratorOnly(selectedTask)" />
+            <Calendar v-model="taskForm.due_date" class="input-field" :minDate="new Date()" :disabled="!canEdit(selectedTask)" />
           </template>
           <template v-else>
             <span class="text-field">{{ formatDate(taskForm.due_date) }}</span>
@@ -370,7 +738,6 @@ onUnmounted(() => {
         <div>
           <label>Status:</label>
           <template v-if="isEditing && selectedTask && !isStaff()">
-            <!-- Only show status dropdown when editing existing tasks -->
             <Dropdown v-model="taskForm.status" :options="statusOptions" optionLabel="label" optionValue="value" class="input-field w-full" />
           </template>
           <template v-else>
@@ -380,7 +747,7 @@ onUnmounted(() => {
         <div>
           <label>Priority:</label>
           <template v-if="isEditing || !selectedTask">
-            <Dropdown v-model="taskForm.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="input-field w-full" :disabled="selectedTask && isCollaboratorOnly(selectedTask)" />
+            <Dropdown v-model="taskForm.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="input-field w-full" :disabled="!canEdit(selectedTask)" />
           </template>
           <template v-else>
             <span class="text-field">{{ taskForm.priority }}</span>
@@ -388,9 +755,22 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="field-row">
+      <div class="field-row" v-if="canAssignTasks() && isEditing">
         <label>Owner:</label>
-        <span class="text-field">{{ currentEmployeeName }}</span>
+        <Dropdown
+          v-model="taskForm.owner"
+          :options="availableEmployees"
+          optionLabel="employee_name"
+          optionValue="employee_id"
+          placeholder="Select owner..."
+          class="input-field w-full"
+          :disabled="!canEdit(selectedTask)"
+        />
+      </div>
+
+      <div class="field-row" v-else>
+        <label>Owner:</label>
+        <span class="text-field">{{ getOwnerName(taskForm.owner) || currentEmployeeName }}</span>
       </div>
 
       <div class="field-row">
@@ -398,11 +778,11 @@ onUnmounted(() => {
         <template v-if="isEditing || !selectedTask">
           <MultiSelect
             v-model="taskForm.collaborators"
-            :options="availableEmployees" 
+            :options="availableEmployees.filter(emp => emp.employee_id !== taskForm.owner)" 
             optionLabel="employee_name"
             optionValue="employee_id"
             class="input-field w-full"
-            :disabled="selectedTask && isCollaboratorOnly(selectedTask)"
+            :disabled="!canEdit(selectedTask)"
             placeholder="Select collaborators..."
           />
         </template>
@@ -414,7 +794,7 @@ onUnmounted(() => {
       <div class="field-row">
         <label>Attachments:</label>
         <template v-if="isEditing || !selectedTask">
-          <FileUpload mode="basic" accept=".pdf" :multiple="true" choose-label="Upload" :auto="false" :customUpload="true" @select="handleAttachment" :disabled="selectedTask && isCollaboratorOnly(selectedTask)" />
+          <FileUpload mode="basic" accept=".pdf" :multiple="true" choose-label="Upload" :auto="false" :customUpload="true" @select="handleAttachment" :disabled="!canEdit(selectedTask)" />
           <ul class="file-list">
             <li v-for="(file, index) in taskForm.attachments" :key="index">
               <a :href="file.url" target="_blank">{{ file.name }}</a>
@@ -432,14 +812,14 @@ onUnmounted(() => {
       </div>
 
       <div class="save-btn-container">
-        <template v-if="selectedTask && !isEditing && !isCollaboratorOnly(selectedTask)">
+        <template v-if="selectedTask && !isEditing && canEdit(selectedTask)">
           <Button label="Edit" class="save-task-btn" @click="startEditing" />
         </template>
-        <Button label="Save" class="save-task-btn" @click="saveTask" v-if="isEditing || !selectedTask" :disabled="selectedTask && isCollaboratorOnly(selectedTask)"/>
+        <Button label="Save" class="save-task-btn" @click="saveTask" v-if="isEditing || !selectedTask" :disabled="!canEdit(selectedTask)"/>
       </div>
+
     </div>
   </Dialog>
-</div>
 </template>
 
 <style scoped>
@@ -457,8 +837,210 @@ onUnmounted(() => {
   font-weight: bold;
 }
 
-/* Task Grid */
-.tasks-page { padding: 2rem; }
+/* Tabs */
+.tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.tab { border: 1px solid #e5e7eb; background: #fff; color: #111827; padding: 0.4rem 0.9rem; border-radius: 999px; cursor: pointer; font-weight: 600; }
+.tab.active { background: #111827; color: #fff; }
+
+/* Team search */
+.team-search-section {
+  margin-bottom: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.employee-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.8rem;
+  margin-top: 1.5rem;
+}
+
+.employee-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.6rem 0.8rem;
+  border-radius: 12px;
+  background: #ededee;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.employee-card:hover {
+  background: #e1e5f3;
+  transform: translateY(-2px);
+}
+
+.employee-card.selected {
+  background: #5ea866;
+  color: white;
+}
+
+.employee-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #bfd6cc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.4rem;
+}
+
+.employee-card.selected .employee-avatar {
+  background: white;
+  color: #5ea866;
+}
+
+.employee-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.employee-role {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* Department Section */
+.department-section {
+  margin-bottom: 3rem;
+  margin-top: 0.5rem;
+  margin-left: 2rem;
+  margin-right: 2rem;
+}
+
+.department-selection {
+  margin-bottom: 2rem;
+}
+
+.department-selection h3 {
+  margin-bottom: 1.5rem;
+  font-size: 1.3rem;
+  color: #333;
+  font-weight: 600;
+}
+
+.department-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.department-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #f8f9fa;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.department-card:hover {
+  background: #e9ecef;
+  transform: translateY(-2px);
+}
+
+.department-card.selected {
+  background: #007bff;
+  color: white;
+  border-color: #0056b3;
+}
+
+.department-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #dee2e6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+
+.department-card.selected .department-icon {
+  background: white;
+  color: #007bff;
+}
+
+.department-name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.employee-selection {
+  margin-top: 3rem;
+}
+
+.employee-selection h3 {
+  margin-bottom: 1.5rem;
+  font-size: 1.3rem;
+  color: #686c84;
+  font-weight: 600;
+  border-top: 3px solid #d1d4e0;
+  padding-top: 1.5rem;
+}
+
+/* Task Container */
+.tasks-page { 
+  padding: 2rem 3rem; 
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.tasks-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.priority-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.priority-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.high-priority {
+  background: #fef2f2;
+  color: #dc2626;
+  border-left: 4px solid #dc2626;
+}
+
+.medium-priority {
+  background: #fffbeb;
+  color: #d97706;
+  border-left: 4px solid #d97706;
+}
+
+.low-priority {
+  background: #f0fdf4;
+  color: #059669;
+  border-left: 4px solid #059669;
+}
+
+.task-count {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 0.20rem 2rem;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .tasks-grid {
   display: grid;
   gap: 1.5rem;
@@ -472,7 +1054,8 @@ onUnmounted(() => {
   white-space: normal;
   background: #fff;
   border-radius: 12px;
-  padding: 1.2rem;
+  padding: 0.5rem;
+  margin: 0 1rem;
   box-shadow: 0 2px 6px rgba(0,0,0,0.1);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -491,7 +1074,7 @@ onUnmounted(() => {
 :deep(.page-style-modal .p-dialog) {
   width: 60vw !important;      
   max-width: 700px;           
-  min-width: 400px;
+  min-width: 700px;
   max-height: 85vh;           
   border-radius: 12px;
   font-family: 'Segoe UI', sans-serif;
@@ -499,7 +1082,7 @@ onUnmounted(() => {
 }
 
 :deep(.page-style-modal .p-dialog-content) {
-  min-height: 400px; 
+  min-height: 500px; 
   max-height: 70vh;
   padding: 1.5rem;
   box-sizing: border-box;
@@ -541,7 +1124,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 1.6rem;
-  min-height: 500px
+  min-height: 500px;
+  width: 100%;
 }
 
 /* Fields */
@@ -551,13 +1135,17 @@ onUnmounted(() => {
 .text-field {
   font-size: 0.95rem;
   color: #444;
-  padding: 0.3rem 0;
+  padding: 0.5rem 0.8rem;
   word-wrap: break-word;
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: normal;
   max-width: 100%; 
-  display: block;   
+  display: block;
+  min-height: 2.5rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
 }
 
 :deep(.p-calendar){
@@ -652,35 +1240,29 @@ onUnmounted(() => {
 /* Priority Badge */
 .task-title-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   width: 100%;
 }
 
-.priority-badge {
-  display: inline-flex;
+.no-tasks {
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: white;
-  min-width: 24px;
-  flex-shrink: 0;
+  padding: 3rem;
+  color: #6b7280;
+  text-align: center;
 }
 
-.priority-high {
-  background-color: #ef4444; /* Red for high priority */
+.no-tasks i {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
 }
 
-.priority-medium {
-  background-color: #f59e0b; /* Orange for medium priority */
-}
-
-.priority-low {
-  background-color: #10b981; /* Green for low priority */
+.no-tasks p {
+  font-size: 1.1rem;
+  margin: 0;
 }
 
 </style>

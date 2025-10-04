@@ -81,12 +81,9 @@ export default {
         if (response.ok) {
           sessionStorage.setItem("employee_id", data.employee_id);
           sessionStorage.setItem("role", data.role);
-          if (data.employee_name) {
-            sessionStorage.setItem("employee_name", data.employee_name);
-          }
-          if (data.department) {
-            sessionStorage.setItem("department", data.department);
-          }
+          sessionStorage.setItem("employee_name", data.employee_name || "");
+          sessionStorage.setItem("department", (data.department || "").trim());
+          sessionStorage.setItem("team", (data.team || "").trim());
           this.$router.push("/home");
         } else {
           this.errorMessage = data.error || "Login failed";
