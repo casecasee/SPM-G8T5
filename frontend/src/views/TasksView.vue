@@ -58,6 +58,21 @@ const priorityOptions = [
 const taskForm = ref(resetForm())
 const openStatusFor = ref(null)
 
+// Subtasks state
+const subtasks = ref([])
+const newSubtask = ref({
+  name: '',
+  description: '',
+  due_date: null,
+  status: 'ongoing',
+  priority: 5,
+  owner: currentEmployeeId,
+  collaborators: [],
+  attachments: []
+})
+const showSubtaskForm = ref(false)
+const subtaskFileUploadRef = ref(null)
+
 function resetForm() {
   const defaultStatus = currentRole === 'staff' ? 'ongoing' : 'unassigned'
   
@@ -72,6 +87,59 @@ function resetForm() {
     collaborators: [], 
     attachments: []
   }
+}
+
+function resetSubtaskForm() {
+  return {
+    name: '',
+    description: '',
+    due_date: null,
+    status: 'ongoing',
+    priority: 5,
+    owner: currentEmployeeId,
+    collaborators: [],
+    attachments: []
+  }
+}
+
+function addSubtask() {
+  if (!newSubtask.value.name.trim()) return
+  
+  subtasks.value.push({
+    id: Date.now(), // Temporary ID for new subtasks
+    ...newSubtask.value
+  })
+  
+  newSubtask.value = resetSubtaskForm()
+  showSubtaskForm.value = false
+}
+
+function toggleSubtaskForm() {
+  showSubtaskForm.value = !showSubtaskForm.value
+  if (!showSubtaskForm.value) {
+    newSubtask.value = resetSubtaskForm()
+  }
+}
+
+function handleSubtaskAttachment(event) {
+  const newFiles = event.files.map(file => ({ 
+    name: file.name, 
+    file: file,
+    url: null
+  }))
+  newSubtask.value.attachments.push(...newFiles)
+  
+  if (subtaskFileUploadRef.value && typeof subtaskFileUploadRef.value.clear === 'function') {
+    subtaskFileUploadRef.value.clear()
+  }
+}
+
+function removeSubtaskAttachment(index) {
+  newSubtask.value.attachments.splice(index, 1)
+}
+
+function updateSubtaskStatus(subtask, newStatus) {
+  subtask.status = newStatus
 }
 
 function canEdit(task) {
@@ -164,6 +232,17 @@ const shouldShowNoTasksMessage = computed(() => {
   }
   
   return false
+})
+
+// Subtask progress tracking
+const subtaskProgress = computed(() => {
+  if (subtasks.value.length === 0) return { completed: 0, total: 0, percentage: 0 }
+  
+  const completed = subtasks.value.filter(subtask => subtask.status === 'done').length
+  const total = subtasks.value.length
+  const percentage = total > 0 ? Math.round((completed / total) * 100) : 0
+  
+  return { completed, total, percentage }
 })
 
 const filteredEmployeesForTeam = computed(() => {
@@ -368,6 +447,10 @@ function isCollaboratorOnly(task) {
   return isStaff() && isCollaborator(task) && !isOwner(task)
 }
 
+function isOwnerOrCollaborator(task) {
+  return isOwner(task) || isCollaborator(task)
+}
+
 async function updateTaskStatus(task, newStatus) {
   try {
     await axios.patch(`http://localhost:5002/task/status/${task.id}`, { status: newStatus, employee_id: currentEmployeeId }, { withCredentials: true })
@@ -422,6 +505,8 @@ function openDetails(task) {
     collaborators: (task.collaborators || []).filter(id => id !== task.owner),
     attachments: task.attachments || []
   }
+  // Initialize subtasks (you can fetch from API later)
+  subtasks.value = task.subtasks || []
   showModal.value = true
 }
 
@@ -603,7 +688,7 @@ onUnmounted(() => {
             <p class="desc">{{ task.description }}</p>
             <p class="meta">📅 {{ formatDate(task.due_date) }}</p>
             <span
-              v-if="(isStaff() && isOwner(task)) || (isManagerRole && isOwner(task))"
+              v-if="isOwnerOrCollaborator(task)"
               class="status-pill status-clickable"
               :class="getStatusClass(task.status)"
               @click.stop="toggleStatusMenu(task)"
@@ -648,7 +733,7 @@ onUnmounted(() => {
             <p class="desc">{{ task.description }}</p>
             <p class="meta">📅 {{ formatDate(task.due_date) }}</p>
             <span
-              v-if="(isStaff() && isOwner(task)) || (isManagerRole && isOwner(task))"
+              v-if="isOwnerOrCollaborator(task)"
               class="status-pill status-clickable"
               :class="getStatusClass(task.status)"
               @click.stop="toggleStatusMenu(task)"
@@ -693,7 +778,7 @@ onUnmounted(() => {
             <p class="desc">{{ task.description }}</p>
             <p class="meta">📅 {{ formatDate(task.due_date) }}</p>
             <span
-              v-if="(isStaff() && isOwner(task)) || (isManagerRole && isOwner(task))"
+              v-if="isOwnerOrCollaborator(task)"
               class="status-pill status-clickable"
               :class="getStatusClass(task.status)"
               @click.stop="toggleStatusMenu(task)"
@@ -845,6 +930,141 @@ onUnmounted(() => {
             </li>
           </ul>
         </template>
+      </div>
+
+      <!-- Subtasks Section -->
+      <div class="field-row subtasks-section">
+        <div class="subtasks-header">
+          <label>Subtasks:</label>
+          <Button 
+            v-if="isEditing || !selectedTask" 
+            icon="pi pi-plus" 
+            label="Add Subtask" 
+            class="add-subtask-btn" 
+            @click="toggleSubtaskForm"
+            size="small"
+          />
+        </div>
+        
+        <!-- Progress Bar -->
+        <div v-if="subtasks.length > 0" class="subtask-progress">
+          <div class="progress-header">
+            <span class="progress-title">Progress</span>
+            <span class="progress-stats">{{ subtaskProgress.completed }}/{{ subtaskProgress.total }} completed</span>
+          </div>
+          <div class="progress-bar-container">
+            <div class="progress-bar">
+              <div 
+                class="progress-fill" 
+                :style="{ width: subtaskProgress.percentage + '%' }"
+              ></div>
+            </div>
+            <span class="progress-percentage">{{ subtaskProgress.percentage }}%</span>
+          </div>
+        </div>
+        
+        <!-- Subtask Form -->
+        <div v-if="showSubtaskForm && (isEditing || !selectedTask)" class="subtask-form">
+          <div class="subtask-form-row">
+            <InputText v-model="newSubtask.name" placeholder="Subtask name" class="input-field" />
+            <div class="subtask-form-controls">
+              <Button label="Add" @click="addSubtask" size="small" />
+              <Button label="Cancel" @click="toggleSubtaskForm" severity="secondary" size="small" />
+            </div>
+          </div>
+          <div class="subtask-form-row">
+            <Textarea v-model="newSubtask.description" placeholder="Description" rows="2" class="input-field" />
+          </div>
+          <div class="subtask-form-row grid-3">
+            <Calendar v-model="newSubtask.due_date" placeholder="Due date" class="input-field" />
+            <Dropdown v-model="newSubtask.status" :options="statusOptions" optionLabel="label" optionValue="value" class="input-field" />
+            <Dropdown v-model="newSubtask.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="input-field" />
+          </div>
+          
+          <!-- Owner Selection -->
+          <div class="subtask-form-row">
+            <label>Owner:</label>
+            <Dropdown
+              v-model="newSubtask.owner"
+              :options="availableEmployees"
+              optionLabel="employee_name"
+              optionValue="employee_id"
+              placeholder="Select owner..."
+              class="input-field"
+            />
+          </div>
+          
+          <!-- Collaborators -->
+          <div class="subtask-form-row">
+            <label>Collaborators:</label>
+            <MultiSelect
+              v-model="newSubtask.collaborators"
+              :options="availableEmployees.filter(emp => emp.employee_id !== newSubtask.owner)" 
+              optionLabel="employee_name"
+              optionValue="employee_id"
+              class="input-field"
+              placeholder="Select collaborators..."
+            />
+          </div>
+          
+          <!-- Attachments -->
+          <div class="subtask-form-row">
+            <label>Attachments:</label>
+            <FileUpload 
+              ref="subtaskFileUploadRef"
+              mode="basic" 
+              accept=".pdf" 
+              :multiple="true"
+              chooseLabel="Upload" 
+              :auto="false" 
+              :customUpload="true" 
+              @select="handleSubtaskAttachment"
+            />
+            <ul class="file-list">
+              <li v-for="(file, index) in newSubtask.attachments" :key="index">
+                <span>{{ file.name }}</span>
+                <Button icon="pi pi-times" class="delete-btn" @click="removeSubtaskAttachment(index)" size="small" text />
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Subtasks List - Compact Design -->
+        <div v-if="subtasks.length > 0" class="subtasks-list">
+          <div v-for="(subtask, index) in subtasks" :key="subtask.id || index" class="subtask-item">
+            <div class="subtask-content">
+              <div class="subtask-header">
+                <h4 class="subtask-title">{{ subtask.name }}</h4>
+                <div class="subtask-meta">
+                  <span 
+                    class="status-pill status-clickable" 
+                    :class="getStatusClass(subtask.status)"
+                    @click="updateSubtaskStatus(subtask, subtask.status === 'done' ? 'ongoing' : 'done')"
+                    title="Click to toggle status"
+                  >
+                    {{ subtask.status }}
+                  </span>
+                  <span class="priority-badge" :class="getPriorityClass(subtask.priority)">P{{ subtask.priority }}</span>
+                </div>
+              </div>
+              <p v-if="subtask.description" class="subtask-description">{{ subtask.description }}</p>
+              <div class="subtask-details">
+                <span v-if="subtask.due_date" class="subtask-due">📅 {{ formatDate(subtask.due_date) }}</span>
+                <span class="subtask-owner">👤 {{ getOwnerName(subtask.owner) }}</span>
+                <span v-if="subtask.collaborators && subtask.collaborators.length > 0" class="subtask-collabs">
+                  🤝 {{ getCollaboratorNames(subtask.collaborators) }}
+                </span>
+                <span v-if="subtask.attachments && subtask.attachments.length > 0" class="subtask-attachments">
+                  📎 {{ subtask.attachments.length }} file(s)
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div v-else-if="!showSubtaskForm" class="no-subtasks">
+          <span>No subtasks yet</span>
+        </div>
       </div>
 
       <div class="save-btn-container">
@@ -1299,6 +1519,233 @@ onUnmounted(() => {
 .no-tasks p {
   font-size: 1.1rem;
   margin: 0;
+}
+
+/* Subtasks Section - Compact Design */
+.subtasks-section {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1.5rem;
+  margin-top: 1rem;
+}
+
+.subtasks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.add-subtask-btn {
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+/* Progress Bar */
+.subtask-progress {
+  background: #f8f9fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.progress-title {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.progress-stats {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.progress-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #059669);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-percentage {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #059669;
+  min-width: 35px;
+  text-align: right;
+}
+
+/* Subtask Form */
+.subtask-form {
+  background: #f8f9fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.subtask-form-row {
+  display: flex;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+  align-items: flex-start;
+}
+
+.subtask-form-row:last-child {
+  margin-bottom: 0;
+}
+
+.subtask-form-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.subtask-form-row label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.3rem;
+  display: block;
+}
+
+.subtask-form-row .input-field {
+  width: 100%;
+}
+
+/* Compact Subtasks List */
+.subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.subtask-item {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.8rem;
+  transition: all 0.2s ease;
+}
+
+.subtask-item:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.subtask-content {
+  width: 100%;
+}
+
+.subtask-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.4rem;
+  gap: 1rem;
+}
+
+.subtask-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  word-wrap: break-word;
+}
+
+.subtask-meta {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.priority-badge {
+  display: inline-block;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: center;
+  min-width: 25px;
+}
+
+.priority-badge.priority-high {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.priority-badge.priority-medium {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fed7aa;
+}
+
+.priority-badge.priority-low {
+  background: #f0fdf4;
+  color: #059669;
+  border: 1px solid #bbf7d0;
+}
+
+.subtask-description {
+  color: #6b7280;
+  font-size: 0.85rem;
+  margin: 0.3rem 0;
+  line-height: 1.3;
+  word-wrap: break-word;
+}
+
+.subtask-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.3rem;
+}
+
+.subtask-due,
+.subtask-owner,
+.subtask-collabs,
+.subtask-attachments {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.no-subtasks {
+  text-align: center;
+  color: #9ca3af;
+  font-style: italic;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px dashed #d1d5db;
 }
 
 </style>
