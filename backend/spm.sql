@@ -1,3 +1,66 @@
+-- phpMyAdmin SQL Dump
+-- version 5.2.1
+-- https://www.phpmyadmin.net/
+--
+-- Host: 127.0.0.1:3306
+-- Generation Time: Oct 06, 2025 at 01:50 PM
+-- Server version: 8.2.0
+-- PHP Version: 8.2.13
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+
+--
+-- Database: `spm`
+--
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `projects`
+--
+
+DROP TABLE IF EXISTS `projects`;
+CREATE TABLE IF NOT EXISTS `projects` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) NOT NULL,
+  `owner` varchar(255) DEFAULT NULL,
+  `owner_id` int DEFAULT NULL,
+  `status` varchar(50) NOT NULL,
+  `tasks_done` int NOT NULL,
+  `tasks_total` int NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ix_projects_owner_id` (`owner_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `project_members`
+--
+
+DROP TABLE IF EXISTS `project_members`;
+CREATE TABLE IF NOT EXISTS `project_members` (
+  `project_id` int NOT NULL,
+  `staff_id` int NOT NULL,
+  PRIMARY KEY (`project_id`,`staff_id`),
+  KEY `staff_id` (`staff_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `staff`
+--
+
 DROP TABLE IF EXISTS `staff`;
 CREATE TABLE IF NOT EXISTS `staff` (
   `employee_id` int NOT NULL AUTO_INCREMENT,
@@ -10,6 +73,10 @@ CREATE TABLE IF NOT EXISTS `staff` (
   PRIMARY KEY (`employee_id`),
   UNIQUE KEY `email` (`email`)
 ) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `staff`
+--
 
 INSERT INTO `staff` (`employee_id`, `employee_name`, `email`, `department`, `role`, `password`, `team`) VALUES
 (1, 'test', 'test1@gmail.com', 'Finance', 'manager', 'scrypt:32768:8:1$mtuy3ILZYT5Oo2xw$2eb0e684d977c87f6717f71a0bbf9d80eab1570be2beb2d0e647f47dd9895c0723fd6fa17d82b412f847d9c324e3ffea2a00455aef9191268bc2710b32397111', 'A'),
@@ -29,7 +96,12 @@ INSERT INTO `staff` (`employee_id`, `employee_name`, `email`, `department`, `rol
 (45, 'Lucas Grant', 'lucas.grant@company.com', 'Operations', 'senior manager', 'scrypt:32768:8:1$LEsHQpVaJr5dyP8u$9de5ca1862a1c723ba7b198a472c0128b0c29fa73a3e9af14d1ef2f67adb725865debe10379f56f8d9187a42dda2feb4cf3a6f063be9ca946c84975a4676d92f', 'E'),
 (46, 'Hannah Lim', 'hannah.lim@company.com', 'Operations', 'staff', 'scrypt:32768:8:1$StRIE6tjdvk9a2hY$d471004894080be2fe1ba794812a238e8622b53d9ee967ce060e4514b21f1aa33019de48a1b206170a7d86dac774bb542e03313998c84c1066b34e498ea29159', 'E'),
 (47, 'James Connor', 'james.connor@company.com', 'Admin', 'manager', 'scrypt:32768:8:1$Igd0teMCNnB1nXDD$7f1aa55a12b1988f2918f00a65d1d29c560f03ea1d549be12f765ac398842263e5eb01294cb831079c68a922c51f223de8b7d52f14a94b0287cdb253c82d4909', 'F');
-COMMIT;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `task`
+--
 
 DROP TABLE IF EXISTS `task`;
 CREATE TABLE IF NOT EXISTS `task` (
@@ -47,24 +119,32 @@ CREATE TABLE IF NOT EXISTS `task` (
   `parent_id` int DEFAULT NULL,
   PRIMARY KEY (`task_id`),
   KEY `parent_id` (`parent_id`),
-  KEY `ix_Task_deadline` (`deadline`),
   KEY `ix_Task_owner` (`owner`),
-  KEY `ix_Task_project_id` (`project_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `ix_Task_project_id` (`project_id`),
+  KEY `ix_Task_deadline` (`deadline`)
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `task`
+--
 
 INSERT INTO `task` (`task_id`, `title`, `description`, `attachment`, `priority`, `start_date`, `deadline`, `completed_date`, `status`, `owner`, `project_id`, `parent_id`) VALUES
-(1, 'task', 'TASKKKKKKKKKKKKKKKKKKKK', NULL, 4, NULL, '2025-10-06 00:00:00', '2025-10-04 14:04:46', 'done', 1, NULL, NULL),
-(2, 'Priority of 9', 'TASK2TASK2TASK2TASK2TASK2TASK2TASK2', NULL, 9, NULL, '2025-10-14 00:00:00', NULL, 'ongoing', 2, NULL, NULL),
-(3, 'Priority of 4', 'TESTTESTETESTERSTESTESTESTS', NULL, 4, NULL, '2025-10-12 08:00:00', NULL, 'done', 2, NULL, NULL),
-(4, 'meeting', 'this meeting will be on monday to discuss the sprint info', NULL, 5, '2025-10-04 14:05:44', '2025-10-10 16:00:00', NULL, 'done', 2, NULL, NULL),
-(5, 'this is a new one', 'this task is just a test to see if it works', NULL, 5, '2025-10-04 14:42:53', '2025-10-23 00:00:00', NULL, 'done', 34, NULL, NULL),
+(1, 'task', 'TASKKKKKKKKKKKKKKKKKKKK', NULL, 4, NULL, '2025-10-06 00:00:00', '2025-10-04 14:04:46', 'under review', 1, NULL, NULL),
 (6, 'this is another new task', '', NULL, 5, NULL, '2025-10-04 06:39:30', NULL, 'ongoing', 2, NULL, NULL),
-(7, 'sprint planning', 'this a test for this idkkkk', NULL, 5, NULL, '2025-10-13 00:00:00', NULL, 'unassigned', 35, NULL, NULL),
-(8, 'task', '', NULL, 5, NULL, '2025-10-04 07:55:36', NULL, 'unassigned', 35, NULL, NULL),
-(9, 'Priority of 10', '', NULL, 10, NULL, '2025-10-04 08:16:26', NULL, 'ongoing', 2, NULL, NULL),
-(10, 'Priority of 8', '', NULL, 8, NULL, '2025-10-04 08:16:52', NULL, 'ongoing', 2, NULL, NULL),
-(11, 'Priority 10', '', NULL, 10, NULL, '2025-10-04 08:23:10', NULL, 'unassigned', 1, NULL, NULL);
-COMMIT;
+(12, 'test status update', 'test', '[]', 5, NULL, '2025-10-26 16:00:00', '2025-10-06 21:28:49', 'done', 1, NULL, NULL),
+(13, 'test status update', 'test', '[]', 5, '2025-10-06 21:28:43', '2025-10-26 16:00:00', NULL, 'under review', 1, NULL, NULL),
+(14, 'Prepare weekly team report', 'Summarize key achievements, blockers, and next steps for this week’s activities.', '[]', 6, '2025-10-06 21:48:45', '2025-10-08 16:00:00', '2025-10-06 21:49:00', 'done', 1, NULL, NULL),
+(15, 'Review design mockups', 'Go over the latest UI designs and provide feedback before the next iteration.', '[]', 3, '2025-10-06 21:38:11', '2025-10-20 16:00:00', NULL, 'ongoing', 1, NULL, NULL),
+(16, 'Update client presentation', 'Incorporate the new performance metrics and refresh the visuals before tomorrow’s meeting.', '[]', 7, NULL, '2025-10-06 16:00:00', NULL, 'ongoing', 34, NULL, NULL),
+(18, 'Schedule performance reviews', 'Coordinate one-on-one meetings with each team member for quarterly evaluations.', '[]', 7, NULL, '2025-10-07 16:00:00', NULL, 'unassigned', 35, NULL, NULL),
+(19, 'Conduct customer feedback survey', 'Prepare and send out the feedback form to recent users, then collect responses.', '[]', 8, NULL, '2025-10-14 16:00:00', NULL, 'ongoing', 34, NULL, NULL),
+(20, 'Optimize website SEO', 'Review page titles, metadata, and keywords to improve search visibility.', '[]', 2, NULL, '2025-10-20 16:00:00', NULL, 'ongoing', 34, NULL, NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `task_collaborators`
+--
 
 DROP TABLE IF EXISTS `task_collaborators`;
 CREATE TABLE IF NOT EXISTS `task_collaborators` (
@@ -74,11 +154,58 @@ CREATE TABLE IF NOT EXISTS `task_collaborators` (
   KEY `staff_id` (`staff_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+--
+-- Dumping data for table `task_collaborators`
+--
+
 INSERT INTO `task_collaborators` (`task_id`, `staff_id`) VALUES
 (1, 1),
-(5, 2),
+(12, 1),
+(13, 1),
+(14, 1),
+(15, 1),
 (6, 2),
-(2, 34),
-(3, 34),
-(4, 34),
-(7, 34);
+(20, 2),
+(14, 34),
+(16, 34),
+(19, 34),
+(20, 34),
+(14, 35),
+(18, 35);
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `projects`
+--
+ALTER TABLE `projects`
+  ADD CONSTRAINT `projects_ibfk_1` FOREIGN KEY (`owner_id`) REFERENCES `staff` (`employee_id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `project_members`
+--
+ALTER TABLE `project_members`
+  ADD CONSTRAINT `project_members_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `project_members_ibfk_2` FOREIGN KEY (`staff_id`) REFERENCES `staff` (`employee_id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `task`
+--
+ALTER TABLE `task`
+  ADD CONSTRAINT `task_ibfk_1` FOREIGN KEY (`owner`) REFERENCES `staff` (`employee_id`) ON DELETE RESTRICT,
+  ADD CONSTRAINT `task_ibfk_2` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `task_ibfk_3` FOREIGN KEY (`parent_id`) REFERENCES `task` (`task_id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `task_collaborators`
+--
+ALTER TABLE `task_collaborators`
+  ADD CONSTRAINT `task_collaborators_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `task` (`task_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `task_collaborators_ibfk_2` FOREIGN KEY (`staff_id`) REFERENCES `staff` (`employee_id`) ON DELETE CASCADE;
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;

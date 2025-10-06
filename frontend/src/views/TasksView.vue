@@ -350,7 +350,7 @@ async function fetchTasks() {
         priority: t.priority || 5,
         owner: t.owner,
         project_id: t.project_id,
-        collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)).filter(id => id !== t.owner) : [],
+        collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)) : [],
         attachments: attachments
       }
     })

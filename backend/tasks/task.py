@@ -59,6 +59,7 @@ def update_stuff_by_status(curr_task, new_status):
 @app.route('/tasks', methods=['POST'])
 def create_task():
     data = request.json
+    print(data)
 
     # input {title, description, attachment(o), deadline, status, project_id, parent_id, collaborators[], priority, owner}
 
@@ -68,8 +69,11 @@ def create_task():
     status = 'ongoing' if role == 'staff' else 'unassigned' # set status by role of person creating it
     
     ppl = data.get('collaborators', [])
+    print('here')
     ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
+    print('here2', ppl)
     collaborators = get_collaborators(ppl)
+    print(collaborators)
 
     # TODO: validate deadline (not before today) - frontend job?
 
@@ -112,7 +116,7 @@ def update_task_status(task_id):
     print('hereee3')
 
     # check if employee is a collaborator
-    # print(curr_task.collaborators)
+    print(curr_task.collaborators)
     # print(eid)
     print(curr_task.collaborators.filter_by(employee_id=eid).first())
     if curr_task.collaborators.filter_by(employee_id=eid).first() is None:

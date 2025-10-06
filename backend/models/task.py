@@ -46,7 +46,7 @@ class Task(db.Model):
     # collaborators many-to-many
     collaborators = db.relationship(
     'Staff',
-    secondary=Task_Collaborators,
+    secondary=Task_Collaborators, 
     lazy='dynamic'
 )
 
