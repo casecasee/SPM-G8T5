@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { getProjects } from '../api/projects'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
@@ -13,6 +14,7 @@ import axios from 'axios'
 
 // ----------------- State -----------------
 const tasks = ref([])
+const projects = ref([])
 const currentTab = ref('my')
 const teamSearch = ref('')
 const teamSelectedEmployeeId = ref(null)
@@ -85,6 +87,7 @@ function resetForm() {
     priority: 5, 
     owner: currentEmployeeId, 
     collaborators: [], 
+    project_id: null,
     attachments: []
   }
 }
@@ -98,6 +101,7 @@ function resetSubtaskForm() {
     priority: 5,
     owner: currentEmployeeId,
     collaborators: [],
+    project_id: null,
     attachments: []
   }
 }
@@ -345,6 +349,7 @@ async function fetchTasks() {
         status: t.status,
         priority: t.priority || 5,
         owner: t.owner,
+        project_id: t.project_id,
         collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)).filter(id => id !== t.owner) : [],
         attachments: attachments
       }
@@ -402,6 +407,7 @@ async function saveTask() {
       parent_id: null,
       employee_id: currentEmployeeId,
       owner: taskForm.value.owner,
+      project_id: taskForm.value.project_id,
       collaborators: (() => {
         const selected = Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : []
         if (currentRole === 'staff') {
@@ -475,6 +481,21 @@ function getOwnerName(ownerId) {
   return name || (ownerId === currentEmployeeId ? currentEmployeeName : '')
 }
 
+// -------- Project helpers for task details --------
+function getProjectLabelById(id) {
+  if (!id) return '-'
+  const p = (projects.value || []).find(p => p.id === id)
+  return p ? `${p.name} (#${p.id})` : `#${id}`
+}
+
+const projectOptions = computed(() => {
+  const opts = [{ label: 'None', value: null }]
+  for (const p of (projects.value || [])) {
+    opts.push({ label: `${p.name} (#${p.id})`, value: p.id })
+  }
+  return opts
+})
+
 function getCollaboratorNames(collaboratorIds) {
   if (!Array.isArray(collaboratorIds) || collaboratorIds.length === 0) return ''
   const names = collaboratorIds
@@ -502,6 +523,7 @@ function openDetails(task) {
     status: task.status,
     priority: task.priority || 5,
     owner: task.owner,
+    project_id: task.project_id || null,
     collaborators: (task.collaborators || []).filter(id => id !== task.owner),
     attachments: task.attachments || []
   }
@@ -567,6 +589,7 @@ let refreshTimer = null
 
 onMounted(() => {
   fetchEmployees().finally(() => fetchTasks())
+  getProjects().then(list => { projects.value = Array.isArray(list) ? list : [] }).catch(() => { projects.value = [] })
   
   if (isSeniorManagerOrHR.value) {
     fetchDepartments()
@@ -864,6 +887,16 @@ onUnmounted(() => {
             <span class="text-field">{{ taskForm.priority }}</span>
           </template>
         </div>
+      </div>
+
+      <div class="field-row">
+        <label>Project:</label>
+        <template v-if="isEditing || !selectedTask">
+          <Dropdown v-model="taskForm.project_id" :options="projectOptions" optionLabel="label" optionValue="value" class="input-field w-full" />
+        </template>
+        <template v-else>
+          <span class="text-field">{{ getProjectLabelById(taskForm.project_id) }}</span>
+        </template>
       </div>
 
       <div class="field-row" v-if="canAssignTasks() && isEditing">

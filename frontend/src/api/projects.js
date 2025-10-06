@@ -12,5 +12,3 @@ async function http(path, options) {
 export const getProjects = () => http('/projects', { method: 'GET' });
 export const createProject = (payload) =>
   http('/projects', { method: 'POST', body: JSON.stringify(payload) });
-export const archiveProject = (id) =>
-  http(`/projects/${id}/archive`, { method: 'PATCH' });

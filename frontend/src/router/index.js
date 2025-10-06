@@ -4,6 +4,7 @@ import ReportsView from '../views/ReportsView.vue'
 import LoginPage from '../views/LoginPage.vue'
 import HomeView from '../views/HomeView.vue' 
 import ProjectsView from '../views/ProjectsView.vue' 
+import ProjectDetailView from '../views/ProjectDetailView.vue'
 
 
 const routes = [
@@ -31,6 +32,11 @@ const routes = [
     path: '/projects',
     name: 'projects',
     component: ProjectsView,
+  },
+  {
+    path: '/projects/:id',
+    name: 'project-detail',
+    component: ProjectDetailView,
   },
 ]
 

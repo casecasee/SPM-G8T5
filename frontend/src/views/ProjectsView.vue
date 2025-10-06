@@ -59,8 +59,8 @@
                         <td colspan="6">No projects found.</td>
                     </tr>
 
-                    <tr v-for="p in filteredAndSorted" :key="p.id">
-                        <td class="name">{{ p.name }}</td>
+                    <tr v-for="p in filteredAndSorted" :key="p.id" @click="$router.push({ name: 'project-detail', params: { id: p.id } })" style="cursor:pointer;">
+                        <td class="name">{{ p.name }} <span class="pid">#{{ p.id }}</span></td>
                         <td>{{ p.owner }}</td>
                         <td>
                             <span class="badge" :class="badgeClass(p.status)">
@@ -74,9 +74,7 @@
                 </tbody>
             </table>
 
-            <div class="table-footer">
-                <a href="#" @click.prevent="onArchive" class="link">Archive</a>
-            </div>
+            <!-- Removed archive footer -->
         </div>
 
         <!-- Create Project Modal -->
@@ -103,12 +101,12 @@
 
                     <div class="row">
                         <label>
-                            Tasks done
-                            <input type="number" min="0" v-model.number="form.tasksDone" />
+                            Tasks done (auto)
+                            <input type="number" min="0" v-model.number="form.tasksDone" disabled />
                         </label>
                         <label>
-                            Tasks total
-                            <input type="number" min="0" v-model.number="form.tasksTotal" />
+                            Tasks total (auto)
+                            <input type="number" min="0" v-model.number="form.tasksTotal" disabled />
                         </label>
                     </div>
 
@@ -117,7 +115,55 @@
                         <input v-model="form.members" placeholder="e.g. 1,2,3" />
                     </label>
 
-                    <div class="actions">
+                    <!-- Add Tasks UI: pill tabs create/attach -->
+                    <div v-if="isOwner" class="pill-tabs" style="margin-top:8px;">
+                        <button :class="['pill', addTab==='create' ? 'active' : '']" @click="addTab='create'">Create Task</button>
+                        <button :class="['pill', addTab==='attach' ? 'active' : '']" @click="addTab='attach'">Attach Existing</button>
+                    </div>
+
+                    <div v-if="isOwner && addTab==='create'" class="row">
+                        <label>
+                            Title
+                            <input v-model="taskForm.title" placeholder="Task title" />
+                        </label>
+                        <label>
+                            Priority (1–10)
+                            <input type="number" min="1" max="10" v-model.number="taskForm.priority" />
+                        </label>
+                        <label style="grid-column:1/-1;">
+                            Description
+                            <input v-model="taskForm.description" placeholder="What needs to be done" />
+                        </label>
+                        <label>
+                            Deadline
+                            <input type="datetime-local" v-model="taskForm.deadline" />
+                        </label>
+                        <label>
+                            Collaborators (IDs, comma-separated)
+                            <input v-model="taskForm.collaborators" placeholder="e.g. 2,3,34" />
+                        </label>
+                    </div>
+
+                    <div v-else-if="isOwner">
+                        <div v-if="tasksLoading">Loading tasks…</div>
+                        <div v-else>
+                            <div class="attach-toolbar">
+                                <input class="search input" v-model="searchExisting" placeholder="Search tasks by title" />
+                                <small class="muted">{{ unassignedTasks.length }} available</small>
+                            </div>
+                            <div class="attach-list">
+                                <label v-for="t in unassignedTasks" :key="t.task_id" class="attach-item">
+                                    <input type="checkbox" v-model="selectedExisting" :value="t.task_id" />
+                                    <div class="attach-meta">
+                                        <div class="attach-title">{{ t.title }}</div>
+                                        <div class="attach-sub">ID: {{ t.task_id }}</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="isOwner" class="actions">
                         <button type="button" class="btn" @click="cancelCreate">Cancel</button>
                         <button type="submit" class="btn-primary">Save</button>
                     </div>
@@ -133,7 +179,8 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { getProjects, createProject, archiveProject } from '../api/projects'
+import { getProjects, createProject } from '../api/projects'
+import { listTasks, createTask, updateTaskProject } from '../api/tasks'
 
 const projects = ref([])
 const loading = ref(false)
@@ -145,6 +192,28 @@ const status = ref('')
 const sort = ref('updated_desc')
 
 const statuses = ['Active', 'On hold', 'Archived']
+
+// Task selection/creation state
+const tasksLoading = ref(false)
+const allTasks = ref([])
+const currentEmployeeId = Number(sessionStorage.getItem('employee_id')) || null
+const unassignedTasks = computed(() => allTasks.value.filter(t => !t.project_id && Number(t.owner) === currentEmployeeId))
+const createTaskNow = ref(false)
+const selectedExisting = ref([])
+const taskForm = reactive({
+    title: '',
+    description: '',
+    deadline: '',
+    priority: 5,
+    collaborators: ''
+})
+const addTab = ref('create')
+const searchExisting = ref('')
+
+const isOwner = computed(() => {
+    const eid = Number(sessionStorage.getItem('employee_id')) || null
+    return Number(form.ownerId || sessionStorage.getItem('employee_id')) === eid
+})
 
 const owners = computed(() => {
     const uniq = new Set(projects.value.map(p => p.owner).filter(Boolean))
@@ -233,6 +302,12 @@ function openCreate() {
     form.tasksDone = 0
     form.tasksTotal = 0
     formError.value = ''
+
+    // Load unassigned tasks for attachment list
+    createTaskNow.value = false
+    selectedExisting.value = []
+    tasksLoading.value = true
+    listTasks().then(ts => { allTasks.value = ts || [] }).finally(() => { tasksLoading.value = false })
     showCreate.value = true
 }
 
@@ -252,8 +327,9 @@ async function submitCreate() {
             owner: form.owner || 'Unassigned',
             ownerId: Number(sessionStorage.getItem('employee_id')) || null,
             status: form.status,
-            tasksDone: Number(form.tasksDone) || 0,
-            tasksTotal: Number(form.tasksTotal) || 0,
+            // Backend initializes counters to 0; they update based on tasks
+            tasksDone: 0,
+            tasksTotal: 0,
             members: (form.members || '')
                 .split(',')
                 .map(s => parseInt(s.trim(), 10))
@@ -261,8 +337,40 @@ async function submitCreate() {
         }
         const created = await createProject(payload)
         projects.value.unshift(created)
-        // Optionally clear filters so new item is visible:
-        // search.value = ''; owner.value = ''; status.value = ''; sort.value = 'updated_desc'
+
+        // After project creation, optionally create a new task and/or attach existing tasks
+        const ops = []
+
+        if (createTaskNow.value) {
+            const deadline = taskForm.deadline && taskForm.deadline.length === 16
+                ? `${taskForm.deadline}:00`
+                : taskForm.deadline
+            const collaborators = (taskForm.collaborators || '')
+                .split(',')
+                .map(s => parseInt(s.trim(), 10))
+                .filter(n => Number.isFinite(n))
+
+            ops.push(createTask({
+                title: taskForm.title.trim(),
+                description: taskForm.description.trim(),
+                deadline,
+                priority: Number(taskForm.priority) || 1,
+                project_id: created.id,
+                collaborators,
+                attachments: []
+            }))
+        }
+
+        if (selectedExisting.value.length) {
+            for (const id of selectedExisting.value) {
+                const t = allTasks.value.find(x => x.task_id === id)
+                if (t) {
+                    ops.push(updateTaskProject(id, created.id, t.owner))
+                }
+            }
+        }
+
+        await Promise.allSettled(ops)
         showCreate.value = false
     } catch (e) {
         formError.value = 'Create failed. Please try again.'
@@ -357,6 +465,7 @@ onMounted(load)
 .projects-table tr:last-child td { border-bottom: none; }
 .projects-table tbody tr:hover { background: #f8fafc; }
 .name { font-weight: 600; }
+.pid { color:#9ca3af; font-weight:500; margin-left:6px; }
 
 .badge {
     display: inline-block;
@@ -407,5 +516,15 @@ onMounted(load)
 }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.pill-tabs { display:flex; gap:8px; margin:8px 0; }
+.pill { border:1px solid #e5e7eb; background:#fff; color:#111827; padding:6px 12px; border-radius: var(--radius-pill); cursor:pointer; font-weight:600; }
+.pill.active { background:#111827; color:#fff; }
+.attach-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; }
+.muted { color:#6b7280; }
+.attach-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; max-height:200px; overflow:auto; border:1px solid #e5e7eb; border-radius: var(--radius-md); padding:8px; }
+.attach-item { display:flex; align-items:flex-start; gap:10px; padding:8px; border:1px solid #e5e7eb; border-radius: var(--radius-md); background:#fff; }
+.attach-item:hover { background:#f8fafc; }
+.attach-title { font-weight:600; }
+.attach-sub { color:#6b7280; font-size:12px; }
 .btn { background: #e5e7eb; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
 </style>
