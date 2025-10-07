@@ -30,6 +30,9 @@ class Staff(db.Model):
         # TODO: uncomment after task endpoint is implemented
         pass
 
+    # authored comments relationship
+    comments = db.relationship('Comment', backref='author', lazy='dynamic')
+
 class Manager(Staff):
     __mapper_args__ = {
         "polymorphic_identity": "manager",

@@ -50,6 +50,14 @@ class Task(db.Model):
     lazy='dynamic'
 )
 
+    # comments relationship
+    comments = db.relationship(
+        'Comment',
+        backref='task',
+        cascade='all, delete-orphan',
+        lazy='dynamic'
+    )
+
     # __table_args__ = (
         # prevent self-loop: a task cannot be its own parent
         # CheckConstraint('parent_id IS NULL OR parent_id <> task_id', name='ck_task_no_self_parent'),)

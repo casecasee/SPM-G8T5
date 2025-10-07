@@ -10,6 +10,11 @@ from flask_cors import CORS
 from models.extensions import db
 from models.task import Task
 from models.staff import Staff
+from models.comment import Comment
+from models.comment_mention import CommentMention
+from models.project import Project
+from datetime import datetime
+import re
 
 ALLOWED_EXTENSIONS = {'pdf'}
 
@@ -55,6 +60,73 @@ def update_stuff_by_status(curr_task, new_status):
     #     curr_task.completed_date = datetime.now()
     curr_task.status = new_status
 
+
+# ------------------ Mentions Helpers ------------------
+MENTION_RE = re.compile(r'@(\d+)')  # numeric ids (still supported)
+ANY_AT = re.compile(r'@(\S+)')      # any token after '@' up to whitespace
+
+def _normalize_token(value: str) -> str:
+    return re.sub(r'[^a-z0-9]', '', (value or '').lower())
+
+def _resolve_name_mentions(allowed_ids: set, name_tokens: set):
+    """Resolve @name tokens to employee_ids within allowed_ids.
+
+    - Normalizes both names and tokens by removing non-alnum and lowercasing
+    - Returns (resolved_ids, invalid_names, ambiguous_names)
+    """
+    if not name_tokens:
+        return set(), [], []
+
+    # Fetch mentionable users (limited to allowed_ids)
+    users = Staff.query.filter(Staff.employee_id.in_(allowed_ids)).all()
+    name_key_to_ids = {}
+    for u in users:
+        key = _normalize_token(u.employee_name)
+        if not key:
+            continue
+        ids = name_key_to_ids.setdefault(key, set())
+        ids.add(u.employee_id)
+
+    resolved_ids = set()
+    invalid_names = []
+    ambiguous_names = []
+
+    for raw in name_tokens:
+        key = _normalize_token(raw)
+        candidates = list(name_key_to_ids.get(key, []))
+        if not candidates:
+            invalid_names.append(raw)
+        elif len(candidates) > 1:
+            ambiguous_names.append(raw)
+        else:
+            resolved_ids.add(candidates[0])
+
+    return resolved_ids, invalid_names, ambiguous_names
+
+def parse_mentions(content: str):
+    tokens = set(ANY_AT.findall(content))
+    numeric_tokens = {t for t in tokens if t.isdigit()}
+    name_tokens = tokens - numeric_tokens
+    numeric_ids = {int(t) for t in numeric_tokens}
+    return numeric_ids, name_tokens
+
+def mentionable_ids_for_task(task_id: int):
+    t = Task.query.get(task_id)
+    if not t:
+        return set()
+    ids = {t.owner}
+    try:
+        ids |= {s.employee_id for s in t.collaborators.all()}
+    except Exception:
+        pass
+    if t.project_id:
+        p = Project.query.get(t.project_id)
+        if p:
+            try:
+                ids |= {m.employee_id for m in p.members.all()}
+            except Exception:
+                pass
+    return ids
 
 @app.route('/tasks', methods=['POST'])
 def create_task():
@@ -239,6 +311,125 @@ def serve_attachment(filename):
     base_dir = os.path.dirname(os.path.abspath(__file__))
     upload_folder = os.path.join(base_dir, '..', 'uploads', 'attachments')
     return send_from_directory(upload_folder, filename)
+
+
+# ------------------ Comments Endpoints ------------------
+@app.route('/task/<int:task_id>/comments', methods=['GET'])
+def list_task_comments(task_id):
+    comments = Comment.query.filter_by(task_id=task_id).order_by(Comment.created_at.asc()).all()
+    return jsonify([c.to_dict() for c in comments]), 200
+
+
+@app.route('/task/<int:task_id>/comments', methods=['POST'])
+def create_task_comment(task_id):
+    if 'employee_id' not in session:
+        return {"message": "Unauthorized"}, 401
+    data = request.json or {}
+    content = (data.get('content') or '').strip()
+    if not content:
+        return {"message": "Content is required"}, 400
+
+    # validate mentions: allow numeric IDs and @{Name}
+    numeric_ids, name_tokens = parse_mentions(content)
+    allowed = mentionable_ids_for_task(task_id)
+    invalid_ids = numeric_ids - allowed
+    resolved_name_ids, invalid_names, ambiguous_names = _resolve_name_mentions(allowed, name_tokens)
+
+    errors = []
+    if invalid_ids:
+        errors.append(f"Invalid IDs: {sorted(list(invalid_ids))}")
+    if invalid_names:
+        errors.append(f"Unknown names: {invalid_names}")
+    if ambiguous_names:
+        errors.append(f"Ambiguous names (not unique): {ambiguous_names}")
+    if errors:
+        return {"message": "; ".join(errors)}, 400
+
+    comment = Comment(task_id=task_id, author_id=session['employee_id'], content=content)
+    db.session.add(comment)
+    db.session.flush()  # get comment.id before commit
+
+    # persist mentions (numeric and resolved names)
+    for mid in (numeric_ids | resolved_name_ids):
+        db.session.add(CommentMention(comment_id=comment.id, mentioned_id=mid))
+
+    db.session.commit()
+    return jsonify(comment.to_dict()), 201
+
+
+@app.route('/comments/<int:comment_id>', methods=['PUT'])
+def update_comment(comment_id):
+    if 'employee_id' not in session:
+        return {"message": "Unauthorized"}, 401
+    comment = Comment.query.get(comment_id)
+    if not comment:
+        return {"message": "Not found"}, 404
+    if comment.author_id != session['employee_id']:
+        return {"message": "Forbidden"}, 403
+
+    data = request.json or {}
+    content = (data.get('content') or '').strip()
+    if not content:
+        return {"message": "Content is required"}, 400
+
+    # validate mentions against the task: allow numeric and names
+    numeric_ids, name_tokens = parse_mentions(content)
+    allowed = mentionable_ids_for_task(comment.task_id)
+    invalid_ids = numeric_ids - allowed
+    resolved_name_ids, invalid_names, ambiguous_names = _resolve_name_mentions(allowed, name_tokens)
+
+    errors = []
+    if invalid_ids:
+        errors.append(f"Invalid IDs: {sorted(list(invalid_ids))}")
+    if invalid_names:
+        errors.append(f"Unknown names: {invalid_names}")
+    if ambiguous_names:
+        errors.append(f"Ambiguous names (not unique): {ambiguous_names}")
+    if errors:
+        return {"message": "; ".join(errors)}, 400
+
+    comment.content = content
+    comment.updated_at = datetime.utcnow()
+
+    # rewrite mentions
+    CommentMention.query.filter_by(comment_id=comment.id).delete()
+    for mid in (numeric_ids | resolved_name_ids):
+        db.session.add(CommentMention(comment_id=comment.id, mentioned_id=mid))
+
+    db.session.commit()
+    return jsonify(comment.to_dict()), 200
+
+
+@app.route('/comments/<int:comment_id>', methods=['DELETE'])
+def delete_comment(comment_id):
+    if 'employee_id' not in session:
+        return {"message": "Unauthorized"}, 401
+    comment = Comment.query.get(comment_id)
+    if not comment:
+        return {"message": "Not found"}, 404
+
+    role = session.get('role')
+    if comment.author_id != session['employee_id'] and role != 'manager':
+        return {"message": "Forbidden"}, 403
+
+    db.session.delete(comment)
+    db.session.commit()
+    return '', 204
+
+
+@app.route('/task/<int:task_id>/mentionable', methods=['GET'])
+def list_mentionable(task_id):
+    ids = mentionable_ids_for_task(task_id)
+    if not ids:
+        return jsonify([]), 200
+    users = Staff.query.filter(Staff.employee_id.in_(ids)).all()
+    return jsonify([
+        {
+            "employee_id": u.employee_id,
+            "employee_name": u.employee_name,
+            "role": u.role
+        } for u in users
+    ]), 200
 
 if __name__ == "__main__":
     with app.app_context():

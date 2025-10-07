@@ -24,6 +24,80 @@ const isEditing = ref(false)
 const availableEmployees = ref([])
 const fileUploadRef = ref(null)
 
+// Comments state
+const comments = ref([])
+const newComment = ref('')
+const editingCommentId = ref(null)
+const editingContent = ref('')
+const commentError = ref('')
+
+// Mention suggestions
+const mentionable = ref([]) // [{employee_id, employee_name, role}]
+const showMentionList = ref(false)
+const mentionQuery = ref('')
+const mentionStartIdx = ref(-1)
+const filteredMentionable = computed(() => {
+  const q = (mentionQuery.value || '').trim().toLowerCase()
+  if (!q) return mentionable.value
+  return (mentionable.value || []).filter(u => (u.employee_name || '').toLowerCase().includes(q))
+})
+
+const mentionHighlighted = ref(0)
+
+function onCommentInput(e) {
+  const text = newComment.value || ''
+  const cursor = e?.target?.selectionStart ?? text.length
+  // find the last '@' before cursor that isn't preceded by whitespace
+  let start = -1
+  for (let i = cursor - 1; i >= 0; i--) {
+    const ch = text[i]
+    if (ch === '@') { start = i; break }
+    if (ch === ' ' || ch === '\n' || ch === '\t') break
+  }
+  if (start >= 0) {
+    mentionStartIdx.value = start
+    mentionQuery.value = text.slice(start + 1, cursor)
+    showMentionList.value = true
+    mentionHighlighted.value = 0
+  } else {
+    hideMentionList()
+  }
+}
+
+function hideMentionList() {
+  showMentionList.value = false
+  mentionQuery.value = ''
+  mentionStartIdx.value = -1
+  mentionHighlighted.value = 0
+}
+
+function moveMentionSelection(delta) {
+  if (!showMentionList.value || filteredMentionable.value.length === 0) return
+  const n = filteredMentionable.value.length
+  mentionHighlighted.value = (mentionHighlighted.value + delta + n) % n
+}
+
+function applyMentionSelection() {
+  if (!showMentionList.value || filteredMentionable.value.length === 0) return
+  const user = filteredMentionable.value[mentionHighlighted.value]
+  insertMention(user)
+}
+
+function insertMention(user) {
+  const text = newComment.value || ''
+  const start = mentionStartIdx.value
+  if (start < 0) return
+  const before = text.slice(0, start)
+  const after = text.slice(start)
+  // Replace the token starting at '@' up to next whitespace
+  const match = after.match(/^@\S*/)
+  const rest = match ? after.slice(match[0].length) : ''
+  // Insert @{Employee Name} (the server supports names)
+  const insertion = `@${user.employee_name}`
+  newComment.value = before + insertion + (rest.startsWith(' ') ? rest : (' ' + rest))
+  hideMentionList()
+}
+
 // Department view state
 const departments = ref([])
 const selectedDepartment = ref(null)
@@ -529,6 +603,10 @@ function openDetails(task) {
   }
   // Initialize subtasks (you can fetch from API later)
   subtasks.value = task.subtasks || []
+  // Load comments for this task
+  loadComments(task.id)
+  // Load mentionable users for this task
+  loadMentionable(task.id)
   showModal.value = true
 }
 
@@ -603,6 +681,83 @@ onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
   window.removeEventListener('focus', fetchTasks)
 })
+
+// ----------------- Comments API -----------------
+async function loadComments(taskId) {
+  comments.value = []
+  try {
+    const res = await axios.get(`http://localhost:5002/task/${taskId}/comments`, { withCredentials: true })
+    comments.value = Array.isArray(res.data) ? res.data : []
+  } catch (err) {
+    comments.value = []
+  }
+}
+
+async function loadMentionable(taskId) {
+  mentionable.value = []
+  try {
+    const res = await axios.get(`http://localhost:5002/task/${taskId}/mentionable`, { withCredentials: true })
+    mentionable.value = Array.isArray(res.data) ? res.data : []
+  } catch (_) {
+    mentionable.value = []
+  }
+}
+
+async function addComment() {
+  const taskId = selectedTask.value?.id
+  if (!taskId) return
+  const content = (newComment.value || '').trim()
+  if (!content) return
+  try {
+    commentError.value = ''
+    await axios.post(`http://localhost:5002/task/${taskId}/comments`, { content }, { withCredentials: true })
+    newComment.value = ''
+    await loadComments(taskId)
+  } catch (e) {
+    try {
+      const msg = (e?.response?.data?.message || '').toString()
+      commentError.value = msg || 'Failed to add comment'
+    } catch {
+      commentError.value = 'Failed to add comment'
+    }
+  }
+}
+
+function startEditComment(comment) {
+  editingCommentId.value = comment.id
+  editingContent.value = comment.content
+}
+
+function cancelEditComment() {
+  editingCommentId.value = null
+  editingContent.value = ''
+}
+
+async function saveEditComment(commentId) {
+  const content = (editingContent.value || '').trim()
+  if (!content) return
+  try {
+    commentError.value = ''
+    await axios.put(`http://localhost:5002/comments/${commentId}`, { content }, { withCredentials: true })
+    editingCommentId.value = null
+    editingContent.value = ''
+    if (selectedTask.value?.id) await loadComments(selectedTask.value.id)
+  } catch (e) {
+    try {
+      const msg = (e?.response?.data?.message || '').toString()
+      commentError.value = msg || 'Failed to update comment'
+    } catch {
+      commentError.value = 'Failed to update comment'
+    }
+  }
+}
+
+async function deleteComment(commentId) {
+  try {
+    await axios.delete(`http://localhost:5002/comments/${commentId}`, { withCredentials: true })
+    if (selectedTask.value?.id) await loadComments(selectedTask.value.id)
+  } catch (_) {}
+}
 </script>
 
 <template>
@@ -963,6 +1118,63 @@ onUnmounted(() => {
             </li>
           </ul>
         </template>
+      </div>
+
+      <!-- Comments Section -->
+      <div class="field-row comments-section">
+        <label>Comments:</label>
+        <div v-if="commentError" class="comment-error">{{ commentError }}</div>
+        <div class="comments-list" v-if="comments.length > 0">
+          <div class="comment-item" v-for="c in comments" :key="c.id">
+            <div class="comment-content">
+              <div class="comment-meta">
+                <span class="author">#{{ c.author_id }}</span>
+                <span class="timestamp">{{ new Date(c.created_at || c.updated_at).toLocaleString() }}</span>
+              </div>
+              <div v-if="editingCommentId === c.id" class="comment-edit">
+                <Textarea v-model="editingContent" rows="2" class="input-field" />
+                <div class="comment-actions">
+                  <Button label="Save" size="small" @click="saveEditComment(c.id)" />
+                  <Button label="Cancel" size="small" severity="secondary" @click="cancelEditComment" />
+                </div>
+              </div>
+              <div v-else class="comment-text">{{ c.content }}</div>
+            </div>
+            <div class="comment-ops" v-if="isOwnerOrCollaborator(selectedTask) || (sessionStorage.getItem('role') || '').toLowerCase() !== 'staff'">
+              <Button label="Edit" size="small" text @click="startEditComment(c)" />
+              <Button label="Delete" size="small" text severity="danger" @click="deleteComment(c.id)" />
+            </div>
+          </div>
+        </div>
+        <div v-else class="no-comments">No comments yet</div>
+
+        <div class="comment-new">
+          <div class="comment-input-wrapper">
+            <Textarea 
+              v-model="newComment" 
+              rows="2" 
+              class="input-field" 
+              placeholder="Write a comment..."
+              @input="onCommentInput"
+              @keydown.down.prevent="moveMentionSelection(1)"
+              @keydown.up.prevent="moveMentionSelection(-1)"
+              @keydown.enter.prevent="applyMentionSelection"
+              @blur="hideMentionList" />
+            <div v-if="showMentionList && filteredMentionable.length > 0" class="mention-list">
+              <div 
+                v-for="(u, idx) in filteredMentionable" 
+                :key="u.employee_id" 
+                :class="['mention-item', idx === mentionHighlighted ? 'active' : '']"
+                @mousedown.prevent="insertMention(u)">
+                <span class="mention-name">{{ u.employee_name }}</span>
+                <span class="mention-role">({{ u.role }})</span>
+              </div>
+            </div>
+          </div>
+          <div class="comment-actions">
+            <Button label="Add Comment" @click="addComment" :disabled="!newComment.trim() || !selectedTask" />
+          </div>
+        </div>
       </div>
 
       <!-- Subtasks Section -->
@@ -1436,6 +1648,23 @@ onUnmounted(() => {
   border-radius: 8px;
   background: #f9fafb;
 }
+
+/* Comments */
+.comments-section { border-top: 1px solid #e5e7eb; padding-top: 1rem; }
+.comments-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 0.6rem; }
+.comment-item { display: flex; justify-content: space-between; gap: 0.6rem; border: 1px solid #eee; border-radius: 8px; padding: 0.6rem; background: #fff; }
+.comment-meta { font-size: 0.75rem; color: #6b7280; margin-bottom: 0.2rem; display: flex; gap: 0.6rem; }
+.comment-text { font-size: 0.95rem; color: #374151; white-space: pre-wrap; }
+.comment-ops { display: flex; gap: 0.25rem; align-items: center; }
+.comment-new { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }
+.no-comments { color: #9ca3af; font-style: italic; margin-bottom: 0.5rem; }
+.comment-error { color: #b91c1c; background: #fee2e2; border: 1px solid #fecaca; padding: 0.5rem 0.75rem; border-radius: 6px; margin-bottom: 0.5rem; }
+.comment-input-wrapper { position: relative; }
+.mention-list { position: absolute; z-index: 20; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; width: 100%; max-height: 180px; overflow-y: auto; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.mention-item { padding: 8px 10px; display: flex; justify-content: space-between; gap: 8px; cursor: pointer; }
+.mention-item.active, .mention-item:hover { background: #f3f4f6; }
+.mention-name { font-weight: 600; color: #111827; }
+.mention-role { color: #6b7280; font-size: 0.85rem; }
 
 :deep(.p-calendar){
   border: none !important;
