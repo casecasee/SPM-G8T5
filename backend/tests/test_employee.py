@@ -12,6 +12,8 @@ class TestEmployee(unittest.TestCase):
         app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
         self.client = app.test_client()
 
+        db.init_app(app)
+
         with app.app_context():
             db.create_all()
 
