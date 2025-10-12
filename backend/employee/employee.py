@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 # from werkzeug.security import generate_password_hash, check_password_hash
+import os
 
 from models import db, Staff, Task
 
@@ -11,7 +12,7 @@ app.config["SESSION_COOKIE_SECURE"] = True
 
 CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://localhost:5174"])
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/SPM'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI", "mysql+mysqlconnector://root@localhost:3306/SPM")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # suppress warning msgs
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299} # do not timeout
 
