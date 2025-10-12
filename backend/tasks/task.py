@@ -15,6 +15,7 @@ from models.comment_mention import CommentMention
 from models.project import Project
 from datetime import datetime
 import re
+import os
 
 ALLOWED_EXTENSIONS = {'pdf'}
 
@@ -29,7 +30,7 @@ app.config["SESSION_COOKIE_SECURE"] = True
 app.config['UPLOAD_FOLDER'] = 'uploads/attachments'
 
 CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://localhost:5174"])
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/SPM'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI", "mysql+mysqlconnector://root@localhost:3306/SPM")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299}
 

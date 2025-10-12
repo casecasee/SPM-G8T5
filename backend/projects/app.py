@@ -8,13 +8,14 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from models import db, Project, Staff
 from sqlalchemy import func
+import os
 
 app = Flask(__name__)
 CORS(app, origins=["http://localhost:5173","http://127.0.0.1:5173"])
 
 # TODO: teammate sets this to your MySQL DSN
 # Example: 'mysql+mysqlconnector://root:password@localhost:3306/SPM'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/SPM'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI", "mysql+mysqlconnector://root@localhost:3306/SPM")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
