@@ -7,12 +7,14 @@ class TestEmployee(unittest.TestCase):
 
     def setUp(self):
         """Set up a clean test client and in-memory database before each test."""
-        app.config["TESTING"] = True
-        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-        app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+        app.config.update(
+            TESTING=True,
+            SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
+            SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        )
         self.client = app.test_client()
 
-        db.init_app(app)
+        # db.init_app(app)
 
         with app.app_context():
             db.create_all()
