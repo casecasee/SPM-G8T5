@@ -351,8 +351,6 @@ def update_task_status(task_id):
     return {"message": "Task status updated"}, 200
 
 
-<<<<<<< Updated upstream
-=======
 # @app.route("/task/<int:task_id>", methods=["PUT"])
 # def update_task(task_id):
 
@@ -407,7 +405,6 @@ def update_task_status(task_id):
 #     db.session.commit()
 #     return {"message": "Task updated"}, 200
 
->>>>>>> Stashed changes
 @app.route("/task/<int:task_id>", methods=["PUT"])
 def update_task(task_id):
     # Update task metadata (not status), frontend sends whole task object

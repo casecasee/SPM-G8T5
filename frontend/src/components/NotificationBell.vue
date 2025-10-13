@@ -76,48 +76,54 @@ export default {
     }
   },
   methods: {
-    async fetchNotifications() {
-      this.loading = true;
-      try {
-        const employeeId = sessionStorage.getItem('employee_id');
-        const response = await fetch('http://localhost:5003/api/notifications?per_page=10', {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'X-Employee-Id': employeeId
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          this.notifications = data.notifications;
-        }
-      } catch (error) {
-        console.error('Failed to fetch notifications:', error);
-      } finally {
-        this.loading = false;
+async fetchNotifications() {
+  this.loading = true;
+  try {
+    const employeeId = sessionStorage.getItem('employee_id');
+    const response = await fetch('http://localhost:5003/api/notifications?per_page=10', {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Employee-Id': employeeId
       }
-    },
+    });
 
-    async fetchUnreadCount() {
-      try {
-        const employeeId = sessionStorage.getItem('employee_id');
-        const response = await fetch('http://localhost:5003/api/notifications/unread', {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'X-Employee-Id': employeeId
-          }
-        });
+    if (response.ok) {
+      const data = await response.json();
+      this.notifications = data.notifications || [];
+      console.log('✅ Fetched notifications:', this.notifications.length);
+    } else {
+      console.error('❌ Failed to fetch notifications:', response.status);
+    }
+  } catch (error) {
+    console.error('❌ Error fetching notifications:', error);
+  } finally {
+    this.loading = false;
+  }
+},
 
-        if (response.ok) {
-          const data = await response.json();
-          this.unreadCount = data.unread_count;
-        }
-      } catch (error) {
-        console.error('Failed to fetch unread count:', error);
+async fetchUnreadCount() {
+  try {
+    const employeeId = sessionStorage.getItem('employee_id');
+    const response = await fetch('http://localhost:5003/api/notifications/unread', {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Employee-Id': employeeId
       }
-    },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      this.unreadCount = data.unread_count || 0;
+      console.log('✅ Unread count:', this.unreadCount);
+    }
+  } catch (error) {
+    console.error('❌ Error fetching unread count:', error);
+  }
+},
 
     connectWebSocket() {
       const employeeId = sessionStorage.getItem('employee_id');
@@ -127,10 +133,19 @@ export default {
         return;
       }
 
-      // Connect to notification service
+      console.log('Connecting to WebSocket with employee_id:', employeeId);
+
+      // Connect to notification service - CORRECTED URL
       this.socket = io('http://localhost:5003', {
         query: { employee_id: employeeId },
-        transports: ['websocket']
+        transports: ['websocket', 'polling'],  // Try both transports
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+      });
+
+      this.socket.on('connect', () => {
+        console.log('✅ Connected to notifications WebSocket');
       });
 
       this.socket.on('connected', (data) => {
@@ -138,7 +153,7 @@ export default {
       });
 
       this.socket.on('new_notification', (notification) => {
-        console.log('New notification received:', notification);
+        console.log('🔔 New notification received:', notification);
         
         // Add to notifications list
         this.notifications.unshift(notification);
@@ -150,12 +165,16 @@ export default {
         this.showToast(notification);
       });
 
+      this.socket.on('connect_error', (error) => {
+        console.error('❌ WebSocket connection error:', error);
+      });
+
       this.socket.on('error', (error) => {
-        console.error('WebSocket error:', error);
+        console.error('❌ WebSocket error:', error);
       });
 
       this.socket.on('disconnect', () => {
-        console.log('Disconnected from notifications');
+        console.log('⚠️ Disconnected from notifications');
       });
     },
 
