@@ -134,7 +134,7 @@ def create_task():
     data = request.json
     print(data)
 
-    # input {title, description, attachment(o), deadline, status, project_id, parent_id, collaborators[], priority, owner}
+    # input {title, description, attachment(o), deadline, project_id, parent_id, collaborators[], priority, owner}
 
     role = session['role']
     eid = session['employee_id']
@@ -142,11 +142,8 @@ def create_task():
     status = 'ongoing' if role == 'staff' else 'unassigned' # set status by role of person creating it
     
     ppl = data.get('collaborators', [])
-    print('here')
     ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
-    print('here2', ppl)
     collaborators = get_collaborators(ppl)
-    print(collaborators)
 
     # TODO: validate deadline (not before today) - frontend job?
 
@@ -172,31 +169,25 @@ def create_task():
 
 @app.route("/task/status/<int:task_id>", methods=["PATCH"])
 def update_task_status(task_id):
+    # update task status only
     
     # input {status, eid}
-    print('hereee')
+    # print('hereee')
 
     data = request.json
     new_status = data.get("status")
     eid = session['employee_id']
     curr_task = Task.query.get(task_id)
 
-    print('hereee2')
-
     if curr_task is None: # check if task exists 
         return {"message": "Task not found"}, 404
     
-    print('hereee3')
+    # print('hereee3')
 
     # check if employee is a collaborator
-    print(curr_task.collaborators)
-    # print(eid)
-    print(curr_task.collaborators.filter_by(employee_id=eid).first())
     if curr_task.collaborators.filter_by(employee_id=eid).first() is None:
         print('not collab')
         return {"message": "You are not a collaborator of this task"}, 403
-    
-    print('hereee4')
     
     # update status and other fields accordingly
     # tasks will always pass through ongoing (either by default or after assignment), tasks may or may not pass through under review, tasks will always end at done
@@ -214,7 +205,6 @@ def update_task_status(task_id):
     curr_task.status = new_status
     db.session.commit()
     return {"message": "Task status updated"}, 200
-
 
 
 @app.route("/task/<int:task_id>", methods=["PUT"])

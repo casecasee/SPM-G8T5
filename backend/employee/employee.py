@@ -157,6 +157,8 @@ def get_employees_by_department_and_team(department, team):
 
     return jsonify(result), 200
 
+# TODO: make sure session is set correctly here becuz it is used in other places
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
