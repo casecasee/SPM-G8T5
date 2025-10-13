@@ -158,97 +158,6 @@ def notify_due_date_changed(task_id, old_date, new_date, changed_by_id):
         print(f"[Notification] Sent due date change notification for task {task_id}")
     except Exception as e:
         print(f"[Notification] Failed to send due date notification: {e}")
-# ------------------ Notification Helpers ------------------
-
-def get_task_collaborators_ids(task_id):
-    """Get list of collaborator employee_ids for a task"""
-    task = Task.query.get(task_id)
-    if not task:
-        return []
-    return [c.employee_id for c in task.collaborators.all()]
-
-def get_employee_name(employee_id):
-    """Get employee name from Employee service"""
-    try:
-        response = requests.get(f'http://localhost:5000/api/internal/employee/{employee_id}')
-        if response.status_code == 200:
-            return response.json().get('employee_name', 'Unknown')
-    except Exception as e:
-        print(f"Failed to get employee name: {e}")
-    return 'Unknown'
-
-def notify_task_status_updated(task_id, old_status, new_status, updated_by_id):
-    """Send notification when task status changes"""
-    try:
-        task = Task.query.get(task_id)
-        if not task:
-            return
-        
-        requests.post(
-            f'{NOTIFICATION_SERVICE_URL}/api/internal/events/task-status-updated',
-            json={
-                'task_id': task_id,
-                'task_title': task.title,
-                'owner_id': task.owner,
-                'collaborators': get_task_collaborators_ids(task_id),
-                'old_status': old_status,
-                'new_status': new_status,
-                'updated_by_id': updated_by_id,
-                'updated_by_name': get_employee_name(updated_by_id),
-                'is_subtask': task.parent_id is not None
-            },
-            timeout=2
-        )
-        print(f"[Notification] Sent status update notification for task {task_id}")
-    except Exception as e:
-        print(f"[Notification] Failed to send status update: {e}")
-
-def notify_task_assigned(task_id, assigned_to, assigned_by_id):
-    """Send notification when task is assigned"""
-    try:
-        task = Task.query.get(task_id)
-        if not task:
-            return
-        
-        requests.post(
-            f'{NOTIFICATION_SERVICE_URL}/api/internal/events/task-assigned',
-            json={
-                'task_id': task_id,
-                'task_title': task.title,
-                'assigned_to': assigned_to,
-                'assigned_by_name': get_employee_name(assigned_by_id)
-            },
-            timeout=2
-        )
-        print(f"[Notification] Sent assignment notification for task {task_id}")
-    except Exception as e:
-        print(f"[Notification] Failed to send assignment notification: {e}")
-
-def notify_due_date_changed(task_id, old_date, new_date, changed_by_id):
-    """Send notification when due date changes"""
-    try:
-        task = Task.query.get(task_id)
-        if not task:
-            return
-        
-        requests.post(
-            f'{NOTIFICATION_SERVICE_URL}/api/internal/events/due-date-changed',
-            json={
-                'item_id': task_id,
-                'item_title': task.title,
-                'item_type': 'Subtask' if task.parent_id else 'Task',
-                'owner_id': task.owner,
-                'collaborators': get_task_collaborators_ids(task_id),
-                'old_due_date': old_date.strftime('%Y-%m-%d') if old_date else None,
-                'new_due_date': new_date.strftime('%Y-%m-%d') if new_date else None,
-                'changed_by_id': changed_by_id,
-                'changed_by_name': get_employee_name(changed_by_id)
-            },
-            timeout=2
-        )
-        print(f"[Notification] Sent due date change notification for task {task_id}")
-    except Exception as e:
-        print(f"[Notification] Failed to send due date notification: {e}")
 
 # ------------------ Mentions Helpers ------------------
 MENTION_RE = re.compile(r'@(\d+)')  # numeric ids (still supported)
@@ -400,89 +309,26 @@ def create_task():
 #     db.session.commit()
 #     return {"message": "Task status updated"}, 200
 
-# @app.route("/task/status/<int:task_id>", methods=["PATCH"])
-# def update_task_status(task_id):
-    
-#     # input {status, eid}
-#     print('hereee')
-
-#     data = request.json
-#     new_status = data.get("status")
-#     eid = session['employee_id']
-#     curr_task = Task.query.get(task_id)
-
-#     print('hereee2')
-
-#     if curr_task is None: # check if task exists 
-#         return {"message": "Task not found"}, 404
-    
-#     print('hereee3')
-
-#     # check if employee is a collaborator
-#     print(curr_task.collaborators)
-#     # print(eid)
-#     print(curr_task.collaborators.filter_by(employee_id=eid).first())
-#     if curr_task.collaborators.filter_by(employee_id=eid).first() is None:
-#         print('not collab')
-#         return {"message": "You are not a collaborator of this task"}, 403
-    
-#     print('hereee4')
-    
-#     # update status and other fields accordingly
-#     # tasks will always pass through ongoing (either by default or after assignment), tasks may or may not pass through under review, tasks will always end at done
-#     # if status from unassigned -> ongoing, set start_date
-#     if curr_task.status == 'unassigned' and new_status == 'ongoing':
-#         curr_task.start_date = time.strftime('%Y-%m-%d %H:%M:%S')
-
-#     # unassigned -> under review ?
-
-#     # if status from ongoing -> done, set completed_date
-#     # regardless of start state, if status is done, set completed_date
-#     elif new_status == 'done':
-#         curr_task.completed_date = time.strftime('%Y-%m-%d %H:%M:%S')
-    
-#     curr_task.status = new_status
-#     db.session.commit()
-#     return {"message": "Task status updated"}, 200
-
 @app.route("/task/status/<int:task_id>", methods=["PATCH"])
 def update_task_status(task_id):
-<<<<<<< Updated upstream
     # update task status only
+    # input {status}
     
-    # input {status, eid}
-    # print('hereee')
-
-=======
-    # input {status}
->>>>>>> Stashed changes
-    # input {status}
     data = request.json
     new_status = data.get("status")
     eid = session['employee_id']
     curr_task = Task.query.get(task_id)
 
-<<<<<<< Updated upstream
-    if curr_task is None: # check if task exists 
+    if curr_task is None:  # check if task exists 
         return {"message": "Task not found"}, 404
     
-    # print('hereee3')
-
-=======
-    if curr_task is None:
-        return {"message": "Task not found"}, 404
-    
->>>>>>> Stashed changes
     # check if employee is a collaborator
     if curr_task.collaborators.filter_by(employee_id=eid).first() is None:
         return {"message": "You are not a collaborator of this task"}, 403
     
-<<<<<<< Updated upstream
-=======
     # SAVE OLD STATUS FOR NOTIFICATION
     old_status = curr_task.status
     
->>>>>>> Stashed changes
     # update status and other fields accordingly
     if curr_task.status == 'unassigned' and new_status == 'ongoing':
         curr_task.start_date = time.strftime('%Y-%m-%d %H:%M:%S')
