@@ -157,7 +157,28 @@ def get_employees_by_department_and_team(department, team):
 
     return jsonify(result), 200
 
-# TODO: make sure session is set correctly here becuz it is used in other places
+# ------------------ Internal API for Other Services ------------------
+
+@app.route('/api/internal/employee/<int:employee_id>', methods=['GET'])
+def get_employee_internal(employee_id):
+    """
+    Internal API for other services to get employee details
+    Used by notification service to get employee names
+    """
+    employee = Staff.query.get(employee_id)
+    
+    if not employee:
+        return jsonify({'error': 'Employee not found'}), 404
+    
+    return jsonify({
+        'employee_id': employee.employee_id,
+        'employee_name': employee.employee_name,
+        'email': employee.email,
+        'department': employee.department,
+        'role': employee.role,
+        'team': employee.team
+    }), 200
+
 
 if __name__ == "__main__":
     with app.app_context():
