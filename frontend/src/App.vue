@@ -1,6 +1,6 @@
 <script setup>
 import { RouterView, RouterLink, useRoute } from 'vue-router'
-
+import NotificationBell from '@/components/NotificationBell.vue' // ADD THIS
 const route = useRoute()
 </script>
 
@@ -50,6 +50,9 @@ const route = useRoute()
           <span class="nav-text">Reports</span>
         </RouterLink>
       </nav>
+
+      <!-- ADD NOTIFICATION BELL HERE -->
+      <NotificationBell />
 
       <!-- User Profile -->
       <div class="navbar-user">
