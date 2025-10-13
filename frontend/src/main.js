@@ -13,6 +13,12 @@ import router from './router'
 
 const app = createApp(App)
 
+// const downloadBtn = document.querySelector(".download-btn");
+
+
+
+  
+
 app.use(createPinia())
 app.use(PrimeVue)
 app.use(router)

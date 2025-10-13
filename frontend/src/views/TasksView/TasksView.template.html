@@ -13,6 +13,9 @@
     <button :class="['tab', currentTab==='my' ? 'active' : '']" @click="currentTab='my'">My Tasks</button>
     <button :class="['tab', currentTab==='team' ? 'active' : '']" @click="currentTab='team'" v-if="!isSeniorManagerOrHR">Team's Tasks</button>
     <button :class="['tab', currentTab==='departments' ? 'active' : '']" @click="currentTab='departments'" v-if="isSeniorManagerOrHR">All Departments</button>
+    
+     <button :class="['tab', currentTab==='report' ? 'active' : '']" @click="currentTab='report'">Task Report</button>
+
   </div>
 
   <!-- Team search bar -->
@@ -39,6 +42,63 @@
     </div>
   </div>
 
+  <div v-if="isManagerRole && currentTab==='report'" class="report-tab">
+    <button :class="['download-btn']" @click="printReport">Download Report</button>
+    <div class="report-card">
+  <h2 class="report-title">📊 Task Report</h2>
+
+  <!-- Overdue -->
+  <div class="task-section">
+    <div class="section-header overdue">Overdue</div>
+    <div class="task-details">
+      <p><strong>Task ID:</strong> 1</p>
+      <p><strong>Task Name:</strong> task1</p>
+      <p><strong>Task Description:</strong> do this</p>
+      <p><strong>Task Deadline:</strong> 2025-10-06 00:00:00</p>
+      <p><strong>Task Collaborators:</strong> user1, user2</p>
+    </div>
+  </div>
+
+  <!-- Ongoing -->
+  <div class="task-section">
+    <div class="section-header ongoing">Ongoing</div>
+    <div class="task-details">
+      <p><strong>Task ID:</strong> 2</p>
+      <p><strong>Task Name:</strong> task2</p>
+      <p><strong>Task Description:</strong> do that</p>
+      <p><strong>Task Deadline:</strong> 2025-10-20 00:00:00</p>
+      <p><strong>Task Collaborators:</strong> user3, user4</p>
+    </div>
+  </div>
+
+  <!-- Under Review -->
+  <div class="task-section">
+    <div class="section-header review">Under Review</div>
+    <div class="task-details">
+      <p><strong>Task ID:</strong> 3</p>
+      <p><strong>Task Name:</strong> task3</p>
+      <p><strong>Task Description:</strong> do sth</p>
+      <p><strong>Completed On:</strong> 2025-10-05 00:00:00</p>
+      <p><strong>Task Deadline:</strong> 2025-10-07 00:00:00</p>
+      <p><strong>Task Collaborators:</strong> user1, user2</p>
+    </div>
+  </div>
+
+  <!-- Completed -->
+  <div class="task-section">
+    <div class="section-header completed">Completed</div>
+    <div class="task-details">
+      <p><strong>Task ID:</strong> 4</p>
+      <p><strong>Task Name:</strong> task4</p>
+      <p><strong>Task Description:</strong> done w this</p>
+      <p><strong>Completed On:</strong> 2025-10-05 00:00:00</p>
+      <p><strong>Task Deadline:</strong> 2025-10-07 00:00:00</p>
+      <p><strong>Task Collaborators:</strong> user1, user2</p>
+    </div>
+  </div>
+</div>
+
+  </div>
   <!-- Department selection for Senior Managers and HR -->
   <div v-if="isSeniorManagerOrHR && currentTab==='departments'" class="department-section">
     <!-- Department selection -->

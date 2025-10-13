@@ -682,3 +682,77 @@
   border-radius: 6px;
   border: 1px dashed #d1d5db;
 }
+
+.report-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 700px;
+  margin: 2rem auto;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.report-title {
+  text-align: center;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+
+.task-section {
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.section-header {
+  color: white;
+  padding: 0.7rem 1rem;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+/* Color variations */
+.section-header.overdue {
+  background-color: #e53935; /* red */
+}
+
+.section-header.ongoing {
+  background-color: #757575; /* grey */
+}
+
+.section-header.review {
+  background-color: #1e88e5; /* blue */
+}
+
+.section-header.completed {
+  background-color: #43a047; /* green */
+}
+
+.task-details {
+  background-color: #fafafa;
+  padding: 1rem 1.2rem;
+}
+
+.task-details p {
+  margin: 0.3rem 0;
+  font-size: 0.95rem;
+}
+
+.download-btn {
+  display: block; /* Makes the button a block-level element */
+  margin: 0 auto;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  background: #6edc46;
+  border-radius: 20px;
+  color: #fff;
+  cursor: pointer;
+}
+
+@media print {
+  
+}

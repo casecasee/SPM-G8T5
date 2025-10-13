@@ -15,6 +15,7 @@
     import MultiSelect from 'primevue/multiselect'
     import axios from 'axios'
 
+          
     // ----------------- State -----------------
     const tasks = ref([])
     const projects = ref([])
@@ -66,6 +67,10 @@
         hideMentionList()
     }
     }
+    
+    function printReport() {
+        print();
+        } 
 
     function hideMentionList() {
     showMentionList.value = false
@@ -382,7 +387,7 @@
 
     async function fetchTasks() {
     try {
-        const res = await axios.get("http://localhost:5002/tasks", {
+        const res = await axios.get("http://localhost:5002/task", {
         withCredentials: true,
         params: {
             eid: currentEmployeeId,
@@ -489,7 +494,7 @@
         if (taskForm.value.id) {
         await axios.put(`http://localhost:5002/task/${taskForm.value.id}`, payload, { withCredentials: true })
         } else {
-        await axios.post("http://localhost:5002/tasks", payload, { withCredentials: true })
+        await axios.post("http://localhost:5002/task", payload, { withCredentials: true })
         }
 
         await fetchTasks()

@@ -75,6 +75,15 @@ def login():
 def reset():
     pass
 
+# @app.route('/tasks', methods=['GET'])
+# def get_tasks():
+#     eid = request.args.get('eid')
+#     role = request.args.get('role')
+
+#     # For now, just return all tasks
+#     tasks = Task.query.all()
+#     return jsonify([t.to_dict() for t in tasks]), 200
+
 @app.route('/employees/<department>', methods=['GET'])
 def get_employees_by_department(department):
     # used for create task - collaborators are employees in the same department
