@@ -17,6 +17,12 @@ from datetime import datetime
 import re
 import os
 
+# ADD these imports at the top (after your existing imports)
+import requests
+
+# ADD this constant after your app configuration
+NOTIFICATION_SERVICE_URL = "http://localhost:5003"
+
 ALLOWED_EXTENSIONS = {'pdf'}
 
 def allowed_file(filename):
@@ -61,6 +67,97 @@ def update_stuff_by_status(curr_task, new_status):
     #     curr_task.completed_date = datetime.now()
     curr_task.status = new_status
 
+# ------------------ Notification Helpers ------------------
+
+def get_task_collaborators_ids(task_id):
+    """Get list of collaborator employee_ids for a task"""
+    task = Task.query.get(task_id)
+    if not task:
+        return []
+    return [c.employee_id for c in task.collaborators.all()]
+
+def get_employee_name(employee_id):
+    """Get employee name from Employee service"""
+    try:
+        response = requests.get(f'http://localhost:5000/api/internal/employee/{employee_id}')
+        if response.status_code == 200:
+            return response.json().get('employee_name', 'Unknown')
+    except Exception as e:
+        print(f"Failed to get employee name: {e}")
+    return 'Unknown'
+
+def notify_task_status_updated(task_id, old_status, new_status, updated_by_id):
+    """Send notification when task status changes"""
+    try:
+        task = Task.query.get(task_id)
+        if not task:
+            return
+        
+        requests.post(
+            f'{NOTIFICATION_SERVICE_URL}/api/internal/events/task-status-updated',
+            json={
+                'task_id': task_id,
+                'task_title': task.title,
+                'owner_id': task.owner,
+                'collaborators': get_task_collaborators_ids(task_id),
+                'old_status': old_status,
+                'new_status': new_status,
+                'updated_by_id': updated_by_id,
+                'updated_by_name': get_employee_name(updated_by_id),
+                'is_subtask': task.parent_id is not None
+            },
+            timeout=2
+        )
+        print(f"[Notification] Sent status update notification for task {task_id}")
+    except Exception as e:
+        print(f"[Notification] Failed to send status update: {e}")
+
+def notify_task_assigned(task_id, assigned_to, assigned_by_id):
+    """Send notification when task is assigned"""
+    try:
+        task = Task.query.get(task_id)
+        if not task:
+            return
+        
+        requests.post(
+            f'{NOTIFICATION_SERVICE_URL}/api/internal/events/task-assigned',
+            json={
+                'task_id': task_id,
+                'task_title': task.title,
+                'assigned_to': assigned_to,
+                'assigned_by_name': get_employee_name(assigned_by_id)
+            },
+            timeout=2
+        )
+        print(f"[Notification] Sent assignment notification for task {task_id}")
+    except Exception as e:
+        print(f"[Notification] Failed to send assignment notification: {e}")
+
+def notify_due_date_changed(task_id, old_date, new_date, changed_by_id):
+    """Send notification when due date changes"""
+    try:
+        task = Task.query.get(task_id)
+        if not task:
+            return
+        
+        requests.post(
+            f'{NOTIFICATION_SERVICE_URL}/api/internal/events/due-date-changed',
+            json={
+                'item_id': task_id,
+                'item_title': task.title,
+                'item_type': 'Subtask' if task.parent_id else 'Task',
+                'owner_id': task.owner,
+                'collaborators': get_task_collaborators_ids(task_id),
+                'old_due_date': old_date.strftime('%Y-%m-%d') if old_date else None,
+                'new_due_date': new_date.strftime('%Y-%m-%d') if new_date else None,
+                'changed_by_id': changed_by_id,
+                'changed_by_name': get_employee_name(changed_by_id)
+            },
+            timeout=2
+        )
+        print(f"[Notification] Sent due date change notification for task {task_id}")
+    except Exception as e:
+        print(f"[Notification] Failed to send due date notification: {e}")
 
 # ------------------ Mentions Helpers ------------------
 MENTION_RE = re.compile(r'@(\d+)')  # numeric ids (still supported)
@@ -167,98 +264,222 @@ def create_task():
     return {"message": "Task created", "task_id": new_task.task_id}, 201
 
 
+# @app.route("/task/status/<int:task_id>", methods=["PATCH"])
+# def update_task_status(task_id):
+    
+#     # input {status, eid}
+#     print('hereee')
+
+#     data = request.json
+#     new_status = data.get("status")
+#     eid = session['employee_id']
+#     curr_task = Task.query.get(task_id)
+
+#     print('hereee2')
+
+#     if curr_task is None: # check if task exists 
+#         return {"message": "Task not found"}, 404
+    
+#     print('hereee3')
+
+#     # check if employee is a collaborator
+#     print(curr_task.collaborators)
+#     # print(eid)
+#     print(curr_task.collaborators.filter_by(employee_id=eid).first())
+#     if curr_task.collaborators.filter_by(employee_id=eid).first() is None:
+#         print('not collab')
+#         return {"message": "You are not a collaborator of this task"}, 403
+    
+#     print('hereee4')
+    
+#     # update status and other fields accordingly
+#     # tasks will always pass through ongoing (either by default or after assignment), tasks may or may not pass through under review, tasks will always end at done
+#     # if status from unassigned -> ongoing, set start_date
+#     if curr_task.status == 'unassigned' and new_status == 'ongoing':
+#         curr_task.start_date = time.strftime('%Y-%m-%d %H:%M:%S')
+
+#     # unassigned -> under review ?
+
+#     # if status from ongoing -> done, set completed_date
+#     # regardless of start state, if status is done, set completed_date
+#     elif new_status == 'done':
+#         curr_task.completed_date = time.strftime('%Y-%m-%d %H:%M:%S')
+    
+#     curr_task.status = new_status
+#     db.session.commit()
+#     return {"message": "Task status updated"}, 200
+
 @app.route("/task/status/<int:task_id>", methods=["PATCH"])
 def update_task_status(task_id):
+<<<<<<< Updated upstream
     # update task status only
     
     # input {status, eid}
     # print('hereee')
 
+=======
+    # input {status}
+>>>>>>> Stashed changes
     data = request.json
     new_status = data.get("status")
     eid = session['employee_id']
     curr_task = Task.query.get(task_id)
 
+<<<<<<< Updated upstream
     if curr_task is None: # check if task exists 
         return {"message": "Task not found"}, 404
     
     # print('hereee3')
 
+=======
+    if curr_task is None:
+        return {"message": "Task not found"}, 404
+    
+>>>>>>> Stashed changes
     # check if employee is a collaborator
     if curr_task.collaborators.filter_by(employee_id=eid).first() is None:
-        print('not collab')
         return {"message": "You are not a collaborator of this task"}, 403
     
+<<<<<<< Updated upstream
+=======
+    # SAVE OLD STATUS FOR NOTIFICATION
+    old_status = curr_task.status
+    
+>>>>>>> Stashed changes
     # update status and other fields accordingly
-    # tasks will always pass through ongoing (either by default or after assignment), tasks may or may not pass through under review, tasks will always end at done
-    # if status from unassigned -> ongoing, set start_date
     if curr_task.status == 'unassigned' and new_status == 'ongoing':
         curr_task.start_date = time.strftime('%Y-%m-%d %H:%M:%S')
-
-    # unassigned -> under review ?
-
-    # if status from ongoing -> done, set completed_date
-    # regardless of start state, if status is done, set completed_date
     elif new_status == 'done':
         curr_task.completed_date = time.strftime('%Y-%m-%d %H:%M:%S')
     
     curr_task.status = new_status
     db.session.commit()
+    
+    # SEND NOTIFICATION IF STATUS CHANGED
+    if old_status != new_status:
+        notify_task_status_updated(task_id, old_status, new_status, eid)
+    
     return {"message": "Task status updated"}, 200
 
 
+<<<<<<< Updated upstream
+=======
+# @app.route("/task/<int:task_id>", methods=["PUT"])
+# def update_task(task_id):
+
+#     # Update task metadata (not status), frontend sends whole task object
+#     # This method is not for assigning tasks aka editing owner
+
+#     # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority, owner}
+#     data = request.json
+#     curr_task = Task.query.get(task_id)
+#     eid = session['employee_id']
+#     role = session['role']
+
+#     if curr_task is None: # check if task exists 
+#         return {"message": "Task not found"}, 404
+
+#     if curr_task.owner != eid: # only owner can update task
+#         return {"message": "Only the owner can update the task"}, 403
+
+#     # update fields
+#     curr_task.title = data.get('title', curr_task.title)
+#     curr_task.description = data.get('description', curr_task.description)
+    
+#     # Handle attachments as JSON array
+#     if 'attachments' in data:
+#         curr_task.attachment = json.dumps(data['attachments'])
+    
+#     if 'deadline' in data:
+#         curr_task.deadline = convert_datetime(data['deadline'])
+#     curr_task.project_id = data.get('project_id', curr_task.project_id) #TODO: deal with it when doing projects
+#     curr_task.parent_id = data.get('parent_id', curr_task.parent_id) #TODO: deal with it when doing subtasks
+#     curr_task.priority = data.get('priority', curr_task.priority)
+
+#     if 'status' in data: #TODO: idk if frontend will send status here
+#         new_status = data['status']
+#         update_stuff_by_status(curr_task, new_status)
+
+#     if data['owner'] != curr_task.owner and role == 'manager': # owner changed, and only manager can change it
+#         new_owner = Staff.query.get(data['owner'])
+#         if new_owner is None:
+#             return {"message": "New owner not found"}, 404
+#         curr_task.owner_staff = new_owner
+#         # TODO: need to update status here
+#     elif data['owner'] == 'staff':
+#         return {"message": "Only a manager can assign tasks"}, 403
+
+#     if 'collaborators' in data: # update collaborators, dont need to check same depertment etc because frontend should handle it
+#         ppl = data['collaborators']
+#         ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
+#         collaborators = Staff.query.filter(Staff.employee_id.in_(ppl)).all()
+#         curr_task.collaborators = collaborators
+
+#     db.session.commit()
+#     return {"message": "Task updated"}, 200
+
+>>>>>>> Stashed changes
 @app.route("/task/<int:task_id>", methods=["PUT"])
 def update_task(task_id):
-
     # Update task metadata (not status), frontend sends whole task object
-    # This method is not for assigning tasks aka editing owner
-
-    # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority, owner}
     data = request.json
     curr_task = Task.query.get(task_id)
     eid = session['employee_id']
     role = session['role']
 
-    if curr_task is None: # check if task exists 
+    if curr_task is None:
         return {"message": "Task not found"}, 404
 
-    if curr_task.owner != eid: # only owner can update task
+    if curr_task.owner != eid:
         return {"message": "Only the owner can update the task"}, 403
+
+    # SAVE OLD DEADLINE FOR NOTIFICATION
+    old_deadline = curr_task.deadline
 
     # update fields
     curr_task.title = data.get('title', curr_task.title)
     curr_task.description = data.get('description', curr_task.description)
     
-    # Handle attachments as JSON array
     if 'attachments' in data:
         curr_task.attachment = json.dumps(data['attachments'])
     
     if 'deadline' in data:
         curr_task.deadline = convert_datetime(data['deadline'])
-    curr_task.project_id = data.get('project_id', curr_task.project_id) #TODO: deal with it when doing projects
-    curr_task.parent_id = data.get('parent_id', curr_task.parent_id) #TODO: deal with it when doing subtasks
+    
+    curr_task.project_id = data.get('project_id', curr_task.project_id)
+    curr_task.parent_id = data.get('parent_id', curr_task.parent_id)
     curr_task.priority = data.get('priority', curr_task.priority)
 
-    if 'status' in data: #TODO: idk if frontend will send status here
+    if 'status' in data:
         new_status = data['status']
         update_stuff_by_status(curr_task, new_status)
 
-    if data['owner'] != curr_task.owner and role == 'manager': # owner changed, and only manager can change it
+    if 'owner' in data and data['owner'] != curr_task.owner and role == 'manager':
         new_owner = Staff.query.get(data['owner'])
         if new_owner is None:
             return {"message": "New owner not found"}, 404
+        
+        # SEND NOTIFICATION FOR TASK ASSIGNMENT
+        old_owner = curr_task.owner
         curr_task.owner_staff = new_owner
-        # TODO: need to update status here
-    elif data['owner'] == 'staff':
+        if old_owner != new_owner.employee_id:
+            notify_task_assigned(task_id, new_owner.employee_id, eid)
+    
+    elif 'owner' in data and role == 'staff':
         return {"message": "Only a manager can assign tasks"}, 403
 
-    if 'collaborators' in data: # update collaborators, dont need to check same depertment etc because frontend should handle it
+    if 'collaborators' in data:
         ppl = data['collaborators']
-        ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
+        ppl.append(eid)
         collaborators = Staff.query.filter(Staff.employee_id.in_(ppl)).all()
         curr_task.collaborators = collaborators
 
     db.session.commit()
+    
+    # SEND NOTIFICATION IF DEADLINE CHANGED
+    if old_deadline != curr_task.deadline:
+        notify_due_date_changed(task_id, old_deadline, curr_task.deadline, eid)
+    
     return {"message": "Task updated"}, 200
 
 @app.route('/upload-attachment', methods=['POST'])
@@ -421,6 +642,48 @@ def list_mentionable(task_id):
             "role": u.role
         } for u in users
     ]), 200
+
+# ------------------ Internal API for Notification Service ------------------
+
+@app.route('/api/internal/tasks/upcoming-deadlines', methods=['GET'])
+def get_upcoming_deadlines():
+    """
+    Get tasks with deadlines in specified date range
+    Used by Notification Service for deadline reminders
+    """
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    if not start_date or not end_date:
+        return jsonify({'error': 'start_date and end_date required'}), 400
+    
+    try:
+        # Convert ISO strings to datetime
+        from datetime import datetime
+        start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+        end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+    except ValueError:
+        return jsonify({'error': 'Invalid date format'}), 400
+    
+    # Query tasks with deadlines in range, not completed
+    tasks = Task.query.filter(
+        Task.deadline >= start,
+        Task.deadline <= end,
+        Task.status != 'done'  # Your status name for completed
+    ).all()
+    
+    result = []
+    for task in tasks:
+        result.append({
+            'task_id': task.task_id,
+            'title': task.title,
+            'deadline': task.deadline.strftime('%Y-%m-%d') if task.deadline else None,
+            'owner': task.owner,
+            'collaborators': get_task_collaborators_ids(task.task_id),
+            'is_subtask': task.parent_id is not None
+        })
+    
+    return jsonify({'tasks': result}), 200
 
 if __name__ == "__main__":
     with app.app_context():
