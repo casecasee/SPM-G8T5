@@ -23,12 +23,6 @@ import requests
 # ADD this constant after your app configuration
 NOTIFICATION_SERVICE_URL = "http://localhost:5003"
 
-# ADD these imports at the top (after your existing imports)
-import requests
-
-# ADD this constant after your app configuration
-NOTIFICATION_SERVICE_URL = "http://localhost:5003"
-
 ALLOWED_EXTENSIONS = {'pdf'}
 
 def allowed_file(filename):

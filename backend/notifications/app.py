@@ -14,15 +14,6 @@ app.secret_key = "issa_secret_key"
 app.config["SESSION_COOKIE_SAMESITE"] = "None"
 app.config["SESSION_COOKIE_SECURE"] = True
 
-
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', request.headers.get('Origin', 'http://localhost:5173'))
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,X-Employee-Id,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS')
-    response.headers.add('Access-Control-Allow-Credentials', 'true')
-    return response
-
 # Update CORS configuration
 CORS(app, 
      resources={r"/api/*": {
