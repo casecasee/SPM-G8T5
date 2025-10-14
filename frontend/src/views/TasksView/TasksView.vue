@@ -387,12 +387,12 @@
 
     async function fetchTasks() {
     try {
-        const res = await axios.get("http://localhost:5002/task", {
+        const res = await axios.get("http://localhost:5002/tasks", {
         withCredentials: true,
-        params: {
-            eid: currentEmployeeId,
-            role: currentRole
-        }
+        // params: {
+        //     eid: currentEmployeeId,
+        //     role: currentRole
+        // }
         })
         const fetchedTasks = res.data.tasks.map(t => {
         // Parse attachments from JSON string

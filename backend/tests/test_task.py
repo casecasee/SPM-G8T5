@@ -208,7 +208,16 @@ class TaskApiTestCase(unittest.TestCase):
     def test_status_update_employee_not_collaborator(self):
         pass
 
+    def test_metadata_update_by_owner(self):
+        pass
 
+    def test_metadata_update(self):
+        pass
+
+    def test_assign_tasks(self):
+        pass
+
+    
 
 
 
