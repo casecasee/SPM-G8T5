@@ -64,6 +64,8 @@ def login():
     
     session['employee_id'] = employee.employee_id
     session['role'] = employee.role
+    session['team'] = employee.team
+    session['department'] = employee.department
 
     dept = (employee.department or "").strip()
     team = (employee.team or "").strip()

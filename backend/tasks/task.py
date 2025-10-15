@@ -236,13 +236,18 @@ def create_task():
     role = session['role']
     eid = session['employee_id']
 
+    # check if task title already exists
+    existing_task = Task.query.filter_by(title=data['title']).first()
+    if existing_task:
+        return {"message": "Task title already exists"}, 400
+
     status = 'ongoing' if role == 'staff' else 'unassigned' # set status by role of person creating it
     
     ppl = data.get('collaborators', [])
     ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
     collaborators = get_collaborators(ppl)
 
-    # TODO: validate deadline (not before today) - frontend job?
+    # frontend will make sure deadline is not before today
 
     # Convert attachments array to JSON string
     attachments_json = json.dumps(data.get('attachments', []))
@@ -264,155 +269,68 @@ def create_task():
     return {"message": "Task created", "task_id": new_task.task_id}, 201
 
 
-# @app.route("/task/status/<int:task_id>", methods=["PATCH"])
-# def update_task_status(task_id):
-    
-#     # input {status, eid}
-#     print('hereee')
-
-#     data = request.json
-#     new_status = data.get("status")
-#     eid = session['employee_id']
-#     curr_task = Task.query.get(task_id)
-
-#     print('hereee2')
-
-#     if curr_task is None: # check if task exists 
-#         return {"message": "Task not found"}, 404
-    
-#     print('hereee3')
-
-#     # check if employee is a collaborator
-#     print(curr_task.collaborators)
-#     # print(eid)
-#     print(curr_task.collaborators.filter_by(employee_id=eid).first())
-#     if curr_task.collaborators.filter_by(employee_id=eid).first() is None:
-#         print('not collab')
-#         return {"message": "You are not a collaborator of this task"}, 403
-    
-#     print('hereee4')
-    
-#     # update status and other fields accordingly
-#     # tasks will always pass through ongoing (either by default or after assignment), tasks may or may not pass through under review, tasks will always end at done
-#     # if status from unassigned -> ongoing, set start_date
-#     if curr_task.status == 'unassigned' and new_status == 'ongoing':
-#         curr_task.start_date = time.strftime('%Y-%m-%d %H:%M:%S')
-
-#     # unassigned -> under review ?
-
-#     # if status from ongoing -> done, set completed_date
-#     # regardless of start state, if status is done, set completed_date
-#     elif new_status == 'done':
-#         curr_task.completed_date = time.strftime('%Y-%m-%d %H:%M:%S')
-    
-#     curr_task.status = new_status
-#     db.session.commit()
-#     return {"message": "Task status updated"}, 200
-
 @app.route("/task/status/<int:task_id>", methods=["PATCH"])
 def update_task_status(task_id):
-    # update task status only
-    # input {status}
     
+    # input {status, eid}
+
     data = request.json
     new_status = data.get("status")
     eid = session['employee_id']
     curr_task = Task.query.get(task_id)
 
-    if curr_task is None:  # check if task exists 
+    if curr_task is None: # check if task exists 
         return {"message": "Task not found"}, 404
-    
+
     # check if employee is a collaborator
     if curr_task.collaborators.filter_by(employee_id=eid).first() is None:
+        print('not collab')
         return {"message": "You are not a collaborator of this task"}, 403
     
     # SAVE OLD STATUS FOR NOTIFICATION
     old_status = curr_task.status
     
     # update status and other fields accordingly
+    # tasks will always pass through ongoing (either by default or after assignment), tasks may or may not pass through under review, tasks will always end at done
+    # if status from unassigned -> ongoing, set start_date
     if curr_task.status == 'unassigned' and new_status == 'ongoing':
         curr_task.start_date = time.strftime('%Y-%m-%d %H:%M:%S')
+
+    # unassigned -> under review ?
+
+    # if status from ongoing -> done, set completed_date
+    # regardless of start state, if status is done, set completed_date
     elif new_status == 'done':
         curr_task.completed_date = time.strftime('%Y-%m-%d %H:%M:%S')
     
     curr_task.status = new_status
     db.session.commit()
-    
+
     # SEND NOTIFICATION IF STATUS CHANGED
     if old_status != new_status:
         notify_task_status_updated(task_id, old_status, new_status, eid)
     
     return {"message": "Task status updated"}, 200
 
-
-# @app.route("/task/<int:task_id>", methods=["PUT"])
-# def update_task(task_id):
-
-#     # Update task metadata (not status), frontend sends whole task object
-#     # This method is not for assigning tasks aka editing owner
-
-#     # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority, owner}
-#     data = request.json
-#     curr_task = Task.query.get(task_id)
-#     eid = session['employee_id']
-#     role = session['role']
-
-#     if curr_task is None: # check if task exists 
-#         return {"message": "Task not found"}, 404
-
-#     if curr_task.owner != eid: # only owner can update task
-#         return {"message": "Only the owner can update the task"}, 403
-
-#     # update fields
-#     curr_task.title = data.get('title', curr_task.title)
-#     curr_task.description = data.get('description', curr_task.description)
-    
-#     # Handle attachments as JSON array
-#     if 'attachments' in data:
-#         curr_task.attachment = json.dumps(data['attachments'])
-    
-#     if 'deadline' in data:
-#         curr_task.deadline = convert_datetime(data['deadline'])
-#     curr_task.project_id = data.get('project_id', curr_task.project_id) #TODO: deal with it when doing projects
-#     curr_task.parent_id = data.get('parent_id', curr_task.parent_id) #TODO: deal with it when doing subtasks
-#     curr_task.priority = data.get('priority', curr_task.priority)
-
-#     if 'status' in data: #TODO: idk if frontend will send status here
-#         new_status = data['status']
-#         update_stuff_by_status(curr_task, new_status)
-
-#     if data['owner'] != curr_task.owner and role == 'manager': # owner changed, and only manager can change it
-#         new_owner = Staff.query.get(data['owner'])
-#         if new_owner is None:
-#             return {"message": "New owner not found"}, 404
-#         curr_task.owner_staff = new_owner
-#         # TODO: need to update status here
-#     elif data['owner'] == 'staff':
-#         return {"message": "Only a manager can assign tasks"}, 403
-
-#     if 'collaborators' in data: # update collaborators, dont need to check same depertment etc because frontend should handle it
-#         ppl = data['collaborators']
-#         ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
-#         collaborators = Staff.query.filter(Staff.employee_id.in_(ppl)).all()
-#         curr_task.collaborators = collaborators
-
-#     db.session.commit()
-#     return {"message": "Task updated"}, 200
-
 @app.route("/task/<int:task_id>", methods=["PUT"])
 def update_task(task_id):
+
     # Update task metadata (not status), frontend sends whole task object
+    # This method is not for assigning tasks aka editing owner
+
+    # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority, owner}
     data = request.json
     curr_task = Task.query.get(task_id)
     eid = session['employee_id']
     role = session['role']
+    # team = session['team'] #TODO: set this in login and use here
 
-    if curr_task is None:
+    if curr_task is None: # check if task exists 
         return {"message": "Task not found"}, 404
 
-    if curr_task.owner != eid:
+    if curr_task.owner != eid: # only owner can update task
         return {"message": "Only the owner can update the task"}, 403
-
+    
     # SAVE OLD DEADLINE FOR NOTIFICATION
     old_deadline = curr_task.deadline
 
@@ -420,47 +338,49 @@ def update_task(task_id):
     curr_task.title = data.get('title', curr_task.title)
     curr_task.description = data.get('description', curr_task.description)
     
+    # Handle attachments as JSON array
     if 'attachments' in data:
         curr_task.attachment = json.dumps(data['attachments'])
     
     if 'deadline' in data:
         curr_task.deadline = convert_datetime(data['deadline'])
-    
-    curr_task.project_id = data.get('project_id', curr_task.project_id)
-    curr_task.parent_id = data.get('parent_id', curr_task.parent_id)
+
+    curr_task.project_id = data.get('project_id', curr_task.project_id) #TODO: deal with it when doing projects
+    curr_task.parent_id = data.get('parent_id', curr_task.parent_id) #TODO: deal with it when doing subtasks
     curr_task.priority = data.get('priority', curr_task.priority)
 
-    if 'status' in data:
+    if 'status' in data: #TODO: idk if frontend will send status here
         new_status = data['status']
-        update_stuff_by_status(curr_task, new_status)
+        update_stuff_by_status(curr_task, new_status) 
+        # TODO: do the update stuff by status function
 
-    if 'owner' in data and data['owner'] != curr_task.owner and role == 'manager':
+    if data['owner'] != curr_task.owner and role == 'manager': # owner changed, and only manager can change it
         new_owner = Staff.query.get(data['owner'])
         if new_owner is None:
             return {"message": "New owner not found"}, 404
-        
         # SEND NOTIFICATION FOR TASK ASSIGNMENT
         old_owner = curr_task.owner
         curr_task.owner_staff = new_owner
         if old_owner != new_owner.employee_id:
             notify_task_assigned(task_id, new_owner.employee_id, eid)
-    
-    elif 'owner' in data and role == 'staff':
+        # TODO: need to update status here
+    elif role == 'staff':
         return {"message": "Only a manager can assign tasks"}, 403
 
-    if 'collaborators' in data:
+    if 'collaborators' in data: # update collaborators, dont need to check same depertment etc because frontend should handle it
         ppl = data['collaborators']
-        ppl.append(eid)
+        ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
         collaborators = Staff.query.filter(Staff.employee_id.in_(ppl)).all()
         curr_task.collaborators = collaborators
 
     db.session.commit()
-    
+
     # SEND NOTIFICATION IF DEADLINE CHANGED
     if old_deadline != curr_task.deadline:
         notify_due_date_changed(task_id, old_deadline, curr_task.deadline, eid)
-    
+
     return {"message": "Task updated"}, 200
+
 
 @app.route('/upload-attachment', methods=['POST'])
 def upload_attachment():
@@ -493,9 +413,60 @@ def upload_attachment():
 
 @app.route("/tasks", methods=["GET"])
 def get_all_tasks():
+    role = session['role']
+    eid = session['employee_id']
+    team = session['team']
+    dept = session['department']
+
     tasks = Task.query.all()
     tasks_list = [task.to_dict() for task in tasks]
     return jsonify({"tasks": tasks_list}), 200
+
+    # TODO: do filter
+
+    # # if staff or manager, get all tasks of team.
+    # # return as {my_tasks: [], team_tasks: [emp1: [list of tasks], emp2: [...]]}
+
+    # if role == 'staff' or role == 'manager':
+    #     print('Getting tasks for staff/manager')
+    #     # get all tasks i am a collaborator and owner of
+    #     my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
+    #     my_tasks_list = [t.to_dict() for t in my_tasks]
+    #     # get all tasks of team members
+    #     team_members = Staff.query.filter_by(team=team).all()
+    #     team_tasks = {}
+    #     for member in team_members:
+    #         if member.employee_id == eid:
+    #             continue
+    #         member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
+    #         team_tasks[member.employee_name] = [t.to_dict() for t in member_tasks]
+        
+    #     return jsonify({"my_tasks": my_tasks_list, "team_tasks": team_tasks}), 200
+
+
+    # # if role is director, get all task for department
+    # # return as {my_tasks: [], dept_tasks : {team_A: [emp1: [list of tasks], emp2: [...]], team_B: [...]}
+    # elif role == 'director' or role == 'senior manager' or role == 'hr':
+    #     print('Getting tasks for director/senior manager/hr')
+    #     # get all tasks i am a collaborator of (includes those im owner of)
+    #     my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
+    #     my_tasks_list = [t.to_dict() for t in my_tasks]
+    #     # get all tasks of department
+    #     dept_members = Staff.query.filter_by(department=dept).all()
+    #     # loop through members and group responses into team_tasks
+    #     dept_tasks = {} 
+    #     for member in dept_members:
+    #         if member.employee_id == eid:
+    #             continue
+    #         member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
+    #         team = member.team or "No Team"
+    #         if team not in dept_tasks:
+    #             dept_tasks[team] = {}
+    #         dept_tasks[team][member.employee_name] = [t.to_dict() for t in member_tasks]
+        
+    #     return jsonify({"my_tasks": my_tasks_list, "dept_tasks": dept_tasks}), 200
+
+
     
 @app.route('/attachments/<path:filename>')
 def serve_attachment(filename):
@@ -669,3 +640,5 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
     app.run(port=5002, debug=True)
+
+
