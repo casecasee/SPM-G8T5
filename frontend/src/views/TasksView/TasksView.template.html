@@ -3,7 +3,7 @@
   <div class="tasks-header">
     <h2>Tasks</h2>
     <div class="header-buttons" v-if="currentTab === 'my'">
-      <Button icon="pi pi-filter" label="Filter" class="filter-btn" text />
+      <Button icon="pi pi-filter" label="Filter" class="filter-btn p-button-text" />
       <Button label="+ Add Task" class="add-top-btn" @click="openAdd" />
     </div>
   </div>
@@ -409,7 +409,7 @@
           <ul class="file-list">
             <li v-for="(file, index) in taskForm.attachments" :key="index">
               <a :href="file.url" target="_blank">{{ file.name }}</a>
-              <Button icon="pi pi-times" class="delete-btn" @click="removeAttachment(index)" v-if="isEditing || !selectedTask"/>
+              <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm" @click="removeAttachment(index)" v-if="isEditing || !selectedTask"/>
             </li>
           </ul>
         </template>
@@ -436,15 +436,22 @@
               <div v-if="editingCommentId === c.id" class="comment-edit">
                 <Textarea v-model="editingContent" rows="2" class="input-field" />
                 <div class="comment-actions">
-                  <Button label="Save" size="small" @click="saveEditComment(c.id)" />
-                  <Button label="Cancel" size="small" severity="secondary" @click="cancelEditComment" />
+              <Button label="Save" class="p-button-sm" @click="saveEditComment(c.id)" />
+              <Button label="Cancel" class="p-button-text p-button-sm" @click="cancelEditComment" />
                 </div>
               </div>
-              <div v-else class="comment-text">{{ c.content }}</div>
+              <div v-else class="comment-text">
+                {{ c.content }}
+                <div v-if="(c.attachments || []).length" class="comment-attachments">
+                  <a v-for="a in c.attachments" :key="a.id || a.filename" :href="`http://localhost:5002${a.url || '/attachments/' + a.filename}`" target="_blank" rel="noopener">
+                    {{ a.original_name || a.filename }}
+                  </a>
+                </div>
+              </div>
             </div>
             <div class="comment-ops" v-if="isOwnerOrCollaborator(selectedTask) || (sessionStorage.getItem('role') || '').toLowerCase() !== 'staff'">
-              <Button label="Edit" size="small" text @click="startEditComment(c)" />
-              <Button label="Delete" size="small" text severity="danger" @click="deleteComment(c.id)" />
+              <Button label="Edit" class="p-button-text p-button-sm" @click="startEditComment(c)" />
+              <Button label="Delete" class="p-button-danger p-button-text p-button-sm" @click="deleteComment(c.id)" />
             </div>
           </div>
         </div>
@@ -473,6 +480,26 @@
               </div>
             </div>
           </div>
+          <FileUpload
+            mode="basic"
+            name="attachment"
+            url="http://localhost:5002/upload-attachment"
+            :withCredentials="true"
+            :auto="true"
+            multiple
+            accept=".pdf,.png,.jpg,.jpeg"
+            :maxFileSize="16777216"
+            :showUploadButton="false"
+            :showCancelButton="false"
+            chooseLabel="Attach"
+            @upload="onCommentFileUploaded"
+          />
+          <div class="attached-files" v-if="newCommentAttachments.length">
+            <div v-for="(f, i) in newCommentAttachments" :key="i" class="attached-file">
+              <span>{{ f.original_name || f.filename }}</span>
+              <Button class="p-button-danger p-button-text p-button-sm" @click="removeNewAttachment(i)">Remove</Button>
+            </div>
+          </div>
           <div class="comment-actions">
             <Button label="Add Comment" @click="addComment" :disabled="!newComment.trim() || !selectedTask" />
           </div>
@@ -487,9 +514,8 @@
             v-if="isEditing || !selectedTask" 
             icon="pi pi-plus" 
             label="Add Subtask" 
-            class="add-subtask-btn" 
+            class="add-subtask-btn p-button-sm" 
             @click="toggleSubtaskForm"
-            size="small"
           />
         </div>
         
@@ -515,8 +541,8 @@
           <div class="subtask-form-row">
             <InputText v-model="newSubtask.name" placeholder="Subtask name" class="input-field" />
             <div class="subtask-form-controls">
-              <Button label="Add" @click="addSubtask" size="small" />
-              <Button label="Cancel" @click="toggleSubtaskForm" severity="secondary" size="small" />
+              <Button label="Add" @click="addSubtask" class="p-button-sm" />
+              <Button label="Cancel" @click="toggleSubtaskForm" class="p-button-text p-button-sm" />
             </div>
           </div>
           <div class="subtask-form-row">
@@ -574,7 +600,7 @@
             <ul class="file-list">
               <li v-for="(file, index) in newSubtask.attachments" :key="index">
                 <span>{{ file.name }}</span>
-                <Button icon="pi pi-times" class="delete-btn" @click="removeSubtaskAttachment(index)" size="small" text />
+                <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm" @click="removeSubtaskAttachment(index)" />
               </li>
             </ul>
           </div>

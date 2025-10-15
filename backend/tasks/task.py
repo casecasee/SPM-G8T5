@@ -12,6 +12,7 @@ from models.task import Task
 from models.staff import Staff
 from models.comment import Comment
 from models.comment_mention import CommentMention
+from models.comment_attachment import CommentAttachment
 from models.project import Project
 from datetime import datetime
 import re
@@ -23,7 +24,7 @@ import requests
 # ADD this constant after your app configuration
 NOTIFICATION_SERVICE_URL = "http://localhost:5003"
 
-ALLOWED_EXTENSIONS = {'pdf'}
+ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg'}
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -480,7 +481,12 @@ def serve_attachment(filename):
 @app.route('/task/<int:task_id>/comments', methods=['GET'])
 def list_task_comments(task_id):
     comments = Comment.query.filter_by(task_id=task_id).order_by(Comment.created_at.asc()).all()
-    return jsonify([c.to_dict() for c in comments]), 200
+    def serialize(c):
+        atts = CommentAttachment.query.filter_by(comment_id=c.id).all()
+        return {**c.to_dict(), "attachments": [
+            {"id": a.id, "filename": a.filename, "original_name": a.original_name, "url": f"/attachments/{a.filename}"}
+        for a in atts]}
+    return jsonify([serialize(c) for c in comments]), 200
 
 
 @app.route('/task/<int:task_id>/comments', methods=['POST'])
@@ -508,6 +514,8 @@ def create_task_comment(task_id):
     if errors:
         return {"message": "; ".join(errors)}, 400
 
+    attachments = list((data.get('attachments') or []))
+
     comment = Comment(task_id=task_id, author_id=session['employee_id'], content=content)
     db.session.add(comment)
     db.session.flush()  # get comment.id before commit
@@ -516,8 +524,18 @@ def create_task_comment(task_id):
     for mid in (numeric_ids | resolved_name_ids):
         db.session.add(CommentMention(comment_id=comment.id, mentioned_id=mid))
 
+    # persist attachments (limit to 10 to avoid abuse)
+    for fname in attachments[:10]:
+        if isinstance(fname, str) and fname:
+            db.session.add(CommentAttachment(comment_id=comment.id, filename=fname))
+
     db.session.commit()
-    return jsonify(comment.to_dict()), 201
+    # include attachments in response
+    resp_atts = [
+        {"id": a.id, "filename": a.filename, "url": f"/attachments/{a.filename}"}
+        for a in CommentAttachment.query.filter_by(comment_id=comment.id).all()
+    ]
+    return jsonify({**comment.to_dict(), "attachments": resp_atts}), 201
 
 
 @app.route('/comments/<int:comment_id>', methods=['PUT'])

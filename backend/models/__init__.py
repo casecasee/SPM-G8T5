@@ -4,3 +4,4 @@ from .extensions import db
 from .project import Project
 from .comment import Comment
 from .comment_mention import CommentMention
+from .comment_attachment import CommentAttachment

@@ -1,5 +1,5 @@
 <template src="./TasksView.template.html"></template>
-<style scoped src="./TasksView.style.css"></style>
+<style src="./TasksView.style.css"></style>
 
 <script setup>
     import { ref, computed, onMounted, onUnmounted } from 'vue'
@@ -31,6 +31,7 @@
     // Comments state
     const comments = ref([])
     const newComment = ref('')
+    const newCommentAttachments = ref([])
     const editingCommentId = ref(null)
     const editingContent = ref('')
     const commentError = ref('')
@@ -720,8 +721,10 @@
     if (!content) return
     try {
         commentError.value = ''
-        await axios.post(`http://localhost:5002/task/${taskId}/comments`, { content }, { withCredentials: true })
+        const attachments = (newCommentAttachments.value || []).map(a => a.filename)
+        await axios.post(`http://localhost:5002/task/${taskId}/comments`, { content, attachments }, { withCredentials: true })
         newComment.value = ''
+        newCommentAttachments.value = []
         await loadComments(taskId)
     } catch (e) {
         try {
@@ -767,5 +770,19 @@
         await axios.delete(`http://localhost:5002/comments/${commentId}`, { withCredentials: true })
         if (selectedTask.value?.id) await loadComments(selectedTask.value.id)
     } catch (_) {}
+    }
+
+    function onCommentFileUploaded(e) {
+    try {
+        const res = JSON.parse(e?.xhr?.response || '{}')
+        if (res?.filename) {
+            const original = (e?.files?.[0]?.name) || res.filename
+            newCommentAttachments.value.push({ filename: res.filename, original_name: original })
+        }
+    } catch {}
+    }
+
+    function removeNewAttachment(idx) {
+    newCommentAttachments.value.splice(idx, 1)
     }
 </script>
