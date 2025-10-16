@@ -46,17 +46,18 @@
                         <th>Status</th>
                         <th>Tasks</th>
                         <th>Members</th>
+                        <th>Due Date</th>
                         <th>Last Updated</th>
                     </tr>
                 </thead>
 
                 <tbody>
                     <tr v-if="loading">
-                        <td colspan="6">Loading…</td>
+                        <td colspan="7">Loading…</td>
                     </tr>
 
                     <tr v-else-if="!loading && filteredAndSorted.length === 0">
-                        <td colspan="6">No projects found.</td>
+                        <td colspan="7">No projects found.</td>
                     </tr>
 
                     <tr v-for="p in filteredAndSorted" :key="p.id" @click="$router.push({ name: 'project-detail', params: { id: p.id } })" style="cursor:pointer;">
@@ -69,6 +70,7 @@
                         </td>
                         <td>{{ p.tasksDone }} / {{ p.tasksTotal }}</td>
                         <td>{{ (p.memberNames && p.memberNames.length) ? p.memberNames.join(', ') : '-' }}</td>
+                        <td>{{ formatDueDate(p.dueDate) }}</td>
                         <td>{{ fromNow(p.updatedAt) }}</td>
                     </tr>
                 </tbody>
@@ -78,7 +80,7 @@
         </div>
 
         <!-- Create Project Modal -->
-        <div v-if="showCreate" class="modal-overlay" @click.self="cancelCreate">
+        <div v-if="showCreate" class="modal-overlay" @click.self.stop="cancelCreate">
             <div class="modal">
                 <h2>Create Project</h2>
                 <form @submit.prevent="submitCreate">
@@ -111,40 +113,53 @@
                     </div>
 
                     <label>
-                        Members (IDs, comma-separated)
-                        <input v-model="form.members" placeholder="e.g. 1,2,3" />
+                        Project Due Date
+                        <input type="datetime-local" v-model="form.dueDate" />
                     </label>
 
-                    <!-- Add Tasks UI: pill tabs create/attach -->
-                    <div v-if="isOwner" class="pill-tabs" style="margin-top:8px;">
-                        <button :class="['pill', addTab==='create' ? 'active' : '']" @click="addTab='create'">Create Task</button>
-                        <button :class="['pill', addTab==='attach' ? 'active' : '']" @click="addTab='attach'">Attach Existing</button>
-                    </div>
+                    <label>
+                        Members
+                        <div v-if="employees.length > 0" class="custom-multiselect">
+                            <div 
+                              class="multiselect-trigger"
+                              @click="showDropdown = !showDropdown"
+                              :class="{ 'open': showDropdown }"
+                            >
+                                <span v-if="form.memberIds.length === 0" class="placeholder">Select collaborators...</span>
+                                <span v-else class="selected-count">{{ form.memberIds.length }} selected</span>
+                                <span class="dropdown-arrow">▼</span>
+                            </div>
+                            <div v-if="showDropdown" class="multiselect-dropdown">
+                                <div class="dropdown-header">
+                                    <input 
+                                      v-model="searchFilter" 
+                                      placeholder="Search employees..." 
+                                      class="search-input"
+                                      @click.stop
+                                    />
+                                </div>
+                                <div class="dropdown-options">
+                                    <div 
+                                      v-for="employee in filteredEmployees" 
+                                      :key="employee.employee_id" 
+                                      class="option-item"
+                                      :class="{ 'selected': form.memberIds.includes(employee.employee_id) }"
+                                      @click="toggleEmployee(employee.employee_id)"
+                                    >
+                                        <div class="checkbox">
+                                            <div class="checkbox-inner" v-if="form.memberIds.includes(employee.employee_id)">✓</div>
+                                        </div>
+                                        <span class="option-text">{{ employee.display_label }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else>Loading employees...</div>
+                    </label>
 
-                    <div v-if="isOwner && addTab==='create'" class="row">
-                        <label>
-                            Title
-                            <input v-model="taskForm.title" placeholder="Task title" />
-                        </label>
-                        <label>
-                            Priority (1–10)
-                            <input type="number" min="1" max="10" v-model.number="taskForm.priority" />
-                        </label>
-                        <label style="grid-column:1/-1;">
-                            Description
-                            <input v-model="taskForm.description" placeholder="What needs to be done" />
-                        </label>
-                        <label>
-                            Deadline
-                            <input type="datetime-local" v-model="taskForm.deadline" />
-                        </label>
-                        <label>
-                            Collaborators (IDs, comma-separated)
-                            <input v-model="taskForm.collaborators" placeholder="e.g. 2,3,34" />
-                        </label>
-                    </div>
-
-                    <div v-else-if="isOwner">
+                    <!-- Attach Existing Tasks UI -->
+                    <div v-if="isOwner">
+                        <h4 style="margin: 16px 0 8px 0; font-weight: 600; color: #374151;">Attach existing tasks</h4>
                         <div v-if="tasksLoading">Loading tasks…</div>
                         <div v-else>
                             <div class="attach-toolbar">
@@ -178,9 +193,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import MultiSelect from 'primevue/multiselect'
 import { getProjects, createProject } from '../api/projects'
-import { listTasks, createTask, updateTaskProject } from '../api/tasks'
+import { listTasks, updateTaskProject } from '../api/tasks'
+import axios from 'axios'
 
 const projects = ref([])
 const loading = ref(false)
@@ -198,22 +215,56 @@ const tasksLoading = ref(false)
 const allTasks = ref([])
 const currentEmployeeId = Number(sessionStorage.getItem('employee_id')) || null
 const unassignedTasks = computed(() => allTasks.value.filter(t => !t.project_id && Number(t.owner) === currentEmployeeId))
-const createTaskNow = ref(false)
 const selectedExisting = ref([])
-const taskForm = reactive({
-    title: '',
-    description: '',
-    deadline: '',
-    priority: 5,
-    collaborators: ''
-})
-const addTab = ref('create')
 const searchExisting = ref('')
 
 const isOwner = computed(() => {
     const eid = Number(sessionStorage.getItem('employee_id')) || null
     return Number(form.ownerId || sessionStorage.getItem('employee_id')) === eid
 })
+
+// Employees for member dropdown
+const employees = ref([])
+const showDropdown = ref(false)
+const searchFilter = ref('')
+
+const employeeOptions = computed(() => {
+  const options = (employees.value || []).map(e => ({
+    ...e,
+    display_label: `${e.employee_name} (#${e.employee_id})${e.role ? ' · ' + e.role : ''}${e.department ? ' · ' + e.department : ''}${e.team ? ' · ' + e.team : ''}`
+  }))
+  
+  return options
+})
+
+const filteredEmployees = computed(() => {
+  if (!searchFilter.value) return employeeOptions.value
+  return employeeOptions.value.filter(emp => 
+    emp.display_label.toLowerCase().includes(searchFilter.value.toLowerCase())
+  )
+})
+
+
+function toggleEmployee(employeeId) {
+  const index = form.memberIds.indexOf(employeeId)
+  if (index > -1) {
+    form.memberIds.splice(index, 1)
+  } else {
+    form.memberIds.push(employeeId)
+  }
+}
+
+
+// Fetch employees for project collaborators (anyone can be invited)
+async function fetchEmployees() {
+  try {
+    const res = await axios.get('http://localhost:5000/employees/all', { withCredentials: true })
+    employees.value = Array.isArray(res.data) ? res.data : []
+  } catch (error) {
+    console.error('Error fetching employees:', error)
+    employees.value = []
+  }
+}
 
 const owners = computed(() => {
     const uniq = new Set(projects.value.map(p => p.owner).filter(Boolean))
@@ -239,6 +290,24 @@ function fromNow(iso) {
     if (hr < 24) return `${hr} hour${hr > 1 ? 's' : ''} ago`
     const day = Math.floor(hr / 24)
     return `${day} day${day > 1 ? 's' : ''} ago`
+}
+
+function formatDueDate(dueDate) {
+  if (!dueDate) return '-'
+  const date = new Date(dueDate)
+  const now = new Date()
+  const diffTime = date - now
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  
+  if (diffDays < 0) {
+    return `${Math.abs(diffDays)} days overdue`
+  } else if (diffDays === 0) {
+    return 'Due today'
+  } else if (diffDays === 1) {
+    return 'Due tomorrow'
+  } else {
+    return `Due in ${diffDays} days`
+  }
 }
 
 const filteredAndSorted = computed(() => {
@@ -292,23 +361,28 @@ const form = reactive({
     status: 'Active',
     tasksDone: 0,
     tasksTotal: 0,
-    members: '',
+    members: '',        // legacy text field (unused after dropdown)
+    memberIds: [],      // new dropdown selection
+    dueDate: '',
 })
 
-function openCreate() {
-    form.name = ''
-    form.owner = sessionStorage.getItem('employee_name') || 'Unassigned'
-    form.status = 'Active'
-    form.tasksDone = 0
-    form.tasksTotal = 0
-    formError.value = ''
+async function openCreate() {
+  form.name = ''
+  form.owner = sessionStorage.getItem('employee_name') || 'Unassigned'
+  form.status = 'Active'
+  form.tasksDone = 0
+  form.tasksTotal = 0
+  form.memberIds = []
+  formError.value = ''
 
-    // Load unassigned tasks for attachment list
-    createTaskNow.value = false
-    selectedExisting.value = []
-    tasksLoading.value = true
-    listTasks().then(ts => { allTasks.value = ts || [] }).finally(() => { tasksLoading.value = false })
-    showCreate.value = true
+  // Load unassigned tasks for attachment list
+  selectedExisting.value = []
+  tasksLoading.value = true
+  listTasks().then(ts => { allTasks.value = ts || [] }).finally(() => { tasksLoading.value = false })
+  
+  // Fetch project employees
+  await fetchEmployees()
+  showCreate.value = true
 }
 
 function cancelCreate() {
@@ -330,36 +404,14 @@ async function submitCreate() {
             // Backend initializes counters to 0; they update based on tasks
             tasksDone: 0,
             tasksTotal: 0,
-            members: (form.members || '')
-                .split(',')
-                .map(s => parseInt(s.trim(), 10))
-                .filter(n => Number.isFinite(n)),
+            members: Array.isArray(form.memberIds) ? form.memberIds : [],
+            dueDate: form.dueDate && form.dueDate.length === 16 ? `${form.dueDate}:00` : form.dueDate,
         }
         const created = await createProject(payload)
         projects.value.unshift(created)
 
-        // After project creation, optionally create a new task and/or attach existing tasks
+        // After project creation, optionally attach existing tasks
         const ops = []
-
-        if (createTaskNow.value) {
-            const deadline = taskForm.deadline && taskForm.deadline.length === 16
-                ? `${taskForm.deadline}:00`
-                : taskForm.deadline
-            const collaborators = (taskForm.collaborators || '')
-                .split(',')
-                .map(s => parseInt(s.trim(), 10))
-                .filter(n => Number.isFinite(n))
-
-            ops.push(createTask({
-                title: taskForm.title.trim(),
-                description: taskForm.description.trim(),
-                deadline,
-                priority: Number(taskForm.priority) || 1,
-                project_id: created.id,
-                collaborators,
-                attachments: []
-            }))
-        }
 
         if (selectedExisting.value.length) {
             for (const id of selectedExisting.value) {
@@ -392,7 +444,9 @@ async function onArchive() {
     }
 }
 
-onMounted(load)
+onMounted(async () => {
+  await Promise.allSettled([load(), fetchEmployees()])
+})
 </script>
 
 <style scoped>
@@ -497,17 +551,171 @@ onMounted(load)
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    overflow: visible !important; /* Allow dropdown to extend outside overlay */
 }
 .modal {
     background: #fff;
-    width: 520px;
-    max-width: 90vw;
+    width: 80vw;
+    max-width: 1100px;
+    min-width: 900px;
+    max-height: 85vh;
     border-radius: 12px;
     padding: 20px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    overflow: visible !important; /* Allow dropdown to extend outside modal */
+    font-family: 'Segoe UI', sans-serif;
+    margin: 2rem auto;
+}
+
+/* Ensure MultiSelect dropdown has proper z-index */
+:deep(.p-multiselect-panel) {
+    z-index: 9999 !important;
+}
+
+/* Alternative: if the above doesn't work, try this */
+:deep(.p-multiselect) {
+    z-index: 1000;
+}
+
+:deep(.p-multiselect-panel) {
+    z-index: 1001;
+}
+
+.custom-multiselect {
+  position: relative;
+  width: 100%;
+}
+
+.multiselect-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  min-height: 40px;
+}
+
+.multiselect-trigger:hover {
+  border-color: #9ca3af;
+}
+
+.multiselect-trigger.open {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.placeholder {
+  color: #9ca3af;
+}
+
+.selected-count {
+  color: #374151;
+  font-weight: 500;
+}
+
+.dropdown-arrow {
+  color: #6b7280;
+  transition: transform 0.2s;
+}
+
+.multiselect-trigger.open .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.multiselect-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  max-height: 200px;
+  overflow: hidden;
+}
+
+.dropdown-header {
+  padding: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.search-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.dropdown-options {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.option-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  cursor: pointer;
+  gap: 10px;
+  border-radius: 4px;
+  margin: 2px 8px;
+  transition: background-color 0.2s;
+}
+
+.option-item:hover {
+  background: #f3f4f6;
+}
+
+.option-item.selected {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #d1d5db;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.option-item.selected .checkbox {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.checkbox-inner {
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.option-text {
+  flex: 1;
+  font-size: 14px;
 }
 .modal h2 { margin-top: 0; }
-.modal form { display: grid; gap: 12px; }
+.modal form { 
+    display: grid; 
+    gap: 12px; 
+    min-height: 500px;
+    max-height: 72vh;
+    overflow-y: auto;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    box-sizing: border-box;
+}
 .modal label { display: grid; gap: 6px; font-weight: 600; }
 .modal input, .modal select {
     padding: 8px 10px;
@@ -516,9 +724,6 @@ onMounted(load)
 }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-.pill-tabs { display:flex; gap:8px; margin:8px 0; }
-.pill { border:1px solid #e5e7eb; background:#fff; color:#111827; padding:6px 12px; border-radius: var(--radius-pill); cursor:pointer; font-weight:600; }
-.pill.active { background:#111827; color:#fff; }
 .attach-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:8px; }
 .muted { color:#6b7280; }
 .attach-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; max-height:200px; overflow:auto; border:1px solid #e5e7eb; border-radius: var(--radius-md); padding:8px; }

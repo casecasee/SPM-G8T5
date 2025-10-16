@@ -19,3 +19,21 @@ source .venv/bin/activate
 pip3 install -r requirements.txt
 python3 projects/app.py  # http://localhost:8001
 ```
+
+### Migrations
+
+After pulling latest, run this migration to add the optional project due date column:
+
+Windows PowerShell:
+
+```
+mysql -u root -p SPM < backend\projects\migrations\001_add_due_date.sql
+```
+
+macOS/Linux:
+
+```
+mysql -u root -p SPM < backend/projects/migrations/001_add_due_date.sql
+```
+
+Then restart the service.

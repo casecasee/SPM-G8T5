@@ -12,6 +12,7 @@ CREATE TABLE projects (
   status VARCHAR(50) NOT NULL DEFAULT 'Active',
   tasks_done INT NOT NULL DEFAULT 0,
   tasks_total INT NOT NULL DEFAULT 0,
+  due_date DATETIME NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX ix_projects_owner_id (owner_id),
   CONSTRAINT fk_projects_owner FOREIGN KEY (owner_id) REFERENCES staff(employee_id) ON DELETE SET NULL
