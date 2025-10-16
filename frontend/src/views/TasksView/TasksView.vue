@@ -9,7 +9,6 @@
     import Card from 'primevue/card'
     import InputText from 'primevue/inputtext'
     import Textarea from 'primevue/textarea'
-    import Calendar from 'primevue/calendar'
     import Dropdown from 'primevue/dropdown'
     import FileUpload from 'primevue/fileupload'
     import MultiSelect from 'primevue/multiselect'
@@ -122,6 +121,7 @@
     const currentTeam = sessionStorage.getItem("team")
 
     const statusOptions = [
+    { label: 'Unassigned', value: 'unassigned' },
     { label: 'Ongoing', value: 'ongoing' },
     { label: 'Under Review', value: 'under review' },
     { label: 'Done', value: 'done' }
@@ -141,7 +141,6 @@
     ]
 
     const taskForm = ref(resetForm())
-    const openStatusFor = ref(null)
 
     // Subtasks state
     const subtasks = ref([])
@@ -159,7 +158,14 @@
     const subtaskFileUploadRef = ref(null)
 
     function resetForm() {
-    const defaultStatus = currentRole === 'staff' ? 'ongoing' : 'unassigned'
+    // const defaultStatus = currentRole === 'staff' ? 'ongoing' : 'unassigned'
+    const role = (currentRole || '').toLowerCase()
+    let defaultStatus = 'ongoing'
+
+    // Only these roles start as "unassigned"
+    if (['manager', 'hr', 'senior director', 'senior manager'].includes(role)) {
+        defaultStatus = 'unassigned'
+    }
     
     return {
         id: null,
@@ -389,12 +395,9 @@
     async function fetchTasks() {
     try {
         const res = await axios.get("http://localhost:5002/tasks", {
-        withCredentials: true,
-        // params: {
-        //     eid: currentEmployeeId,
-        //     role: currentRole
-        // }
+        withCredentials: true
         })
+        
         const fetchedTasks = res.data.tasks.map(t => {
         // Parse attachments from JSON string
         let attachments = []
@@ -428,14 +431,8 @@
         }
         })
 
-        if (currentRole === 'staff') {
-        tasks.value = fetchedTasks.filter(task => {
-            const collabIds = Array.isArray(task.collaborators) ? task.collaborators : []
-            return task.owner === currentEmployeeId || collabIds.includes(currentEmployeeId)
-        })
-        } else {
         tasks.value = fetchedTasks
-        }
+        
         if (!availableEmployees.value || availableEmployees.value.length === 0) {
         try { await fetchEmployees() } catch (_) {}
         }
@@ -468,13 +465,22 @@
         }
         }
 
+        let deadlineDate
+        if (taskForm.value.due_date) {
+            if (taskForm.value.due_date instanceof Date) {
+                deadlineDate = taskForm.value.due_date.toISOString()
+            } else {
+                deadlineDate = new Date(taskForm.value.due_date).toISOString()
+            }
+        } else {
+            deadlineDate = new Date().toISOString()
+        }
+
         const payload = {
         title: taskForm.value.name,
         description: taskForm.value.description,
         attachments: uploadedAttachments,  // Array of filenames
-        deadline: taskForm.value.due_date
-            ? new Date(taskForm.value.due_date).toISOString()
-            : new Date().toISOString(),
+        deadline: deadlineDate,
         status: taskForm.value.status,
         priority: taskForm.value.priority,
         parent_id: null,
@@ -495,7 +501,7 @@
         if (taskForm.value.id) {
         await axios.put(`http://localhost:5002/task/${taskForm.value.id}`, payload, { withCredentials: true })
         } else {
-        await axios.post("http://localhost:5002/task", payload, { withCredentials: true })
+        await axios.post("http://localhost:5002/tasks", payload, { withCredentials: true })
         }
 
         await fetchTasks()
@@ -628,7 +634,22 @@
 
     function formatDate(date) {
     if (!date) return '-'
-    return new Date(date).toLocaleDateString()
+    const d = new Date(date)
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+
+    function formatDateRelative(date) {
+    if (!date) return '-'
+    const d = new Date(date)
+    const now = new Date()
+    const diffMs = d.getTime() - now.getTime()
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 0) return 'Today'
+    if (diffDays === 1) return 'Tomorrow'
+    if (diffDays === -1) return 'Yesterday'
+    if (diffDays > 0) return `In ${diffDays} days`
+    return `${Math.abs(diffDays)} days ago`
     }
 
     function handleAttachment(event) {
@@ -785,4 +806,12 @@
     function removeNewAttachment(idx) {
     newCommentAttachments.value.splice(idx, 1)
     }
+
+    function isOverdue(task) {
+        if (!task?.due_date || !task?.status) return false
+        const due = new Date(task.due_date)
+        const now = new Date()
+        return due < now && task.status.toLowerCase() !== 'done'
+    }
+
 </script>
