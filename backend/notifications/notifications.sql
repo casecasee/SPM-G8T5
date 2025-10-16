@@ -9,6 +9,7 @@ CREATE TABLE notifications (
     message TEXT,
     related_task_id VARCHAR(36),
     related_project_id VARCHAR(36),
+    related_comment_id VARCHAR(36),
     is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     read_at TIMESTAMP NULL,

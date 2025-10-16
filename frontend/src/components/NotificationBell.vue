@@ -2,7 +2,10 @@
   <div class="notification-bell">
     <!-- Bell Icon Button -->
     <button @click="toggleDropdown" class="bell-button">
-      <i class="fas fa-bell"></i>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25-2 7-2 7h14s-2-1.75-2-7c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M9 21c0 1.66 1.34 3 3 3s3-1.34 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
       <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
     </button>
 
@@ -276,9 +279,16 @@ async fetchUnreadCount() {
         'deadline_7_days': 'fas fa-calendar-alt',
         'deadline_3_days': 'fas fa-calendar-exclamation',
         'deadline_1_day': 'fas fa-clock',
+        'overdue_task': 'fas fa-exclamation-triangle',
         'task_assigned': 'fas fa-user-plus',
         'task_status_updated': 'fas fa-exchange-alt',
-        'due_date_changed': 'fas fa-calendar-edit'
+        'due_date_changed': 'fas fa-calendar-edit',
+        'collaborators_changed': 'fas fa-users',
+        'priority_updated': 'fas fa-flag',
+        'description_updated': 'fas fa-file-text',
+        'name_updated': 'fas fa-tag',
+        'comments_updated': 'fas fa-comments',
+        'mention': 'fas fa-at'
       };
       return icons[type] || 'fas fa-bell';
     },
@@ -324,7 +334,7 @@ async fetchUnreadCount() {
 
 .badge {
   position: absolute;
-  top: 0;
+  bottom: 0;
   right: 0;
   background: #e74c3c;
   color: white;

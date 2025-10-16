@@ -47,6 +47,27 @@ def register():
     db.session.commit()
     return {"employee_id": new_employee.employee_id, "role": new_employee.role}, 201
 
+@app.route('/create-fake-user', methods=['POST'])
+def create_fake_user():
+    """Create a fake user account for email notifications testing"""
+    fake_user = Staff(
+        email="zhengruichew@gmail.com",
+        employee_name="Zheng Rui Chew",
+        department="IT",
+        role="staff",
+        team="Development"
+    )
+    fake_user.set_password("password123")
+    
+    # Check if user already exists
+    existing = Staff.query.filter_by(email="zhengruichew@gmail.com").first()
+    if existing:
+        return {"message": "Fake user already exists", "employee_id": existing.employee_id}, 200
+    
+    db.session.add(fake_user)
+    db.session.commit()
+    return {"message": "Fake user created", "employee_id": fake_user.employee_id}, 201
+
 @app.route('/login', methods=['POST'])
 def login():
     # input: {email:str, password:str}
