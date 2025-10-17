@@ -324,8 +324,8 @@
         </div>
         <div>
           <label>Status:</label>
-          <template v-if="isEditing && selectedTask && !isStaff()">
-            <Dropdown v-model="taskForm.status" :options="statusOptions" optionLabel="label" optionValue="value" class="input-field w-full" />
+          <template v-if="isEditing || !selectedTask">
+            <Dropdown v-model="taskForm.status" :options="statusOptions" optionLabel="label" optionValue="value" class="input-field w-full" :disabled="!canEdit(selectedTask)" />
           </template>
           <template v-else>
             <span class="text-field">{{ taskForm.status }}</span>
@@ -449,7 +449,7 @@
                 </div>
               </div>
             </div>
-            <div class="comment-ops" v-if="isOwnerOrCollaborator(selectedTask) || (sessionStorage.getItem('role') || '').toLowerCase() !== 'staff'">
+            <div class="comment-ops" v-if="(isOwnerOrCollaborator(selectedTask) || (sessionStorage.getItem('role') || '').toLowerCase() !== 'staff') && isEditing">
               <Button label="Edit" class="p-button-text p-button-sm" @click="startEditComment(c)" />
               <Button label="Delete" class="p-button-danger p-button-text p-button-sm" @click="deleteComment(c.id)" />
             </div>
@@ -457,7 +457,7 @@
         </div>
         <div v-else class="no-comments">No comments yet</div>
 
-        <div class="comment-new">
+        <div class="comment-new" v-if="isEditing">
           <div class="comment-input-wrapper">
             <Textarea 
               v-model="newComment" 
@@ -501,7 +501,7 @@
             </div>
           </div>
           <div class="comment-actions">
-            <Button label="Add Comment" @click="addComment" :disabled="!newComment.trim() || !selectedTask" />
+            <Button label="Add Comment" @click="addComment" :disabled="!newComment.trim()" />
           </div>
         </div>
       </div>

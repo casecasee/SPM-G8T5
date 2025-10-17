@@ -388,14 +388,15 @@
 
     async function fetchTasks() {
     try {
-        const res = await axios.get("http://localhost:5002/tasks", {
+        const res = await axios.get("http://localhost:5002/task", {
         withCredentials: true,
-        // params: {
-        //     eid: currentEmployeeId,
-        //     role: currentRole
-        // }
+        params: {
+            eid: currentEmployeeId,
+            role: currentRole
+        }
         })
-        const fetchedTasks = res.data.tasks.map(t => {
+        console.log("API Response:", res.data)
+        const fetchedTasks = (res.data.tasks || []).map(t => {
         // Parse attachments from JSON string
         let attachments = []
         if (t.attachment) {
@@ -428,14 +429,8 @@
         }
         })
 
-        if (currentRole === 'staff') {
-        tasks.value = fetchedTasks.filter(task => {
-            const collabIds = Array.isArray(task.collaborators) ? task.collaborators : []
-            return task.owner === currentEmployeeId || collabIds.includes(currentEmployeeId)
-        })
-        } else {
+        // Store all tasks - filtering will be done in computed properties
         tasks.value = fetchedTasks
-        }
         if (!availableEmployees.value || availableEmployees.value.length === 0) {
         try { await fetchEmployees() } catch (_) {}
         }
@@ -492,10 +487,35 @@
         role: currentRole
         }
 
+        let createdTaskId = null
         if (taskForm.value.id) {
-        await axios.put(`http://localhost:5002/task/${taskForm.value.id}`, payload, { withCredentials: true })
+        const updateRes = await axios.put(`http://localhost:5002/task/${taskForm.value.id}`, payload, { withCredentials: true })
+        console.log("Task updated:", updateRes.data)
+        createdTaskId = taskForm.value.id
         } else {
-        await axios.post("http://localhost:5002/task", payload, { withCredentials: true })
+        const createRes = await axios.post("http://localhost:5002/task", payload, { withCredentials: true })
+        console.log("Task created:", createRes.data)
+        createdTaskId = createRes.data.task_id || createRes.data.id
+        }
+
+        // Save temporary comments for new tasks
+        if (createdTaskId && !taskForm.value.id) {
+        const tempComments = comments.value.filter(c => c.is_temp)
+        for (const comment of tempComments) {
+            try {
+            const attachments = (comment.attachments || []).map(a => a.filename)
+            await axios.post(
+                `http://localhost:5002/task/${createdTaskId}/comments`,
+                { content: comment.content, attachments },
+                {
+                withCredentials: true,
+                headers: { 'X-Employee-Id': String(currentEmployeeId) }
+                }
+            )
+            } catch (err) {
+            console.error("Error saving comment:", err)
+            }
+        }
         }
 
         await fetchTasks()
@@ -506,6 +526,7 @@
 
         showModal.value = false
         taskForm.value = resetForm()
+        comments.value = [] // Clear comments when closing modal
         isEditing.value = false
     } catch (err) {
         console.error("Error saving task:", err)
@@ -593,6 +614,7 @@
     isEditing.value = true
     selectedTask.value = null
     taskForm.value = resetForm()
+    comments.value = [] // Clear any temporary comments
     await fetchEmployees()
     showModal.value = true
     }
@@ -716,13 +738,37 @@
 
     async function addComment() {
     const taskId = selectedTask.value?.id
-    if (!taskId) return
     const content = (newComment.value || '').trim()
     if (!content) return
+    
+    // If creating a new task, store comment temporarily
+    if (!taskId) {
+        const tempComment = {
+            id: Date.now(), // Temporary ID
+            content: content,
+            attachments: [...newCommentAttachments.value],
+            author_id: currentEmployeeId,
+            created_at: new Date().toISOString(),
+            is_temp: true
+        }
+        comments.value.push(tempComment)
+        newComment.value = ''
+        newCommentAttachments.value = []
+        return
+    }
+    
+    // For existing tasks, add comment via API
     try {
         commentError.value = ''
         const attachments = (newCommentAttachments.value || []).map(a => a.filename)
-        await axios.post(`http://localhost:5002/task/${taskId}/comments`, { content, attachments }, { withCredentials: true })
+        await axios.post(
+          `http://localhost:5002/task/${taskId}/comments`,
+          { content, attachments },
+          {
+            withCredentials: true,
+            headers: { 'X-Employee-Id': String(currentEmployeeId) }
+          }
+        )
         newComment.value = ''
         newCommentAttachments.value = []
         await loadComments(taskId)
