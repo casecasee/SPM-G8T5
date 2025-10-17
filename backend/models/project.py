@@ -19,7 +19,8 @@ class Project(db.Model):
     tasks_total = db.Column(db.Integer, nullable=False, default=0)
     # New: optional project-level due date
     due_date = db.Column(db.DateTime, nullable=True)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    # updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     members = db.relationship('Staff', secondary=project_members, lazy='dynamic')
 
