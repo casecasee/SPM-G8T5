@@ -167,7 +167,7 @@
               <Dropdown
                 v-if="isOwnerOrCollaborator(task)"
                 v-model="task.status"
-                :options="statusOptions"
+                :options="filteredStatusOptions"
                 optionLabel="label"
                 optionValue="value"
                 class="status-pill-dropdown"
@@ -203,7 +203,7 @@
             <Dropdown
                 v-if="isOwnerOrCollaborator(task)"
                 v-model="task.status"
-                :options="statusOptions"
+                :options="filteredStatusOptions"
                 optionLabel="label"
                 optionValue="value"
                 class="status-pill-dropdown"
@@ -239,7 +239,7 @@
             <Dropdown
                 v-if="isOwnerOrCollaborator(task)"
                 v-model="task.status"
-                :options="statusOptions"
+                :options="filteredStatusOptions"
                 optionLabel="label"
                 optionValue="value"
                 class="status-pill-dropdown"
@@ -298,7 +298,7 @@
         <div>
           <label>Status:</label>
           <template v-if="isEditing || !selectedTask">
-            <Dropdown v-model="taskForm.status" :options="statusOptions" optionLabel="label" optionValue="value" class="input-field w-full" :disabled="!canEdit(selectedTask)" />
+            <Dropdown v-model="taskForm.status" :options="filteredStatusOptions" optionLabel="label" optionValue="value" class="input-field w-full" :disabled="!canEdit(selectedTask)" />
           </template>
           <template v-else>
             <span class="text-field">{{ taskForm.status }}</span>
@@ -523,7 +523,7 @@
           </div>
           <div class="subtask-form-row grid-3">
             <input type="datetime-local" v-model="newSubtask.due_date" placeholder="Due date" class="input-field" />
-            <Dropdown v-model="newSubtask.status" :options="statusOptions" optionLabel="label" optionValue="value" class="input-field" />
+            <Dropdown v-model="newSubtask.status" :options="filteredStatusOptions" optionLabel="label" optionValue="value" class="input-field" />
             <Dropdown v-model="newSubtask.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="input-field" />
           </div>
           

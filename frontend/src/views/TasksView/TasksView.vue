@@ -128,16 +128,9 @@
     ]
 
     const priorityOptions = [
-    { label: '1 - Lowest', value: 1 },
-    { label: '2', value: 2 },
-    { label: '3', value: 3 },
-    { label: '4', value: 4 },
-    { label: '5 - Medium', value: 5 },
-    { label: '6', value: 6 },
-    { label: '7', value: 7 },
-    { label: '8', value: 8 },
-    { label: '9', value: 9 },
-    { label: '10 - Highest', value: 10 }
+    { label: '1 - Lowest', value: 1 },{ label: '2', value: 2 },{ label: '3', value: 3 },{ label: '4', value: 4 },
+    { label: '5 - Medium', value: 5 },{ label: '6', value: 6 },{ label: '7', value: 7 },{ label: '8', value: 8 },
+    { label: '9', value: 9 },{ label: '10 - Highest', value: 10 }
     ]
 
     const taskForm = ref(resetForm())
@@ -353,8 +346,15 @@
     if (q.length < 2) return []
     return list.filter(e => (e.employee_name || '').toLowerCase().startsWith(q))
     })
+    
+    const filteredStatusOptions = computed(() => {
+    const role = (sessionStorage.getItem('role') || '').toLowerCase();
+    if (role === 'staff') {
+        return statusOptions.filter(opt => opt.value !== 'unassigned');
+    }
+    return statusOptions;
+    });
 
-    // ----------------- Functions -----------------
     async function fetchDepartments() {
     try {
         const res = await axios.get("http://localhost:5000/departments", { withCredentials: true })
@@ -394,12 +394,13 @@
 
     async function fetchTasks() {
     try {
-        const res = await axios.get("http://localhost:5002/task", {
+        const res = await axios.get("http://localhost:5002/tasks", {
         withCredentials: true,
-        params: {
-            eid: currentEmployeeId,
-            role: currentRole
-        }
+        // params: {
+        //     eid: currentEmployeeId,
+        //     role: currentRole
+        // }
+        // NOT NEEDED - BACKEND USES SESSION TO IDENTIFY USER
         })
         console.log("API Response:", res.data)
         const fetchedTasks = (res.data.tasks || []).map(t => {
@@ -510,7 +511,7 @@
         console.log("Task updated:", updateRes.data)
         createdTaskId = taskForm.value.id
         } else {
-        const createRes = await axios.post("http://localhost:5002/task", payload, { withCredentials: true })
+        const createRes = await axios.post("http://localhost:5002/tasks", payload, { withCredentials: true })
         console.log("Task created:", createRes.data)
         createdTaskId = createRes.data.task_id || createRes.data.id
         }
