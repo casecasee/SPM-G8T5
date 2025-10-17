@@ -507,7 +507,7 @@
         console.log("Task updated:", updateRes.data)
         createdTaskId = taskForm.value.id
         } else {
-        const createRes = await axios.post("http://localhost:5002/task", payload, { withCredentials: true })
+        const createRes = await axios.post("http://localhost:5002/tasks", payload, { withCredentials: true })
         console.log("Task created:", createRes.data)
         createdTaskId = createRes.data.task_id || createRes.data.id
         }
