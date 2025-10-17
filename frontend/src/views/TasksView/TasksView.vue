@@ -396,10 +396,11 @@
     try {
         const res = await axios.get("http://localhost:5002/tasks", {
         withCredentials: true,
-        params: {
-            eid: currentEmployeeId,
-            role: currentRole
-        }
+        // params: {
+        //     eid: currentEmployeeId,
+        //     role: currentRole
+        // }
+        // NOT NEEDED - BACKEND USES SESSION TO IDENTIFY USER
         })
         console.log("API Response:", res.data)
         const fetchedTasks = (res.data.tasks || []).map(t => {
