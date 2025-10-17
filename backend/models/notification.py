@@ -1,5 +1,5 @@
 from models.extensions import db
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Notification(db.Model):
     __tablename__ = 'notifications'
@@ -11,9 +11,9 @@ class Notification(db.Model):
     message = db.Column(db.Text)
     related_task_id = db.Column(db.Integer, db.ForeignKey('Task.task_id', ondelete='CASCADE'), nullable=True)
     related_project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=True)
-    related_comment_id = db.Column(db.Integer, db.ForeignKey('comments.id', ondelete='CASCADE'), nullable=True)
+    related_comment_id = db.Column(db.Integer, db.ForeignKey('task_comments.id', ondelete='CASCADE'), nullable=True)
     is_read = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     read_at = db.Column(db.DateTime)
     
     def to_dict(self):
@@ -64,7 +64,7 @@ class DeadlineNotificationLog(db.Model):
     task_id = db.Column(db.Integer, db.ForeignKey('Task.task_id', ondelete='CASCADE'), nullable=False, index=True)
     staff_id = db.Column(db.Integer, db.ForeignKey('staff.employee_id', ondelete='CASCADE'), nullable=False)
     notification_type = db.Column(db.String(50), nullable=False)
-    sent_at = db.Column(db.DateTime, default=datetime.utcnow)
+    sent_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     
     __table_args__ = (
         db.UniqueConstraint('task_id', 'staff_id', 'notification_type', 

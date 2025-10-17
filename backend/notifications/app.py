@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS, cross_origin
 from flask_socketio import SocketIO, emit, join_room
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 import uuid
@@ -12,6 +12,7 @@ from email.mime.multipart import MIMEMultipart
 from models.extensions import db
 from models.notification import Notification, NotificationPreferences, DeadlineNotificationLog
 from models.staff import Staff
+from models.comment import Comment
 
 app = Flask(__name__)
 app.secret_key = "issa_secret_key"
@@ -148,7 +149,7 @@ def mark_read(notification_id):
         return jsonify({'error': 'Not found'}), 404
     if not n.is_read:
         n.is_read = True
-        n.read_at = datetime.utcnow()
+        n.read_at = datetime.now(timezone.utc)
         db.session.commit()
     return jsonify({'status': 'ok'}), 200
 
@@ -160,7 +161,7 @@ def mark_all_read():
         return jsonify({'error': 'Missing X-Employee-Id'}), 400
     updated = (Notification.query
                .filter_by(staff_id=int(staff_id), is_read=False)
-               .update({Notification.is_read: True, Notification.read_at: datetime.utcnow()}))
+               .update({Notification.is_read: True, Notification.read_at: datetime.now(timezone.utc)}))
     if updated:
         db.session.commit()
     return jsonify({'status': 'ok'}), 200
@@ -301,7 +302,7 @@ def event_due_date_changed():
 scheduler = BackgroundScheduler()
 
 def _within_day(target: datetime, days_from_now: int) -> bool:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     start = (now + timedelta(days=days_from_now)).replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=1)
     return start <= target < end
@@ -315,7 +316,7 @@ def _send_deadline_reminders():
         tasks = resp.json()
     except Exception:
         return
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for t in tasks:
         deadline_str = t.get('deadline')
         status = t.get('status')

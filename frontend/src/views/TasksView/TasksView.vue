@@ -476,7 +476,10 @@
                 deadlineDate = new Date(taskForm.value.due_date).toISOString()
             }
         } else {
-            deadlineDate = new Date().toISOString()
+            // Set deadline to 7 days from now in local timezone
+            const futureDate = new Date()
+            futureDate.setDate(futureDate.getDate() + 7)
+            deadlineDate = futureDate.toISOString()
         }
 
         const payload = {

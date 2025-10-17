@@ -34,9 +34,6 @@
           :class="['notification-item', { unread: !notif.is_read }]"
           @click="handleNotificationClick(notif)"
         >
-          <div class="notification-icon">
-            <i :class="getNotificationIcon(notif.type)"></i>
-          </div>
           <div class="notification-content">
             <strong>{{ notif.title }}</strong>
             <p>{{ notif.message }}</p>
@@ -405,7 +402,6 @@ async fetchUnreadCount() {
 
 .notification-item {
   display: flex;
-  gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px solid #f3f4f6;
   cursor: pointer;
@@ -420,17 +416,6 @@ async fetchUnreadCount() {
   background: #eff6ff;
 }
 
-.notification-icon {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  background: #337587;
-  color: white;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 
 .notification-content {
   flex: 1;
