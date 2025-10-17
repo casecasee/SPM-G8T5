@@ -7,6 +7,7 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from models import db, Project, Staff
+from models.task import Task
 from sqlalchemy import func
 import os
 
@@ -25,25 +26,23 @@ db.init_app(app)
 def list_projects():
     rows = Project.query.order_by(Project.updated_at.desc()).all()
 
-    # Try to fetch all tasks once from tasks service and aggregate per project
+    # Query tasks directly from database to count per project
     project_id_to_counts = {}
     try:
-        with urlopen('http://localhost:5002/tasks', timeout=2) as resp:
-            body = resp.read().decode('utf-8')
-            payload = json.loads(body)
-            tasks = payload.get('tasks') or []
-            for t in tasks:
-                pid = t.get('project_id')
-                if not pid:
-                    continue
-                stats = project_id_to_counts.setdefault(pid, {'total': 0, 'done': 0})
-                stats['total'] += 1
-                if (t.get('status') or '').lower() == 'done':
-                    stats['done'] += 1
-    except URLError:
-        # tasks service not available; fall back to stored counters
-        project_id_to_counts = {}
-    except Exception:
+        tasks = Task.query.all()
+        print(f"DEBUG: Fetched {len(tasks)} tasks from database")
+        for task in tasks:
+            pid = task.project_id
+            if not pid:
+                continue
+            print(f"DEBUG: Task {task.task_id} has project_id {pid}")
+            stats = project_id_to_counts.setdefault(pid, {'total': 0, 'done': 0})
+            stats['total'] += 1
+            if task.status and task.status.lower() == 'done':
+                stats['done'] += 1
+        print(f"DEBUG: Project counts: {project_id_to_counts}")
+    except Exception as e:
+        print(f"DEBUG: Error querying tasks: {e}")
         project_id_to_counts = {}
 
     # Build response, overriding counters when we have live stats
@@ -60,6 +59,15 @@ def list_projects():
 @app.post('/projects')
 def create_project():
     data = request.json or {}
+
+    def parse_iso(z):
+        if not z:
+            return None
+        try:
+            return datetime.fromisoformat(z.replace('Z', '+00:00'))
+        except Exception:
+            return None
+
     p = Project(
         name=data.get("name", "Untitled Project"),
         owner=data.get("owner", "Unassigned"),
@@ -70,6 +78,8 @@ def create_project():
         tasks_total=0,
         updated_at=datetime.utcnow(),
     )
+    # New: optional project-level due date
+    p.due_date = parse_iso(data.get("dueDate"))
     db.session.add(p)
     members = data.get("members") or []
     if members:

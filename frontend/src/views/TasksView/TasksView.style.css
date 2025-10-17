@@ -183,6 +183,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  margin-left: 1rem;
   padding: 0.5rem 1rem;
   border-radius: 8px;
   font-weight: 600;
@@ -243,6 +244,7 @@
   white-space: normal;
 }
 .meta, .status { font-size: 0.9rem; margin-top: 0.5rem; }
+.relative-time { color: #6b7280; font-size: 0.85rem; font-style: italic; }
 
 /* Modal Styling */
 .p-dialog.page-style-modal {
@@ -339,10 +341,6 @@
 .mention-name { font-weight: 600; color: #111827; }
 .mention-role { color: #6b7280; font-size: 0.85rem; }
 
-:deep(.p-calendar){
-  border: none !important;
-  width: 100%;
-}
 :deep(.p-dropdown) {
   border: 1px solid #ccc !important;
   border-radius: 8px;  
@@ -353,6 +351,14 @@
   border-radius: 8px;
   padding: 0.5rem 0.8rem;
   font-size: 0.95rem;
+}
+
+input[type="datetime-local"] {
+  border-radius: 8px;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.95rem;
+  border: 1px solid #ccc;
+  width: 100%;
 }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
@@ -381,41 +387,41 @@
   gap: 0.5rem;
   font-size: 0.9rem;
 }
-.status-pill {
+.status-pill-dropdown {
   display: inline-block;
-  padding: 0.25rem 0.8rem;
+  padding: 0.15rem 0.4rem; 
+  margin: auto;
   border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 0.75rem;
   text-transform: capitalize;
   color: #fff;
-  min-width: 70px;
+  min-width: auto;
   text-align: center;
+  line-height: 0.4rem;
+  outline: none !important;
 }
 
 .status-clickable {
   cursor: pointer;
   user-select: none;
+  outline: none !important;
 }
 
-.status-menu-inline { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
-.status-option {
-  padding: 0.2rem 0.6rem;
-}
 .status-selected {
   outline: 2px solid rgba(0,0,0,0.15);
+  outline: none !important;
 }
 
 .status-ongoing {
-  background-color: #3b82f6; 
+  background-color: #629bf6; 
 }
 
 .status-review {
-  background-color: #f59e0b; 
+  background-color: #e8a17d; 
 }
 
 .status-completed {
-  background-color: #10b981; 
+  background-color: #73e082; 
 }
 
 .status-default {
@@ -449,8 +455,7 @@
   font-size: 1.1rem;
   margin: 0;
 }
-
-/* Subtasks Section - Compact Design */
+/* Subtasks */
 .subtasks-section {
   border-top: 1px solid #e5e7eb;
   padding-top: 1.5rem;
@@ -564,7 +569,7 @@
   width: 100%;
 }
 
-/* Compact Subtasks List */
+/* Subtasks List */
 .subtasks-list {
   display: flex;
   flex-direction: column;
@@ -667,6 +672,12 @@
   gap: 0.2rem;
 }
 
+.subtask-due .relative-time {
+  color: #6b7280;
+  font-size: 0.7rem;
+  font-style: italic;
+}
+
 .no-subtasks {
   text-align: center;
   color: #9ca3af;
@@ -747,8 +758,30 @@
   cursor: pointer;
 }
 
+.task-overdue {
+  border: 2px solid #e74c3c;       
+  /* background-color: #fdecea;        */
+  box-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
+}
+
+.overdue-label {
+  color: #fefcfc;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: inline-block;
+  padding: 2px 8px;    
+  border-radius: 20px;       
+  background-color: #e44b3a;
+  min-width: auto;       
+  text-align: center;
+  animation: text-blink 3s infinite;
+}
+
+@keyframes text-blink {
+  0%, 50%, 100% { color: #fefcfc; }
+  25%, 75% { color: transparent; }
+}
+
 @media print {
   
 }
-
-/* PrimeVue default look retained; custom overrides removed */

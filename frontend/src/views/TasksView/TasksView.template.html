@@ -8,18 +8,18 @@
     </div>
   </div>
 
-  <!-- Tabs visible to managers; staff always see 'My' implicitly -->
-  <div class="tabs" v-if="isManagerRole">
+  <!-- Tabs visible to all users -->
+  <div class="tabs">
     <button :class="['tab', currentTab==='my' ? 'active' : '']" @click="currentTab='my'">My Tasks</button>
     <button :class="['tab', currentTab==='team' ? 'active' : '']" @click="currentTab='team'" v-if="!isSeniorManagerOrHR">Team's Tasks</button>
     <button :class="['tab', currentTab==='departments' ? 'active' : '']" @click="currentTab='departments'" v-if="isSeniorManagerOrHR">All Departments</button>
     
-     <button :class="['tab', currentTab==='report' ? 'active' : '']" @click="currentTab='report'">Task Report</button>
+    <button :class="['tab', currentTab==='report' ? 'active' : '']" @click="currentTab='report'" v-if="isManagerRole">Task Report</button>
 
   </div>
 
   <!-- Team search bar -->
-    <div v-if="isManagerRole && currentTab==='team'" class="team-search-section">
+    <div v-if="currentTab==='team'" class="team-search-section">
       <!-- Search bar -->
       <InputText v-model="teamSearch" placeholder="Search employee by name" class="input-field" />
 
@@ -45,8 +45,8 @@
   <div v-if="isManagerRole && currentTab==='report'" class="report-tab">
     <button :class="['download-btn']" @click="printReport">Download Report</button>
     <div class="report-card">
-  <h2 class="report-title">📊 Task Report</h2>
-
+    <h2 class="report-title">📊 Task Report</h2>
+    
   <!-- Overdue -->
   <div class="task-section">
     <div class="section-header overdue">Overdue</div>
@@ -145,7 +145,7 @@
     </div>
   </div>
 
-  <div class="tasks-container">
+  <div v-if="currentTab !== 'report'" class="tasks-container">
     <!-- High Priority Tasks -->
     <div v-if="tasksByPriority.high.length > 0" class="priority-section">
       <div class="priority-header high-priority">
@@ -154,7 +154,7 @@
         <span class="task-count">{{ tasksByPriority.high.length }}</span>
       </div>
       <div class="tasks-grid">
-        <Card v-for="task in tasksByPriority.high" :key="task.id" class="task-card" @click="openDetails(task)">
+        <Card v-for="task in tasksByPriority.high" :key="task.id" class="task-card" :class="{'task-overdue': isOverdue(task)}" @click="openDetails(task) ">
           <template #title>
             <div class="task-title-row">
               <span>{{ task.name }}</span>
@@ -162,28 +162,19 @@
           </template>
           <template #content>
             <p class="desc">{{ task.description }}</p>
-            <p class="meta">📅 {{ formatDate(task.due_date) }}</p>
-            <span
-              v-if="isOwnerOrCollaborator(task)"
-              class="status-pill status-clickable"
-              :class="getStatusClass(task.status)"
-              @click.stop="toggleStatusMenu(task)"
-              title="Change status"
-            >
-              {{ task.status }}
-            </span>
-            <p v-else class="status" :class="getStatusClass(task.status)">
-              {{ task.status }}
-            </p>
-            <div v-if="openStatusFor === task.id" class="status-menu-inline" @click.stop>
-              <span
-                v-for="opt in statusOptions"
-                :key="opt.value"
-                class="status-pill status-option"
-                :class="getStatusClass(opt.value) + (task.status===opt.value ? ' status-selected' : '')"
-                @click.stop="updateTaskStatus(task, opt.value)"
-              >{{ opt.label }}</span>
-            </div>
+            <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>            
+            <p class="meta">📅 {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
+              <Dropdown
+                v-if="isOwnerOrCollaborator(task)"
+                v-model="task.status"
+                :options="statusOptions"
+                optionLabel="label"
+                optionValue="value"
+                class="status-pill-dropdown"
+                :class="getStatusClass(task.status)"
+                @change="updateTaskStatus(task, task.status)"
+                @click.stop
+              />
             <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
             <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) }}</b></p>
           </template>
@@ -199,7 +190,7 @@
         <span class="task-count">{{ tasksByPriority.medium.length }}</span>
       </div>
       <div class="tasks-grid">
-        <Card v-for="task in tasksByPriority.medium" :key="task.id" class="task-card" @click="openDetails(task)">
+        <Card v-for="task in tasksByPriority.medium" :key="task.id" class="task-card" :class="{'task-overdue': isOverdue(task)}" @click="openDetails(task)">
           <template #title>
             <div class="task-title-row">
               <span>{{ task.name }}</span>
@@ -207,28 +198,19 @@
           </template>
           <template #content>
             <p class="desc">{{ task.description }}</p>
-            <p class="meta">📅 {{ formatDate(task.due_date) }}</p>
-            <span
-              v-if="isOwnerOrCollaborator(task)"
-              class="status-pill status-clickable"
-              :class="getStatusClass(task.status)"
-              @click.stop="toggleStatusMenu(task)"
-              title="Change status"
-            >
-              {{ task.status }}
-            </span>
-            <p v-else class="status" :class="getStatusClass(task.status)">
-              {{ task.status }}
-            </p>
-            <div v-if="openStatusFor === task.id" class="status-menu-inline" @click.stop>
-              <span
-                v-for="opt in statusOptions"
-                :key="opt.value"
-                class="status-pill status-option"
-                :class="getStatusClass(opt.value) + (task.status===opt.value ? ' status-selected' : '')"
-                @click.stop="updateTaskStatus(task, opt.value)"
-              >{{ opt.label }}</span>
-            </div>
+            <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
+            <p class="meta">📅 {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
+            <Dropdown
+                v-if="isOwnerOrCollaborator(task)"
+                v-model="task.status"
+                :options="statusOptions"
+                optionLabel="label"
+                optionValue="value"
+                class="status-pill-dropdown"
+                :class="getStatusClass(task.status)"
+                @change="updateTaskStatus(task, task.status)"
+                @click.stop
+              />
             <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
             <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) }}</b></p>
           </template>
@@ -244,7 +226,7 @@
         <span class="task-count">{{ tasksByPriority.low.length }}</span>
       </div>
       <div class="tasks-grid">
-        <Card v-for="task in tasksByPriority.low" :key="task.id" class="task-card" @click="openDetails(task)">
+        <Card v-for="task in tasksByPriority.low" :key="task.id" class="task-card" :class="{ 'task-overdue': isOverdue(task) }" @click="openDetails(task)">
           <template #title>
             <div class="task-title-row">
               <span>{{ task.name }}</span>
@@ -252,28 +234,19 @@
           </template>
           <template #content>
             <p class="desc">{{ task.description }}</p>
-            <p class="meta">📅 {{ formatDate(task.due_date) }}</p>
-            <span
-              v-if="isOwnerOrCollaborator(task)"
-              class="status-pill status-clickable"
-              :class="getStatusClass(task.status)"
-              @click.stop="toggleStatusMenu(task)"
-              title="Change status"
-            >
-              {{ task.status }}
-            </span>
-            <p v-else class="status" :class="getStatusClass(task.status)">
-              {{ task.status }}
-            </p>
-            <div v-if="openStatusFor === task.id" class="status-menu-inline" @click.stop>
-              <span
-                v-for="opt in statusOptions"
-                :key="opt.value"
-                class="status-pill status-option"
-                :class="getStatusClass(opt.value) + (task.status===opt.value ? ' status-selected' : '')"
-                @click.stop="updateTaskStatus(task, opt.value)"
-              >{{ opt.label }}</span>
-            </div>
+            <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
+            <p class="meta">📅 {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
+            <Dropdown
+                v-if="isOwnerOrCollaborator(task)"
+                v-model="task.status"
+                :options="statusOptions"
+                optionLabel="label"
+                optionValue="value"
+                class="status-pill-dropdown"
+                :class="getStatusClass(task.status)"
+                @change="updateTaskStatus(task, task.status)"
+                @click.stop
+              />
             <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
             <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) }}</b></p>
           </template>
@@ -316,7 +289,7 @@
         <div>
           <label>Due Date:</label>
           <template v-if="isEditing || !selectedTask">
-            <Calendar v-model="taskForm.due_date" class="input-field" :minDate="new Date()" :disabled="!canEdit(selectedTask)" />
+            <input type="datetime-local" v-model="taskForm.due_date" class="input-field" :disabled="!canEdit(selectedTask)" />
           </template>
           <template v-else>
             <span class="text-field">{{ formatDate(taskForm.due_date) }}</span>
@@ -549,7 +522,7 @@
             <Textarea v-model="newSubtask.description" placeholder="Description" rows="2" class="input-field" />
           </div>
           <div class="subtask-form-row grid-3">
-            <Calendar v-model="newSubtask.due_date" placeholder="Due date" class="input-field" />
+            <input type="datetime-local" v-model="newSubtask.due_date" placeholder="Due date" class="input-field" />
             <Dropdown v-model="newSubtask.status" :options="statusOptions" optionLabel="label" optionValue="value" class="input-field" />
             <Dropdown v-model="newSubtask.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="input-field" />
           </div>
@@ -626,7 +599,7 @@
               </div>
               <p v-if="subtask.description" class="subtask-description">{{ subtask.description }}</p>
               <div class="subtask-details">
-                <span v-if="subtask.due_date" class="subtask-due">📅 {{ formatDate(subtask.due_date) }}</span>
+                <span v-if="subtask.due_date" class="subtask-due">📅 {{ formatDate(subtask.due_date) }} <span class="relative-time">({{ formatDateRelative(subtask.due_date) }})</span></span>
                 <span class="subtask-owner">👤 {{ getOwnerName(subtask.owner) }}</span>
                 <span v-if="subtask.collaborators && subtask.collaborators.length > 0" class="subtask-collabs">
                   🤝 {{ getCollaboratorNames(subtask.collaborators) }}
