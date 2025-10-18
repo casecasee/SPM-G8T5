@@ -261,7 +261,7 @@ def create_task():
         status=status, # calculated above
         project_id=data.get('project_id'), # o
         parent_id=data.get('parent_id'), # o
-        owner=eid, 
+        owner=data.get('owner', eid),  # Use provided owner or fallback to current user
         collaborators=collaborators,
         priority=data['priority'] # required 
     )

@@ -4,35 +4,94 @@ import { useRoute, useRouter } from 'vue-router'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import InputText from 'primevue/inputtext'
+import Textarea from 'primevue/textarea'
+import Dropdown from 'primevue/dropdown'
+import FileUpload from 'primevue/fileupload'
+import MultiSelect from 'primevue/multiselect'
 import { getProjects } from '../api/projects'
 import { listTasks, createTask, updateTaskProject } from '../api/tasks'
+import axios from 'axios'
 
 const route = useRoute()
 const router = useRouter()
 
 const projectId = computed(() => Number(route.params.id))
 const project = ref(null)
+const projects = ref([])
 const loading = ref(false)
 const error = ref('')
 const allTasks = ref([])
 const currentEmployeeId = Number(sessionStorage.getItem('employee_id')) || null
+const currentEmployeeName = sessionStorage.getItem('employee_name') || ''
+const currentRole = sessionStorage.getItem('role') || ''
 const activeTab = ref('all') // 'all' | 'mine'
 const showAddModal = ref(false)
+
+// Add these new data properties
+const availableEmployees = ref([])
+const fileUploadRef = ref(null)
+const comments = ref([])
+const newComment = ref('')
+const newCommentAttachments = ref([])
+const editingCommentId = ref(null)
+const editingContent = ref('')
+const commentError = ref('')
+
+// Mention suggestions
+const mentionable = ref([])
+const showMentionList = ref(false)
+const mentionQuery = ref('')
+const mentionStartIdx = ref(-1)
+const mentionHighlighted = ref(0)
+
+// Options for dropdowns
+const statusOptions = [
+  { label: 'Unassigned', value: 'unassigned' },
+  { label: 'Ongoing', value: 'ongoing' },
+  { label: 'Under Review', value: 'under review' },
+  { label: 'Done', value: 'done' }
+]
+
+const priorityOptions = [
+  { label: '1 - Lowest', value: 1 },{ label: '2', value: 2 },{ label: '3', value: 3 },{ label: '4', value: 4 },
+  { label: '5 - Medium', value: 5 },{ label: '6', value: 6 },{ label: '7', value: 7 },{ label: '8', value: 8 },
+  { label: '9', value: 9 },{ label: '10 - Highest', value: 10 }
+]
 
 // Add/Attach state
 const addTab = ref('create') // 'create' | 'attach'
 const createTaskNow = ref(true)
 const selectedExisting = ref([])
-const taskForm = ref({
-  title: '',
-  description: '',
-  deadline: '',
-  priority: 5,
-  collaborators: ''
-})
 const addBusy = ref(false)
 const addError = ref('')
 const searchExisting = ref('')
+
+// Replace taskForm with Tasks page structure
+function resetForm() {
+  const role = (currentRole || '').toLowerCase()
+  let defaultStatus = 'ongoing'
+
+  // Only these roles start as "unassigned"
+  if (['manager', 'hr', 'senior director', 'senior manager'].includes(role)) {
+    defaultStatus = 'unassigned'
+  }
+  
+  return {
+    id: null,
+    name: '',
+    description: '',
+    due_date: null,
+    status: defaultStatus,
+    priority: 5, 
+    owner: currentEmployeeId, 
+    collaborators: [], 
+    project_id: projectId.value, // ← This is the key difference - prefilled with current project
+    attachments: []
+  }
+}
+
+const taskForm = ref(resetForm())
 
 const projectTasks = computed(() => {
   const pid = projectId.value
@@ -58,6 +117,35 @@ const myProjectTasks = computed(() =>
 const canManage = computed(() => {
   const p = project.value
   return !!p && Number(p.ownerId) === currentEmployeeId
+})
+
+// Computed properties for Tasks page functionality
+const filteredStatusOptions = computed(() => {
+  if (currentRole === 'staff') {
+    return statusOptions.filter(opt => opt.value !== 'unassigned');
+  }
+  return statusOptions;
+});
+
+const projectOptions = computed(() => {
+  const opts = [{ label: 'None', value: null }]
+  for (const p of (projects.value || [])) {
+    opts.push({ label: `${p.name} (#${p.id})`, value: p.id })
+  }
+  return opts
+})
+
+const employeeDisplayList = computed(() => {
+  return (availableEmployees.value || []).map(emp => ({
+    ...emp,
+    display_label: `${emp.employee_name} (${emp.role}) - ${emp.department || 'N/A'}`
+  }))
+})
+
+const filteredMentionable = computed(() => {
+  const q = (mentionQuery.value || '').trim().toLowerCase()
+  if (!q) return mentionable.value
+  return (mentionable.value || []).filter(u => (u.employee_name || '').toLowerCase().includes(q))
 })
 
 const unassignedTasks = computed(() => (allTasks.value || []).filter(t => !t.project_id && Number(t.owner) === currentEmployeeId))
@@ -91,42 +179,87 @@ function projectBadgeClass(s) {
   }
 }
 
+async function saveTask() {
+  try {
+    let uploadedAttachments = []
+
+    // Upload all new files
+    for (const attachment of taskForm.value.attachments) {
+      if (attachment.file) {
+        // New file to upload
+        const formData = new FormData()
+        formData.append('attachment', attachment.file)
+
+        const uploadRes = await axios.post('http://localhost:5002/upload-attachment', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          withCredentials: true
+        })
+        
+        uploadedAttachments.push(uploadRes.data.file_path)
+      } else if (attachment.url) {
+        // Existing file - extract filename from URL
+        const urlParts = attachment.url.split('/')
+        uploadedAttachments.push(urlParts[urlParts.length - 1])
+      }
+    }
+
+    let deadlineDate
+    if (taskForm.value.due_date) {
+      if (taskForm.value.due_date instanceof Date) {
+        deadlineDate = taskForm.value.due_date.toISOString()
+      } else {
+        deadlineDate = new Date(taskForm.value.due_date).toISOString()
+      }
+    } else {
+      // Set deadline to 7 days from now in local timezone
+      const futureDate = new Date()
+      futureDate.setDate(futureDate.getDate() + 7)
+      deadlineDate = futureDate.toISOString()
+    }
+
+    const payload = {
+      title: taskForm.value.name,
+      description: taskForm.value.description,
+      attachments: uploadedAttachments,
+      deadline: deadlineDate,
+      status: taskForm.value.status,
+      priority: taskForm.value.priority,
+      parent_id: null,
+      employee_id: currentEmployeeId,
+      owner: taskForm.value.owner,
+      project_id: projectId.value, // ← Always use current project ID
+      collaborators: (() => {
+        const selected = Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : []
+        if (currentRole === 'staff') {
+          const allowedIds = (availableEmployees.value || []).map(e => e.employee_id)
+          return selected.filter(id => allowedIds.includes(id))
+        }
+        return selected
+      })(),
+      role: currentRole
+    }
+
+    const createRes = await axios.post("http://localhost:5002/tasks", payload, { withCredentials: true })
+    console.log("Task created:", createRes.data)
+
+    // Refresh tasks list
+    await load()
+    
+    showAddModal.value = false
+    taskForm.value = resetForm()
+    comments.value = []
+  } catch (error) {
+    console.error("Error creating task:", error)
+    addError.value = 'Failed to create task. Please try again.'
+  }
+}
+
+// Keep the attach existing functionality
 async function addTasksToProject() {
   if (addBusy.value) return
   addError.value = ''
   const ops = []
   const pid = projectId.value
-
-  if (addTab.value === 'create' && createTaskNow.value) {
-    const deadline = taskForm.value.deadline && taskForm.value.deadline.length === 16
-      ? `${taskForm.value.deadline}:00`
-      : taskForm.value.deadline
-    const collaborators = (taskForm.value.collaborators || '')
-      .split(',')
-      .map(s => parseInt(s.trim(), 10))
-      .filter(n => Number.isFinite(n))
-
-    if (!taskForm.value.title?.trim()) {
-      addError.value = 'Title is required.'
-      return
-    }
-    if (!deadline) {
-      addError.value = 'Deadline is required.'
-      return
-    }
-
-    ops.push(
-      createTask({
-        title: taskForm.value.title.trim(),
-        description: (taskForm.value.description || '').trim(),
-        deadline,
-        priority: Number(taskForm.value.priority) || 1,
-        project_id: pid,
-        collaborators,
-        attachments: []
-      })
-    )
-  }
 
   if (addTab.value === 'attach' && selectedExisting.value.length) {
     for (const id of selectedExisting.value) {
@@ -142,12 +275,36 @@ async function addTasksToProject() {
     // refresh tasks list and clear selections
     allTasks.value = await listTasks()
     selectedExisting.value = []
-    createTaskNow.value = true
-    taskForm.value = { title: '', description: '', deadline: '', priority: 5, collaborators: '' }
     showAddModal.value = false
   } catch (_) {}
   finally {
     addBusy.value = false
+  }
+}
+
+async function fetchEmployees() {
+  try {
+    const role = (currentRole || '').toLowerCase()
+    if (role === 'senior manager' || role === 'hr') {
+      const res = await axios.get("http://localhost:5000/employees/all", { withCredentials: true })
+      availableEmployees.value = Array.isArray(res.data) ? res.data : []
+    } else {
+      const depRaw = sessionStorage.getItem("department") || ""
+      const res = await axios.get(`http://localhost:5000/employees/${encodeURIComponent(depRaw)}`, { withCredentials: true })
+      availableEmployees.value = Array.isArray(res.data) ? res.data : []
+    }
+  } catch (err) {
+    console.error("Error fetching employees:", err)
+    availableEmployees.value = []
+  }
+}
+
+async function fetchMentionable(taskId) {
+  try {
+    const res = await axios.get(`http://localhost:5002/task/${taskId}/mentionable`, { withCredentials: true })
+    mentionable.value = res.data || []
+  } catch (error) {
+    console.error("Error fetching mentionable users:", error)
   }
 }
 
@@ -156,6 +313,7 @@ async function load() {
   error.value = ''
   try {
     const list = await getProjects()
+    projects.value = list
     project.value = list.find(p => p.id === projectId.value) || null
   } catch (e) {
     error.value = 'Failed to load project.'
@@ -178,7 +336,67 @@ function openTask(t) {
   router.push({ name: 'tasks' })
 }
 
-onMounted(load)
+// Helper functions from Tasks page
+function getOwnerName(ownerId) {
+  const emp = availableEmployees.value.find(e => e.employee_id === ownerId)
+  return emp ? emp.employee_name : `#${ownerId}`
+}
+
+function getCollaboratorNames(collaborators) {
+  if (!collaborators || !Array.isArray(collaborators)) return 'None'
+  const names = collaborators.map(id => {
+    const emp = availableEmployees.value.find(e => e.employee_id === id)
+    return emp ? emp.employee_name : `#${id}`
+  })
+  return names.join(', ')
+}
+
+function getProjectLabelById(projectId) {
+  if (!projectId) return 'None'
+  const project = projects.value.find(p => p.id === projectId)
+  return project ? `${project.name} (#${project.id})` : `#${projectId}`
+}
+
+function canAssignTasks() {
+  return ['manager', 'hr', 'senior director', 'senior manager'].includes(currentRole.toLowerCase())
+}
+
+function canEdit(task) {
+  if (!task) return true // New task
+  return task.owner === currentEmployeeId || canAssignTasks()
+}
+
+// File upload handling
+function handleAttachment(event) {
+  const files = event.files
+  for (const file of files) {
+    taskForm.value.attachments.push({
+      file: file,
+      name: file.name,
+      url: null
+    })
+  }
+}
+
+function removeAttachment(index) {
+  taskForm.value.attachments.splice(index, 1)
+}
+
+// Comment and mention handling (simplified for Projects page)
+function onCommentInput(e) {
+  // Simplified version - you can add full mention functionality if needed
+}
+
+function hideMentionList() {
+  showMentionList.value = false
+  mentionQuery.value = ''
+  mentionStartIdx.value = -1
+  mentionHighlighted.value = 0
+}
+
+onMounted(async () => {
+  await Promise.allSettled([load(), fetchEmployees()])
+})
 </script>
 
 <template>
@@ -261,28 +479,88 @@ onMounted(load)
       <button :class="['pill', addTab==='attach' ? 'active' : '']" @click="addTab='attach'">Attach Existing</button>
     </div>
 
-    <div v-if="addTab==='create'">
-      <div class="create-grid">
-        <label>
-          Title
-          <input v-model="taskForm.title" class="input" placeholder="Task title" />
-        </label>
-        <label>
-          Priority (1–10)
-          <input type="number" min="1" max="10" v-model.number="taskForm.priority" class="input" />
-        </label>
-        <label class="full">
-          Description
-          <input v-model="taskForm.description" class="input" placeholder="What needs to be done" />
-        </label>
-        <label>
-          Deadline
-          <input type="datetime-local" v-model="taskForm.deadline" class="input" />
-        </label>
-        <label>
-          Collaborators (IDs, comma-separated)
-          <input v-model="taskForm.collaborators" class="input" placeholder="e.g. 2,3,34" />
-        </label>
+    <div v-if="addTab==='create'" class="modal-content">
+      <div class="field-row">
+        <label>Name:</label>
+        <InputText v-model="taskForm.name" class="input-field" />
+      </div>
+
+      <div class="field-row">
+        <label>Description:</label>
+        <Textarea v-model="taskForm.description" rows="4" class="input-field" maxlength="100" />
+      </div>
+
+      <div class="field-row grid-3">
+        <div>
+          <label>Due Date:</label>
+          <input type="datetime-local" v-model="taskForm.due_date" class="input-field" />
+        </div>
+        <div>
+          <label>Status:</label>
+          <Dropdown v-model="taskForm.status" :options="filteredStatusOptions" optionLabel="label" optionValue="value" class="input-field w-full" />
+        </div>
+        <div>
+          <label>Priority:</label>
+          <Dropdown v-model="taskForm.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="input-field w-full" />
+        </div>
+      </div>
+
+      <div class="field-row">
+        <label>Project:</label>
+        <span class="text-field">{{ getProjectLabelById(projectId) }} (Fixed)</span>
+      </div>
+
+      <div class="field-row" v-if="canAssignTasks()">
+        <label>Owner:</label>
+        <Dropdown
+          v-model="taskForm.owner"
+          :options="employeeDisplayList"
+          optionLabel="display_label"
+          optionValue="employee_id"
+          placeholder="Select owner..."
+          class="input-field w-full"
+          filter
+          filterBy="display_label,employee_name,role,team,department"
+        />
+      </div>
+
+      <div class="field-row" v-else>
+        <label>Owner:</label>
+        <span class="text-field">{{ getOwnerName(taskForm.owner) || currentEmployeeName }}</span>
+      </div>
+
+      <div class="field-row">
+        <label>Collaborators:</label>
+        <MultiSelect
+          v-model="taskForm.collaborators"
+          :options="employeeDisplayList.filter(emp => emp.employee_id !== taskForm.owner)"
+          optionLabel="display_label"
+          optionValue="employee_id"
+          class="input-field w-full"
+          placeholder="Select collaborators..."
+          filter
+          filterBy="display_label,employee_name,role,team,department"
+        />
+      </div>
+
+      <div class="field-row">
+        <label>Attachments:</label>
+        <FileUpload 
+          ref="fileUploadRef"
+          mode="basic" 
+          accept=".pdf" 
+          :multiple="true"
+          chooseLabel="Upload" 
+          :auto="false" 
+          :customUpload="true" 
+          @select="handleAttachment"
+        />
+        <ul class="file-list">
+          <li v-for="(file, index) in taskForm.attachments" :key="index">
+            <a :href="file.url" target="_blank">{{ file.name }}</a>
+            <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm" @click="removeAttachment(index)"/>
+          </li>
+        </ul>
       </div>
     </div>
 
@@ -305,7 +583,7 @@ onMounted(load)
     <p v-if="addError" class="error" style="margin-top:8px;">{{ addError }}</p>
     <div style="display:flex;justify-content:flex-end;margin-top:12px;gap:8px;">
       <button class="btn btn-secondary" @click="showAddModal=false" :disabled="addBusy">Cancel</button>
-      <button class="btn btn-primary" @click="addTasksToProject" :disabled="addBusy">{{ addBusy ? 'Adding…' : 'Add' }}</button>
+      <button class="btn btn-primary" @click="addTab==='create' ? saveTask() : addTasksToProject()" :disabled="addBusy">{{ addBusy ? 'Processing…' : (addTab==='create' ? 'Create Task' : 'Add') }}</button>
     </div>
   </Dialog>
 </div>
@@ -355,5 +633,67 @@ onMounted(load)
 .attach-item:hover { background:#f8fafc; }
 .attach-title { font-weight:600; }
 .attach-sub { color:#6b7280; font-size:12px; }
+
+/* New styles for Tasks page form */
+.modal-content {
+  padding: 0;
+}
+
+.field-row {
+  margin-bottom: 16px;
+}
+
+.field-row.grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+
+.input-field {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.text-field {
+  padding: 8px 12px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.file-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0 0;
+}
+
+.file-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  margin-bottom: 4px;
+}
+
+.file-list a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.file-list a:hover {
+  text-decoration: underline;
+}
+
+.w-full {
+  width: 100%;
+}
 </style>
 
