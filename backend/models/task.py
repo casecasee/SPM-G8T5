@@ -15,11 +15,13 @@ class Task(db.Model):
     description    = db.Column(db.Text, nullable=False)
     attachment     = db.Column(db.String(512), nullable=True) # TODO: aws s3 link
     priority       = db.Column(db.Integer, nullable=True)  # 1-10
+    recurrence    = db.Column(db.Integer, nullable=True)  # in days, for recurring tasks, daily=1, weekly=7, monthly=30
 
     # dates / status
     start_date     = db.Column(db.DateTime, nullable=True) # TODO: logic for setting start_date when status changes to IN_PROGRESS
     deadline       = db.Column(db.DateTime, nullable=True, index=True)
     completed_date = db.Column(db.DateTime, nullable=True) # TODO: logic for setting completed_date when status changes to DONE
+    created_at     = db.Column(db.DateTime, nullable=False, server_default=db.func.now())
     status         = db.Column(db.String(32), nullable=False)
 
     # owner & project (FKs to other services' tables)

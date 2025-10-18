@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Oct 06, 2025 at 01:50 PM
+-- Generation Time: Oct 18, 2025 at 03:01 PM
 -- Server version: 8.2.0
 -- PHP Version: 8.2.13
 
@@ -24,6 +24,41 @@ SET time_zone = "+00:00";
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `comment_attachments`
+--
+
+DROP TABLE IF EXISTS `comment_attachments`;
+CREATE TABLE IF NOT EXISTS `comment_attachments` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `comment_id` int NOT NULL,
+  `filename` varchar(255) NOT NULL,
+  `original_name` varchar(255) DEFAULT NULL,
+  `mime_type` varchar(100) DEFAULT NULL,
+  `size` int DEFAULT NULL,
+  `uploaded_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ix_comment_attachments_comment_id` (`comment_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `comment_mentions`
+--
+
+DROP TABLE IF EXISTS `comment_mentions`;
+CREATE TABLE IF NOT EXISTS `comment_mentions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `comment_id` int NOT NULL,
+  `mentioned_id` int NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ix_comment_mentions_mentioned_id` (`mentioned_id`),
+  KEY `ix_comment_mentions_comment_id` (`comment_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `projects`
 --
 
@@ -36,10 +71,20 @@ CREATE TABLE IF NOT EXISTS `projects` (
   `status` varchar(50) NOT NULL,
   `tasks_done` int NOT NULL,
   `tasks_total` int NOT NULL,
+  `due_date` datetime DEFAULT NULL,
   `updated_at` datetime NOT NULL,
   PRIMARY KEY (`id`),
   KEY `ix_projects_owner_id` (`owner_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `projects`
+--
+
+INSERT INTO `projects` (`id`, `name`, `owner`, `owner_id`, `status`, `tasks_done`, `tasks_total`, `due_date`, `updated_at`) VALUES
+(1, 'Website Redesign', 'test', 1, 'Active', 0, 0, NULL, '0000-00-00 00:00:00'),
+(2, 'Marketing Launch', 'test2', 2, 'On hold', 0, 0, NULL, '0000-00-00 00:00:00'),
+(3, 'Data Migration', 'James Connor', 47, 'Active', 0, 0, NULL, '0000-00-00 00:00:00');
 
 -- --------------------------------------------------------
 
@@ -54,6 +99,16 @@ CREATE TABLE IF NOT EXISTS `project_members` (
   PRIMARY KEY (`project_id`,`staff_id`),
   KEY `staff_id` (`staff_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Dumping data for table `project_members`
+--
+
+INSERT INTO `project_members` (`project_id`, `staff_id`) VALUES
+(1, 1),
+(1, 2),
+(2, 34),
+(3, 47);
 
 -- --------------------------------------------------------
 
@@ -110,9 +165,11 @@ CREATE TABLE IF NOT EXISTS `task` (
   `description` text NOT NULL,
   `attachment` varchar(512) DEFAULT NULL,
   `priority` int DEFAULT NULL,
+  `recurrence` int DEFAULT NULL,
   `start_date` datetime DEFAULT NULL,
   `deadline` datetime DEFAULT NULL,
   `completed_date` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT (now()),
   `status` varchar(32) NOT NULL,
   `owner` int NOT NULL,
   `project_id` int DEFAULT NULL,
@@ -122,23 +179,25 @@ CREATE TABLE IF NOT EXISTS `task` (
   KEY `ix_Task_owner` (`owner`),
   KEY `ix_Task_project_id` (`project_id`),
   KEY `ix_Task_deadline` (`deadline`)
-) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Dumping data for table `task`
 --
 
-INSERT INTO `task` (`task_id`, `title`, `description`, `attachment`, `priority`, `start_date`, `deadline`, `completed_date`, `status`, `owner`, `project_id`, `parent_id`) VALUES
-(1, 'task', 'TASKKKKKKKKKKKKKKKKKKKK', NULL, 4, NULL, '2025-10-06 00:00:00', '2025-10-04 14:04:46', 'under review', 1, NULL, NULL),
-(6, 'this is another new task', '', NULL, 5, NULL, '2025-10-04 06:39:30', NULL, 'ongoing', 2, NULL, NULL),
-(12, 'test status update', 'test', '[]', 5, NULL, '2025-10-26 16:00:00', '2025-10-06 21:28:49', 'done', 1, NULL, NULL),
-(13, 'test status update', 'test', '[]', 5, '2025-10-06 21:28:43', '2025-10-26 16:00:00', NULL, 'under review', 1, NULL, NULL),
-(14, 'Prepare weekly team report', 'Summarize key achievements, blockers, and next steps for this week’s activities.', '[]', 6, '2025-10-06 21:48:45', '2025-10-08 16:00:00', '2025-10-06 21:49:00', 'done', 1, NULL, NULL),
-(15, 'Review design mockups', 'Go over the latest UI designs and provide feedback before the next iteration.', '[]', 3, '2025-10-06 21:38:11', '2025-10-20 16:00:00', NULL, 'ongoing', 1, NULL, NULL),
-(16, 'Update client presentation', 'Incorporate the new performance metrics and refresh the visuals before tomorrow’s meeting.', '[]', 7, NULL, '2025-10-06 16:00:00', NULL, 'ongoing', 34, NULL, NULL),
-(18, 'Schedule performance reviews', 'Coordinate one-on-one meetings with each team member for quarterly evaluations.', '[]', 7, NULL, '2025-10-07 16:00:00', NULL, 'unassigned', 35, NULL, NULL),
-(19, 'Conduct customer feedback survey', 'Prepare and send out the feedback form to recent users, then collect responses.', '[]', 8, NULL, '2025-10-14 16:00:00', NULL, 'ongoing', 34, NULL, NULL),
-(20, 'Optimize website SEO', 'Review page titles, metadata, and keywords to improve search visibility.', '[]', 2, NULL, '2025-10-20 16:00:00', NULL, 'ongoing', 34, NULL, NULL);
+INSERT INTO `task` (`task_id`, `title`, `description`, `attachment`, `priority`, `recurrence`, `start_date`, `deadline`, `completed_date`, `created_at`, `status`, `owner`, `project_id`, `parent_id`) VALUES
+(1, 'Reconcile Bank Statements', 'Match company bank transactions with internal records to ensure accuracy.', '[]', 8, NULL, NULL, '2025-10-22 12:46:00', NULL, '2025-10-18 22:47:07', 'ongoing', 34, NULL, NULL),
+(2, 'Process Vendor Invoices', 'Enter and verify vendor invoices for approval and payment scheduling.', '[]', 7, NULL, NULL, '2025-10-31 22:47:00', NULL, '2025-10-18 22:48:04', 'ongoing', 34, NULL, NULL),
+(3, 'Expense Reports', 'Record employee expense claims and ensure compliance with policy.', '[]', 5, NULL, NULL, '2025-10-29 13:51:00', NULL, '2025-10-18 22:48:42', 'ongoing', 34, NULL, NULL),
+(4, 'Maintain Financial Records', 'File and organize accounting documents for audit readiness.', '[]', 3, NULL, NULL, '2025-10-22 12:51:00', NULL, '2025-10-18 22:49:50', 'ongoing', 34, NULL, NULL),
+(5, 'Entry for Budget Sheet', 'Input approved budget adjustments into the financial tracking', '[]', 6, NULL, NULL, '2025-10-20 23:52:00', NULL, '2025-10-18 22:51:57', 'ongoing', 34, NULL, NULL),
+(6, 'Assist with Payroll Reconciliation', 'Verify employee timesheets and support payroll accuracy checks.', '[]', 9, NULL, NULL, '2025-10-19 12:54:00', NULL, '2025-10-18 22:52:30', 'ongoing', 34, NULL, NULL),
+(7, 'Prepare Monthly Financial Report', 'Compile monthly financial performance data and present a summary to the director.', '[]', 9, NULL, NULL, '2025-10-30 13:00:00', NULL, '2025-10-18 22:57:15', 'unassigned', 1, NULL, NULL),
+(8, 'Coordinate Internal Audit Schedule', 'Set and communicate the internal audit timeline to all relevant departments.', '[]', 5, NULL, NULL, '2025-10-22 12:59:00', NULL, '2025-10-18 22:57:49', 'unassigned', 1, NULL, NULL),
+(9, 'Analyze Departmental Expenses', 'Review spending across departments to identify cost-saving', '[]', 7, NULL, NULL, '2025-10-23 12:59:00', NULL, '2025-10-18 22:58:16', 'unassigned', 1, NULL, NULL),
+(10, 'Expense Policy Training', 'Conduct training for staff on updated expense reimbursement policies.', '[]', 3, NULL, NULL, '2025-11-07 12:00:00', NULL, '2025-10-18 22:58:45', 'unassigned', 1, NULL, NULL),
+(11, 'Approve Capital Expenditure Requests', 'Evaluate all CAPEX requests exceeding department thresholds and approve or reject accordingly.', '[]', 9, NULL, NULL, '2025-10-23 14:03:00', NULL, '2025-10-18 23:00:14', 'unassigned', 35, NULL, NULL),
+(12, 'Financial Policy Revision', 'Oversee the revision of internal finance policies to align with new regulatory standards.', '[]', 5, NULL, NULL, '2025-10-21 15:04:00', NULL, '2025-10-18 23:00:36', 'unassigned', 35, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -159,23 +218,57 @@ CREATE TABLE IF NOT EXISTS `task_collaborators` (
 --
 
 INSERT INTO `task_collaborators` (`task_id`, `staff_id`) VALUES
-(1, 1),
-(12, 1),
-(13, 1),
-(14, 1),
-(15, 1),
-(6, 2),
-(20, 2),
-(14, 34),
-(16, 34),
-(19, 34),
-(20, 34),
-(14, 35),
-(18, 35);
+(7, 1),
+(8, 1),
+(9, 1),
+(10, 1),
+(1, 2),
+(1, 34),
+(2, 34),
+(3, 34),
+(4, 34),
+(5, 34),
+(6, 34),
+(1, 35),
+(11, 35),
+(12, 35);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `task_comments`
+--
+
+DROP TABLE IF EXISTS `task_comments`;
+CREATE TABLE IF NOT EXISTS `task_comments` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `task_id` int NOT NULL,
+  `author_id` int NOT NULL,
+  `content` text NOT NULL,
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ix_task_comments_created_at` (`created_at`),
+  KEY `ix_task_comments_task_id` (`task_id`),
+  KEY `ix_task_comments_author_id` (`author_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `comment_attachments`
+--
+ALTER TABLE `comment_attachments`
+  ADD CONSTRAINT `comment_attachments_ibfk_1` FOREIGN KEY (`comment_id`) REFERENCES `task_comments` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `comment_mentions`
+--
+ALTER TABLE `comment_mentions`
+  ADD CONSTRAINT `comment_mentions_ibfk_1` FOREIGN KEY (`comment_id`) REFERENCES `task_comments` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `comment_mentions_ibfk_2` FOREIGN KEY (`mentioned_id`) REFERENCES `staff` (`employee_id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `projects`
@@ -204,6 +297,13 @@ ALTER TABLE `task`
 ALTER TABLE `task_collaborators`
   ADD CONSTRAINT `task_collaborators_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `task` (`task_id`) ON DELETE CASCADE,
   ADD CONSTRAINT `task_collaborators_ibfk_2` FOREIGN KEY (`staff_id`) REFERENCES `staff` (`employee_id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `task_comments`
+--
+ALTER TABLE `task_comments`
+  ADD CONSTRAINT `task_comments_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `task` (`task_id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `task_comments_ibfk_2` FOREIGN KEY (`author_id`) REFERENCES `staff` (`employee_id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
