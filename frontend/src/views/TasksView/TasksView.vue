@@ -35,6 +35,10 @@
     const editingContent = ref('')
     const commentError = ref('')
 
+    // Form validation state
+    const formErrors = ref({})
+    const showValidationErrors = ref(false)
+
     // Mention suggestions
     const mentionable = ref([]) // [{employee_id, employee_name, role}]
     const showMentionList = ref(false)
@@ -151,22 +155,13 @@
     const subtaskFileUploadRef = ref(null)
 
     function resetForm() {
-    // const defaultStatus = currentRole === 'staff' ? 'ongoing' : 'unassigned'
-    const role = (currentRole || '').toLowerCase()
-    let defaultStatus = 'ongoing'
-
-    // Only these roles start as "unassigned"
-    if (['manager', 'hr', 'senior director', 'senior manager'].includes(role)) {
-        defaultStatus = 'unassigned'
-    }
-    
     return {
         id: null,
         name: '',
         description: '',
         due_date: null,
-        status: defaultStatus,
-        priority: 5, 
+        status: null, // Start with null for validation
+        priority: null, // Start with null for validation
         owner: currentEmployeeId, 
         collaborators: [], 
         project_id: null,
@@ -446,6 +441,23 @@
     }
 
     async function saveTask() {
+    // Clear previous validation errors
+    clearValidationErrors()
+    
+    // Validate form before saving
+    if (!validateForm()) {
+        // Scroll to first error field
+        const firstErrorField = Object.keys(formErrors.value)[0]
+        if (firstErrorField) {
+            const errorElement = document.querySelector(`[data-field="${firstErrorField}"]`)
+            if (errorElement) {
+                errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                errorElement.focus()
+            }
+        }
+        return
+    }
+
     try {
         let uploadedAttachments = []
 
@@ -471,16 +483,13 @@
 
         let deadlineDate
         if (taskForm.value.due_date) {
-            if (taskForm.value.due_date instanceof Date) {
-                deadlineDate = taskForm.value.due_date.toISOString()
-            } else {
-                deadlineDate = new Date(taskForm.value.due_date).toISOString()
-            }
+            deadlineDate = taskForm.value.due_date.includes(':') && !taskForm.value.due_date.includes(':', 5) 
+                ? taskForm.value.due_date + ':00' 
+                : taskForm.value.due_date
         } else {
-            // Set deadline to 7 days from now in local timezone
             const futureDate = new Date()
             futureDate.setDate(futureDate.getDate() + 7)
-            deadlineDate = futureDate.toISOString()
+            deadlineDate = futureDate.toISOString().slice(0, 19)
         }
 
         const payload = {
@@ -550,6 +559,70 @@
         console.error("Error saving task:", err)
         alert('Error saving task. Please check the console for details.')
     }
+    }
+
+    // Simple helper to parse datetime strings as local time
+    function parseDateTime(dateString) {
+        if (!dateString) return null
+        // If no timezone info, treat as local time by parsing directly
+        if (typeof dateString === 'string' && dateString.includes('T') && 
+            !dateString.includes('Z') && !dateString.includes('+') && !dateString.includes('-', 10)) {
+            // Parse as local time directly
+            const [datePart, timePart] = dateString.split('T')
+            const [year, month, day] = datePart.split('-').map(Number)
+            const [hours, minutes, seconds = 0] = timePart.split(':').map(Number)
+            return new Date(year, month - 1, day, hours, minutes, seconds)
+        }
+        return new Date(dateString)
+    }
+
+    // Form validation functions
+    function validateForm() {
+        const errors = {}
+        
+        // Required fields validation - ALL basic information must be filled
+        if (!taskForm.value.name || taskForm.value.name.trim() === '') {
+            errors.name = 'Task name is required'
+        }
+        
+        if (!taskForm.value.description || taskForm.value.description.trim() === '') {
+            errors.description = 'Description is required'
+        }
+        
+        if (!taskForm.value.due_date || taskForm.value.due_date.trim() === '') {
+            errors.due_date = 'Due date is required'
+        }
+        
+        if (!taskForm.value.status || taskForm.value.status === null || taskForm.value.status === '') {
+            errors.status = 'Status is required'
+        }
+        
+        if (!taskForm.value.priority || taskForm.value.priority === null || taskForm.value.priority === '') {
+            errors.priority = 'Priority is required'
+        }
+        
+        // Additional validation for due date
+        if (taskForm.value.due_date) {
+            const dueDate = new Date(taskForm.value.due_date)
+            const now = new Date()
+            if (dueDate < now) {
+                errors.due_date = 'Due date cannot be in the past'
+            }
+        }
+        
+        formErrors.value = errors
+        showValidationErrors.value = Object.keys(errors).length > 0
+        
+        return Object.keys(errors).length === 0
+    }
+
+    function clearValidationErrors() {
+        formErrors.value = {}
+        showValidationErrors.value = false
+    }
+
+    function getFieldError(fieldName) {
+        return formErrors.value[fieldName] || ''
     }
 
     function isStaff() { return currentRole === 'staff' }
@@ -633,6 +706,7 @@
     selectedTask.value = null
     taskForm.value = resetForm()
     comments.value = [] // Clear any temporary comments
+    clearValidationErrors() // Clear any validation errors
     await fetchEmployees()
     showModal.value = true
     }
@@ -640,13 +714,20 @@
     function openDetails(task) {
     selectedTask.value = task
     isEditing.value = false
+    clearValidationErrors() // Clear any validation errors
+    
+    let formattedDueDate = task.due_date
+    if (task.due_date && typeof task.due_date === 'string' && task.due_date.includes(':')) {
+        formattedDueDate = task.due_date.replace(/:\d{2}$/, '')
+    }
+    
     taskForm.value = {
         id: task.id,
         name: task.name,
         description: task.description,
-        due_date: task.due_date,
+        due_date: formattedDueDate,
         status: task.status,
-        priority: task.priority || 5,
+        priority: task.priority,
         owner: task.owner,
         project_id: task.project_id || null,
         collaborators: (task.collaborators || []).filter(id => id !== task.owner),
@@ -664,17 +745,26 @@
     async function startEditing() {
     isEditing.value = true
     await fetchEmployees()
+    
+    // Set default values if they're null when starting to edit
+    if (taskForm.value.status === null) {
+        const role = (currentRole || '').toLowerCase()
+        taskForm.value.status = ['manager', 'hr', 'senior director', 'senior manager'].includes(role) ? 'unassigned' : 'ongoing'
+    }
+    if (taskForm.value.priority === null) {
+        taskForm.value.priority = 5
+    }
     }
 
     function formatDate(date) {
     if (!date) return '-'
-    const d = new Date(date)
+    const d = parseDateTime(date)
     return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
 
     function formatDateRelative(date) {
     if (!date) return '-'
-    const d = new Date(date)
+    const d = parseDateTime(date)
     const now = new Date()
     const diffMs = d.getTime() - now.getTime()
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
@@ -867,7 +957,7 @@
 
     function isOverdue(task) {
         if (!task?.due_date || !task?.status) return false
-        const due = new Date(task.due_date)
+        const due = parseDateTime(task.due_date)
         const now = new Date()
         return due < now && task.status.toLowerCase() !== 'done'
     }

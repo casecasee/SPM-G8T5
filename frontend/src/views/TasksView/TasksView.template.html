@@ -263,142 +263,185 @@
 
   <Dialog v-model:visible="showModal" modal 
         :header="isEditing && !selectedTask ? 'New Task' : (isEditing ? 'Edit Task' : 'Task Details')" 
-        class="page-style-modal">
+        class="clean-modal">
     <div class="modal-content">
-      <div class="field-row">
-        <label>Name:</label>
-        <template v-if="isEditing || !selectedTask">
-          <InputText v-model="taskForm.name" class="input-field" :disabled="!canEdit(selectedTask)" />
-        </template>
-        <template v-else>
-          <span class="text-field">{{ taskForm.name }}</span>
-        </template>
-      </div>
-
-      <div class="field-row">
-        <label>Description:</label>
-        <template v-if="isEditing || !selectedTask">
-          <Textarea v-model="taskForm.description" rows="4" class="input-field" maxlength="100" :disabled="!canEdit(selectedTask)" />
-        </template>
-        <template v-else>
-          <span class="text-field">{{ taskForm.description }}</span>
-        </template>
-      </div>
-
-      <div class="field-row grid-3">
-        <div>
-          <label>Due Date:</label>
-          <template v-if="isEditing || !selectedTask">
-            <input type="datetime-local" v-model="taskForm.due_date" class="input-field" :disabled="!canEdit(selectedTask)" />
-          </template>
-          <template v-else>
-            <span class="text-field">{{ formatDate(taskForm.due_date) }}</span>
-          </template>
+      <!-- Basic Information Section -->
+      <div class="form-section">
+        <h3 class="section-title">Basic Information</h3>
+        
+        <!-- Validation Error Summary -->
+        <div v-if="showValidationErrors" class="validation-summary">
+          <div class="validation-icon">⚠️</div>
+          <div class="validation-content">
+            <h4>Please in the following fields:</h4>
+            <ul>
+              <li v-for="(error, field) in formErrors" :key="field">{{ error }}</li>
+            </ul>
+          </div>
         </div>
-        <div>
-          <label>Status:</label>
-          <template v-if="isEditing || !selectedTask">
-            <Dropdown v-model="taskForm.status" :options="filteredStatusOptions" optionLabel="label" optionValue="value" class="input-field w-full" :disabled="!canEdit(selectedTask)" />
-          </template>
-          <template v-else>
-            <span class="text-field">{{ taskForm.status }}</span>
-          </template>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Task Name *</label>
+            <template v-if="isEditing || !selectedTask">
+              <InputText 
+                v-model="taskForm.name" 
+                :class="['form-input', { 'error': getFieldError('name') }]"
+                :disabled="!canEdit(selectedTask)" 
+                placeholder="Enter task name" 
+                data-field="name"
+              />
+              <div v-if="getFieldError('name')" class="field-error">{{ getFieldError('name') }}</div>
+            </template>
+            <template v-else>
+              <div class="form-display">{{ taskForm.name }}</div>
+            </template>
+          </div>
+        </div> 
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Description *</label>
+            <template v-if="isEditing || !selectedTask">
+              <Textarea 
+                v-model="taskForm.description" rows="3" :class="['form-input', { 'error': getFieldError('description') }]" :disabled="!canEdit(selectedTask)" placeholder="Enter task description" data-field="description"/>
+              <div v-if="getFieldError('description')" class="field-error">{{ getFieldError('description') }}</div>
+            </template>
+            <template v-else>
+              <div class="form-display">{{ taskForm.description || 'No description' }}</div>
+            </template>
+          </div>
         </div>
-        <div>
-          <label>Priority:</label>
-          <template v-if="isEditing || !selectedTask">
-            <Dropdown v-model="taskForm.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="input-field w-full" :disabled="!canEdit(selectedTask)" />
-          </template>
-          <template v-else>
-            <span class="text-field">{{ taskForm.priority }}</span>
-          </template>
+
+        <div class="form-row form-row-3">
+          <div class="form-group">
+            <label class="form-label">Due Date *</label>
+            <template v-if="isEditing || !selectedTask">
+              <input 
+                type="datetime-local"v-model="taskForm.due_date" :class="['form-input', { 'error': getFieldError('due_date') }]" :disabled="!canEdit(selectedTask)" data-field="due_date" />
+              <div v-if="getFieldError('due_date')" class="field-error">{{ getFieldError('due_date') }}</div>
+            </template>
+            <template v-else>
+              <div class="form-display">{{ formatDate(taskForm.due_date) }}</div>
+            </template>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Status *</label>
+            <template v-if="isEditing || !selectedTask">
+              <Dropdown 
+                v-model="taskForm.status" :options="filteredStatusOptions" optionLabel="label" optionValue="value" :class="['form-input', { 'error': getFieldError('status') }]" :disabled="!canEdit(selectedTask)" placeholder="Select status..." data-field="status" />
+              <div v-if="getFieldError('status')" class="field-error">{{ getFieldError('status') }}</div>
+            </template>
+            <template v-else>
+              <div class="form-display status-display" :class="getStatusClass(taskForm.status)">{{ taskForm.status }}</div>
+            </template>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Priority *</label>
+            <template v-if="isEditing || !selectedTask">
+              <Dropdown 
+                v-model="taskForm.priority" :options="priorityOptions" optionLabel="label" optionValue="value" :class="['form-input', { 'error': getFieldError('priority') }]" :disabled="!canEdit(selectedTask)" placeholder="Select priority..." data-field="priority" />
+              <div v-if="getFieldError('priority')" class="field-error">{{ getFieldError('priority') }}</div>
+            </template>
+            <template v-else>
+              <div class="form-display priority-display" :class="getPriorityClass(taskForm.priority)">P{{ taskForm.priority }}</div>
+            </template>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Project</label>
+            <template v-if="isEditing || !selectedTask">
+              <Dropdown v-model="taskForm.project_id" :options="projectOptions" optionLabel="label" optionValue="value" class="form-input" placeholder="Select project" />
+            </template>
+            <template v-else>
+              <div class="form-display">{{ getProjectLabelById(taskForm.project_id) }}</div>
+            </template>
+          </div>
         </div>
       </div>
 
-      <div class="field-row">
-        <label>Project:</label>
-        <template v-if="isEditing || !selectedTask">
-          <Dropdown v-model="taskForm.project_id" :options="projectOptions" optionLabel="label" optionValue="value" class="input-field w-full" />
-        </template>
-        <template v-else>
-          <span class="text-field">{{ getProjectLabelById(taskForm.project_id) }}</span>
-        </template>
+      <!-- Assignment Section -->
+      <div class="form-section">
+        <h3 class="section-title">Assignment</h3>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Owner</label>
+            <template v-if="canAssignTasks() && isEditing">
+              <Dropdown
+                v-model="taskForm.owner" :options="employeeDisplayList"
+                optionLabel="display_label" optionValue="employee_id" class="form-input" :disabled="!canEdit(selectedTask)" placeholder="Select owner..." data-field="owner" filter filterBy="display_label,employee_name,role,team,department" />
+            </template>
+            <template v-else>
+              <div class="form-display">{{ getOwnerName(taskForm.owner) || currentEmployeeName }}</div>
+            </template>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Collaborators</label>
+            <template v-if="isEditing || !selectedTask">
+              <MultiSelect
+                v-model="taskForm.collaborators"
+                :options="employeeDisplayList.filter(emp => emp.employee_id !== taskForm.owner)"
+                optionLabel="display_label" optionValue="employee_id" class="form-input" :disabled="!canEdit(selectedTask)" placeholder="Select collaborators..." filter filterBy="display_label,employee_name,role,team,department" />
+            </template>
+            <template v-else>
+              <div class="form-display">{{ getCollaboratorNames(taskForm.collaborators) || 'None' }}</div>
+            </template>
+          </div>
+        </div>
       </div>
 
-      <div class="field-row" v-if="canAssignTasks() && isEditing">
-        <label>Owner:</label>
-        <Dropdown
-          v-model="taskForm.owner"
-          :options="employeeDisplayList"
-          optionLabel="display_label"
-          optionValue="employee_id"
-          placeholder="Select owner..."
-          class="input-field w-full"
-          :disabled="!canEdit(selectedTask)"
-          filter
-          filterBy="display_label,employee_name,role,team,department"
-        />
-      </div>
-
-      <div class="field-row" v-else>
-        <label>Owner:</label>
-        <span class="text-field">{{ getOwnerName(taskForm.owner) || currentEmployeeName }}</span>
-      </div>
-
-      <div class="field-row">
-        <label>Collaborators:</label>
-        <template v-if="isEditing || !selectedTask">
-          <MultiSelect
-            v-model="taskForm.collaborators"
-            :options="employeeDisplayList.filter(emp => emp.employee_id !== taskForm.owner)"
-            optionLabel="display_label"
-            optionValue="employee_id"
-            class="input-field w-full"
-            :disabled="!canEdit(selectedTask)"
-            placeholder="Select collaborators..."
-            filter
-            filterBy="display_label,employee_name,role,team,department"
-          />
-        </template>
-        <template v-else>
-          <span class="text-field">{{ getCollaboratorNames(taskForm.collaborators) }}</span>
-        </template>
-      </div>
-
-      <div class="field-row">
-        <label>Attachments:</label>
-        <template v-if="isEditing || !selectedTask">
-        <FileUpload 
-          ref="fileUploadRef"
-          mode="basic" 
-          accept=".pdf" 
-          :multiple="true"
-          chooseLabel="Upload" 
-          :auto="false" 
-          :customUpload="true" 
-          @select="handleAttachment"
-          :disabled="selectedTask && isCollaboratorOnly(selectedTask)" 
-        />
-          <ul class="file-list">
-            <li v-for="(file, index) in taskForm.attachments" :key="index">
-              <a :href="file.url" target="_blank">{{ file.name }}</a>
-              <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm" @click="removeAttachment(index)" v-if="isEditing || !selectedTask"/>
-            </li>
-          </ul>
-        </template>
-        <template v-else>
-          <ul class="file-list">
-            <li v-for="(file, index) in taskForm.attachments" :key="index">
-              <a :href="file.url" target="_blank">{{ file.name }}</a>
-            </li>
-          </ul>
-        </template>
+      <!-- Attachments Section -->
+      <div class="form-section">
+        <h3 class="section-title">Attachments</h3>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <template v-if="isEditing || !selectedTask">
+              <FileUpload 
+                ref="fileUploadRef"
+                mode="basic" 
+                accept=".pdf" 
+                :multiple="true"
+                chooseLabel="Upload" 
+                :auto="false" 
+                :customUpload="true" 
+                @select="handleAttachment"
+                :disabled="selectedTask && isCollaboratorOnly(selectedTask)" 
+                class="file-upload"
+              />
+              <div v-if="taskForm.attachments.length > 0" class="file-list">
+                <div v-for="(file, index) in taskForm.attachments" :key="index" class="file-item">
+                  <a :href="file.url" target="_blank" class="file-link">{{ file.name }}</a>
+                  <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove" @click="removeAttachment(index)" v-if="isEditing || !selectedTask"/>
+                </div>
+              </div>
+            </template>
+            <template v-else>
+              <div v-if="taskForm.attachments.length > 0" class="file-list">
+                <div v-for="(file, index) in taskForm.attachments" :key="index" class="file-item">
+                  <a :href="file.url" target="_blank" class="file-link">{{ file.name }}</a>
+                </div>
+              </div>
+              <div v-else class="form-display">No attachments</div>
+            </template>
+          </div>
+        </div>
       </div>
 
       <!-- Comments Section -->
-      <div class="field-row comments-section">
-        <label>Comments:</label>
+      <div class="form-section">
+        <h3 class="section-title">Comments</h3>
+        
         <div v-if="commentError" class="comment-error">{{ commentError }}</div>
+        
         <div class="comments-list" v-if="comments.length > 0">
           <div class="comment-item" v-for="c in comments" :key="c.id">
             <div class="comment-content">
@@ -407,16 +450,16 @@
                 <span class="timestamp">{{ new Date(c.created_at || c.updated_at).toLocaleString() }}</span>
               </div>
               <div v-if="editingCommentId === c.id" class="comment-edit">
-                <Textarea v-model="editingContent" rows="2" class="input-field" />
+                <Textarea v-model="editingContent" rows="2" class="form-input" />
                 <div class="comment-actions">
-              <Button label="Save" class="p-button-sm" @click="saveEditComment(c.id)" />
-              <Button label="Cancel" class="p-button-text p-button-sm" @click="cancelEditComment" />
+                  <Button label="Save" class="p-button-sm" @click="saveEditComment(c.id)" />
+                  <Button label="Cancel" class="p-button-text p-button-sm" @click="cancelEditComment" />
                 </div>
               </div>
               <div v-else class="comment-text">
                 {{ c.content }}
                 <div v-if="(c.attachments || []).length" class="comment-attachments">
-                  <a v-for="a in c.attachments" :key="a.id || a.filename" :href="`http://localhost:5002${a.url || '/attachments/' + a.filename}`" target="_blank" rel="noopener">
+                  <a v-for="a in c.attachments" :key="a.id || a.filename" :href="`http://localhost:5002${a.url || '/attachments/' + a.filename}`" target="_blank" rel="noopener" class="attachment-link">
                     {{ a.original_name || a.filename }}
                   </a>
                 </div>
@@ -435,7 +478,7 @@
             <Textarea 
               v-model="newComment" 
               rows="2" 
-              class="input-field" 
+              class="form-input" 
               placeholder="Write a comment..."
               @input="onCommentInput"
               @keydown.down.prevent="moveMentionSelection(1)"
@@ -464,8 +507,9 @@
             :maxFileSize="16777216"
             :showUploadButton="false"
             :showCancelButton="false"
-            chooseLabel="Attach"
+            chooseLabel="Attach File"
             @upload="onCommentFileUploaded"
+            class="comment-file-upload"
           />
           <div class="attached-files" v-if="newCommentAttachments.length">
             <div v-for="(f, i) in newCommentAttachments" :key="i" class="attached-file">
@@ -474,20 +518,20 @@
             </div>
           </div>
           <div class="comment-actions">
-            <Button label="Add Comment" @click="addComment" :disabled="!newComment.trim()" />
+            <Button label="Add Comment" @click="addComment" :disabled="!newComment.trim()" class="add-comment-btn" />
           </div>
         </div>
       </div>
 
       <!-- Subtasks Section -->
-      <div class="field-row subtasks-section">
+      <div class="form-section">
         <div class="subtasks-header">
-          <label>Subtasks:</label>
+          <h3 class="section-title">Subtasks</h3>
           <Button 
             v-if="isEditing || !selectedTask" 
             icon="pi pi-plus" 
             label="Add Subtask" 
-            class="add-subtask-btn p-button-sm" 
+            class="add-subtask-btn" 
             @click="toggleSubtaskForm"
           />
         </div>
@@ -511,89 +555,96 @@
         
         <!-- Subtask Form -->
         <div v-if="showSubtaskForm && (isEditing || !selectedTask)" class="subtask-form">
-          <div class="subtask-form-row">
-            <InputText v-model="newSubtask.name" placeholder="Subtask name" class="input-field" />
-            <div class="subtask-form-controls">
-              <Button label="Add" @click="addSubtask" class="p-button-sm" />
-              <Button label="Cancel" @click="toggleSubtaskForm" class="p-button-text p-button-sm" />
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Subtask Name *</label>
+              <InputText v-model="newSubtask.name" placeholder="Enter subtask name" class="form-input" />
             </div>
           </div>
-          <div class="subtask-form-row">
-            <Textarea v-model="newSubtask.description" placeholder="Description" rows="2" class="input-field" />
-          </div>
-          <div class="subtask-form-row grid-3">
-            <input type="datetime-local" v-model="newSubtask.due_date" placeholder="Due date" class="input-field" />
-            <Dropdown v-model="newSubtask.status" :options="filteredStatusOptions" optionLabel="label" optionValue="value" class="input-field" />
-            <Dropdown v-model="newSubtask.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="input-field" />
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Description</label>
+              <Textarea v-model="newSubtask.description" placeholder="Enter description" rows="2" class="form-input" />
+            </div>
           </div>
           
-          <!-- Owner Selection -->
-          <div class="subtask-form-row">
-            <label>Owner:</label>
-            <Dropdown
-              v-model="newSubtask.owner"
-              :options="employeeDisplayList"
-              optionLabel="display_label"
-              optionValue="employee_id"
-              placeholder="Select owner..."
-              class="input-field"
-              filter
-              filterBy="display_label,employee_name,role,team,department"
-            />
+          <div class="form-row form-row-3">
+            <div class="form-group">
+              <label class="form-label">Due Date</label>
+              <input type="datetime-local" v-model="newSubtask.due_date" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Status</label>
+              <Dropdown v-model="newSubtask.status" :options="filteredStatusOptions" optionLabel="label" optionValue="value" class="form-input" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Priority</label>
+              <Dropdown v-model="newSubtask.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="form-input" />
+            </div>
           </div>
           
-          <!-- Collaborators -->
-          <div class="subtask-form-row">
-            <label>Collaborators:</label>
-            <MultiSelect
-              v-model="newSubtask.collaborators"
-              :options="employeeDisplayList.filter(emp => emp.employee_id !== newSubtask.owner)"
-              optionLabel="display_label"
-              optionValue="employee_id"
-              class="input-field"
-              placeholder="Select collaborators..."
-              filter
-              filterBy="display_label,employee_name,role,team,department"
-            />
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Owner</label>
+              <Dropdown
+                v-model="newSubtask.owner" :options="employeeDisplayList"
+                optionLabel="display_label" optionValue="employee_id" class="form-input" :disabled="!canEdit(selectedTask)" placeholder="Select owner..." data-field="owner" filter filterBy="display_label,employee_name,role,team,department" />
+            </div>
           </div>
           
-          <!-- Attachments -->
-          <div class="subtask-form-row">
-            <label>Attachments:</label>
-            <FileUpload 
-              ref="subtaskFileUploadRef"
-              mode="basic" 
-              accept=".pdf" 
-              :multiple="true"
-              chooseLabel="Upload" 
-              :auto="false" 
-              :customUpload="true" 
-              @select="handleSubtaskAttachment"
-            />
-            <ul class="file-list">
-              <li v-for="(file, index) in newSubtask.attachments" :key="index">
-                <span>{{ file.name }}</span>
-                <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm" @click="removeSubtaskAttachment(index)" />
-              </li>
-            </ul>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Collaborators</label>
+              <MultiSelect
+                v-model="newSubtask.collaborators"
+                :options="employeeDisplayList.filter(emp => emp.employee_id !== newSubtask.owner)" optionLabel="display_label" optionValue="employee_id" class="form-input" :disabled="!canEdit(selectedTask)" placeholder="Select collaborators..." filter filterBy="display_label,employee_name,role,team,department" />
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Attachments</label>
+              <FileUpload 
+                ref="subtaskFileUploadRef"
+                mode="basic" 
+                accept=".pdf" 
+                :multiple="true"
+                chooseLabel="Upload" 
+                :auto="false" 
+                :customUpload="true" 
+                @select="handleSubtaskAttachment"
+                class="file-upload"
+              />
+              <div v-if="newSubtask.attachments.length > 0" class="file-list">
+                <div v-for="(file, index) in newSubtask.attachments" :key="index" class="file-item">
+                  <span class="file-name">{{ file.name }}</span>
+                  <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove" @click="removeSubtaskAttachment(index)" />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="subtask-form-actions">
+            <Button label="Add Subtask" @click="addSubtask" class="add-subtask-confirm-btn" />
+            <Button label="Cancel" @click="toggleSubtaskForm" class="p-button-text cancel-subtask-btn" />
           </div>
         </div>
 
-        <!-- Subtasks List - Compact Design -->
+        <!-- Subtasks List -->
         <div v-if="subtasks.length > 0" class="subtasks-list">
           <div v-for="(subtask, index) in subtasks" :key="subtask.id || index" class="subtask-item">
             <div class="subtask-content">
               <div class="subtask-header">
                 <h4 class="subtask-title">{{ subtask.name }}</h4>
                 <div class="subtask-meta">
-                  <span 
-                    class="status-pill status-clickable" 
+                  <Dropdown 
+                    v-model="subtask.status" :options="filteredStatusOptions" optionLabel="label" 
+                    optionValue="value" 
+                    class="subtask-status-dropdown"
                     :class="getStatusClass(subtask.status)"
-                    @click="updateSubtaskStatus(subtask, subtask.status === 'done' ? 'ongoing' : 'done')"
-                    title="Click to toggle status"
-                  >
-                    {{ subtask.status }}
-                  </span>
+                    @change="updateSubtaskStatus(subtask, subtask.status)"
+                  />
                   <span class="priority-badge" :class="getPriorityClass(subtask.priority)">P{{ subtask.priority }}</span>
                 </div>
               </div>
