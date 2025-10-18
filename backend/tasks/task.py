@@ -270,6 +270,102 @@ def create_task():
     return {"message": "Task created", "task_id": new_task.task_id}, 201
 
 
+@app.route("/projects/<int:project_id>/timeline", methods=["GET"])
+def get_project_timeline(project_id):
+    """
+    Get timeline data for a specific project
+    Returns tasks organized by team members and dates
+    """
+    try:
+        # Get current user info
+        current_user_id = session.get('employee_id')
+        current_role = session.get('role', '').lower()
+        current_department = session.get('department', '')
+        
+        if not current_user_id:
+            return {"error": "Unauthorized"}, 401
+        
+        # Get project tasks
+        project_tasks = Task.query.filter_by(project_id=project_id).all()
+        
+        if not project_tasks:
+            return {
+                "project_id": project_id,
+                "tasks": [],
+                "team_members": []
+            }, 200
+        
+        # Get team members based on role
+        team_members = []
+        if current_role in ['senior manager', 'hr']:
+            # HR/Senior Manager: Get all employees
+            team_members = Staff.query.all()
+        elif current_role == 'manager':
+            # Manager: Get department employees
+            team_members = Staff.query.filter_by(department=current_department).all()
+        else:
+            # Staff: Get department employees (for team context)
+            team_members = Staff.query.filter_by(department=current_department).all()
+        
+        # Convert tasks to timeline format
+        timeline_tasks = []
+        for task in project_tasks:
+            # Filter tasks based on role and permissions
+            if current_role == 'staff':
+                # Staff can only see their own tasks and team tasks
+                if task.owner != current_user_id:
+                    # Check if they're a collaborator
+                    is_collaborator = any(collab.employee_id == current_user_id for collab in task.collaborators)
+                    if not is_collaborator:
+                        continue
+            
+            timeline_tasks.append({
+                "id": task.task_id,
+                "title": task.title,
+                "description": task.description,
+                "status": task.status,
+                "priority": task.priority,
+                "due_date": task.deadline.isoformat() if task.deadline else None,
+                "owner": task.owner,
+                "collaborators": [collab.employee_id for collab in task.collaborators],
+                "project_id": task.project_id
+            })
+        
+        # Convert team members to timeline format
+        timeline_members = []
+        for member in team_members:
+            timeline_members.append({
+                "employee_id": member.employee_id,
+                "employee_name": member.employee_name,
+                "role": member.role,
+                "department": member.department,
+                "team": member.team
+            })
+        
+        # Calculate project date range (first task to last task)
+        project_date_range = None
+        if timeline_tasks:
+            task_dates = [task["due_date"] for task in timeline_tasks if task["due_date"]]
+            if task_dates:
+                earliest_date = min(task_dates)
+                latest_date = max(task_dates)
+                project_date_range = {
+                    "start_date": earliest_date,
+                    "end_date": latest_date
+                }
+        
+        return {
+            "project_id": project_id,
+            "tasks": timeline_tasks,
+            "team_members": timeline_members,
+            "project_date_range": project_date_range
+        }, 200
+        
+    except Exception as e:
+        print(f"Error in get_project_timeline: {e}")
+        return {"error": "Internal server error"}, 500
+
+
 @app.route("/task/status/<int:task_id>", methods=["PATCH"])
 def update_task_status(task_id):
     

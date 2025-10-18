@@ -331,6 +331,10 @@ function goBack() {
   router.push({ name: 'projects' })
 }
 
+function goToTimeline() {
+  router.push({ name: 'project-timeline', params: { id: projectId.value } })
+}
+
 function openTask(t) {
   // Navigate to Tasks page; the Tasks view already handles details modal
   router.push({ name: 'tasks' })
@@ -445,7 +449,10 @@ onMounted(async () => {
 
   <div class="tasks-header">
     <h3 class="section-title">Tasks</h3>
-    <Button v-if="canManage" label="+ Add Task" class="btn-primary" @click="showAddModal=true" />
+    <div class="header-buttons">
+      <Button label="📅 Timeline View" class="btn-secondary" @click="goToTimeline" />
+      <Button v-if="canManage" label="+ Add Task" class="btn-primary" @click="showAddModal=true" />
+    </div>
   </div>
   <div class="tabs">
     <button :class="['tab', activeTab==='all' ? 'active' : '']" @click="activeTab='all'">All</button>
@@ -604,6 +611,7 @@ onMounted(async () => {
 .badge--on-hold { background:#fef3c7; color:#92400e; }
 .badge--archived { background:#e5e7eb; color:#374151; }
 .section-title { margin:16px 0 8px; }
+.header-buttons { display:flex; gap:8px; align-items:center; }
 .tabs { display:flex; gap:8px; margin:8px 0 12px; }
 .tab { border:1px solid #e5e7eb; background:#fff; color:#111827; padding:6px 12px; border-radius: var(--radius-pill); cursor:pointer; font-weight:600; }
 .tab.active { background:#111827; color:#fff; }

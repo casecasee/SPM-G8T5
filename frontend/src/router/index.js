@@ -5,6 +5,7 @@ import LoginPage from '../views/LoginPage.vue'
 import HomeView from '../views/HomeView.vue' 
 import ProjectsView from '../views/ProjectsView.vue' 
 import ProjectDetailView from '../views/ProjectDetailView.vue'
+import ProjectTimelineView from '../views/ProjectTimelineView.vue'
 
 
 const routes = [
@@ -37,6 +38,16 @@ const routes = [
     path: '/projects/:id',
     name: 'project-detail',
     component: ProjectDetailView,
+  },
+  {
+    path: '/projects/:id/timeline',
+    name: 'project-timeline',
+    component: ProjectTimelineView,
+  },
+  {
+    path: '/timeline',
+    name: 'timeline',
+    component: ProjectTimelineView,
   },
 ]
 

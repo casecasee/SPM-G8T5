@@ -11,6 +11,9 @@
                     placeholder="Search projects"
                     :disabled="loading"
                 />
+                <button class="btn-primary" @click="goToTimeline" :disabled="loading">
+                    📅 Timeline View
+                </button>
                 <button class="btn-primary" @click="openCreate" :disabled="loading">
                     Create Project
                 </button>
@@ -194,10 +197,13 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import MultiSelect from 'primevue/multiselect'
 import { getProjects, createProject } from '../api/projects'
 import { listTasks, updateTaskProject } from '../api/tasks'
 import axios from 'axios'
+
+const router = useRouter()
 
 const projects = ref([])
 const loading = ref(false)
@@ -444,6 +450,10 @@ async function onArchive() {
     }
 }
 
+function goToTimeline() {
+    router.push({ name: 'timeline' })
+}
+
 onMounted(async () => {
   await Promise.allSettled([load(), fetchEmployees()])
 })
@@ -482,8 +492,20 @@ onMounted(async () => {
     padding: 8px 14px;
     border-radius: 10px;
     cursor: pointer;
+    margin-left: 8px;
 }
 .btn-primary:disabled { opacity: 0.7; cursor: not-allowed; }
+
+.btn-secondary {
+    background: #6b7280;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    margin-right: 8px;
+}
+.btn-secondary:disabled { opacity: 0.7; cursor: not-allowed; }
 
 .filters-row {
     display: flex;
