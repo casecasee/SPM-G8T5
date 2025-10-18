@@ -12,7 +12,11 @@ app.config["SESSION_COOKIE_SECURE"] = True
 
 CORS(app, supports_credentials=True, origins=["http://localhost:5173", "http://localhost:5174"])
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI", "mysql+mysqlconnector://root@localhost:3306/SPM")
+# Only use production database if not testing
+if not os.getenv('TESTING'):
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI", "mysql+mysqlconnector://root@localhost:3306/SPM")
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # suppress warning msgs
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299} # do not timeout
 
