@@ -233,6 +233,7 @@ def mentionable_ids_for_task(task_id: int):
 
 @app.route('/tasks', methods=['POST'])
 def create_task():
+    # this endpoint creates both tasks and subtasks
     data = request.json
     print(data)
 
@@ -271,6 +272,28 @@ def create_task():
     )
     db.session.add(new_task)
     db.session.commit()
+# --------------------------- SUBTASKS CODE ----------------------------------------
+    id = new_task.task_id
+    if data.get('subtasks') != []:
+        # create subtasks
+        for st in data.get('subtasks'):
+            subtask = Task(
+                title=st['title'],
+                description=st['description'],
+                attachment=json.dumps(st.get('attachments', [])),
+                deadline=convert_datetime(st['deadline']),
+                status='unassigned',
+                project_id=new_task.project_id,
+                parent_id=id,
+                owner=new_task.owner,
+                collaborators=collaborators,
+                priority=st['priority']
+            )
+            db.session.add(subtask)
+        db.session.commit()
+# ------------------------------------------------------------------------------------
+
+
     return {"message": "Task created", "task_id": new_task.task_id}, 201
 
 
@@ -417,7 +440,6 @@ def update_task_status(task_id):
 def update_task(task_id):
 
     # Update task metadata (not status), frontend sends whole task object
-    # This method is not for assigning tasks aka editing owner
 
     # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority, owner}
     data = request.json
@@ -455,6 +477,7 @@ def update_task(task_id):
         update_stuff_by_status(curr_task, new_status) 
         # TODO: do the update stuff by status function
 
+    # TODO: check this
     if data['owner'] != curr_task.owner and role == 'manager': # owner changed, and only manager can change it
         new_owner = Staff.query.get(data['owner'])
         if new_owner is None:
@@ -519,55 +542,71 @@ def get_all_tasks():
     team = session['team']
     dept = session['department']
 
+# ------------------------------- old task code: get all tasks (no filtering) -------
+
     tasks = Task.query.all()
     tasks_list = [task.to_dict() for task in tasks]
     return jsonify({"tasks": tasks_list}), 200
 
-    # TODO: do filter
+# -----------------------------------------------------------------------------------------------
+
 
     # if staff or manager, get all tasks of team.
     # return as {my_tasks: [], team_tasks: [emp1: [list of tasks], emp2: [...]]}
+    # if there are subtasks within a task, nest them under parent task
 
-    if role == 'staff' or role == 'manager':
-        print('Getting tasks for staff/manager')
-        # get all tasks i am a collaborator and owner of
-        my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
-        my_tasks_list = [t.to_dict() for t in my_tasks]
-        # get all tasks of team members
-        team_members = Staff.query.filter_by(team=team).all()
-        team_tasks = {}
-        for member in team_members:
-            if member.employee_id == eid:
-                continue
-            member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
-            team_tasks[member.employee_name] = [t.to_dict() for t in member_tasks]
+# ----------- New task code: get tasks based on role ---------------------------------------------
+
+    # def top_level_tasks_for(employee_id):
+    #     return (Task.query.filter(
+    #                 Task.collaborators.any(employee_id=employee_id),
+    #                 Task.parent_id.is_(None)        # <-- only parents
+    #     ).all())
+
+    # if role == 'staff' or role == 'manager':
+    #     print('Getting tasks for staff/manager')
+    #     # get all tasks i am a collaborator and owner of
+    #     # my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
+    #     # my_tasks_list = [t.to_dict() for t in my_tasks]
+    #     my_tasks_list = [t.to_dict() for t in top_level_tasks_for(eid)]
+    #     # get all tasks of team members
+    #     team_members = Staff.query.filter_by(team=team).all()
+    #     team_tasks = {}
+    #     for member in team_members:
+    #         if member.employee_id == eid:
+    #             continue
+    #         # member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
+    #         member_tasks = top_level_tasks_for(member.employee_id)
+    #         team_tasks[member.employee_name] = [t.to_dict() for t in member_tasks]
         
-        return jsonify({"my_tasks": my_tasks_list, "team_tasks": team_tasks}), 200
+    #     return jsonify({"my_tasks": my_tasks_list, "team_tasks": team_tasks}), 200
 
 
-    # if role is director, get all task for department
-    # return as {my_tasks: [], dept_tasks : {team_A: [emp1: [list of tasks], emp2: [...]], team_B: [...]}
-    elif role == 'director' or role == 'senior manager' or role == 'hr':
-        print('Getting tasks for director/senior manager/hr')
-        # get all tasks i am a collaborator of (includes those im owner of)
-        my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
-        my_tasks_list = [t.to_dict() for t in my_tasks]
-        # get all tasks of department
-        dept_members = Staff.query.filter_by(department=dept).all()
-        # loop through members and group responses into team_tasks
-        dept_tasks = {} 
-        for member in dept_members:
-            if member.employee_id == eid:
-                continue
-            member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
-            team = member.team or "No Team"
-            if team not in dept_tasks:
-                dept_tasks[team] = {}
-            dept_tasks[team][member.employee_name] = [t.to_dict() for t in member_tasks]
+    # # if role is director, get all task for department
+    # # return as {my_tasks: [], dept_tasks : {team_A: [emp1: [list of tasks], emp2: [...]], team_B: [...]}
+    # elif role == 'director' or role == 'senior manager' or role == 'hr':
+    #     print('Getting tasks for director/senior manager/hr')
+    #     # get all tasks i am a collaborator of (includes those im owner of)
+    #     # my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
+    #     # my_tasks_list = [t.to_dict() for t in my_tasks]
+    #     my_tasks_list = [t.to_dict() for t in top_level_tasks_for(eid)]
+    #     # get all tasks of department
+    #     dept_members = Staff.query.filter_by(department=dept).all()
+    #     # loop through members and group responses into team_tasks
+    #     dept_tasks = {} 
+    #     for member in dept_members:
+    #         if member.employee_id == eid:
+    #             continue
+    #         # member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
+    #         member_tasks = top_level_tasks_for(member.employee_id)
+    #         member_team = member.team or "No Team"
+    #         if member_team not in dept_tasks:
+    #             dept_tasks[member_team] = {}
+    #         dept_tasks[member_team][member.employee_name] = [t.to_dict() for t in member_tasks]
         
-        return jsonify({"my_tasks": my_tasks_list, "dept_tasks": dept_tasks}), 200
+    #     return jsonify({"my_tasks": my_tasks_list, "dept_tasks": dept_tasks}), 200
 
-
+# --------------------------------------------------------------------------------------------------------------
     
 @app.route('/attachments/<path:filename>')
 def serve_attachment(filename):

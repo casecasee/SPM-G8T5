@@ -64,7 +64,7 @@ class Task(db.Model):
         # prevent self-loop: a task cannot be its own parent
         # CheckConstraint('parent_id IS NULL OR parent_id <> task_id', name='ck_task_no_self_parent'),)
     
-    def __init__(self, title, description, deadline, status, owner, collaborators, priority, start_date=None, attachment=None, project_id=None, completed_date=None, parent_id=None):
+    def __init__(self, title, description, deadline, status, owner, collaborators, priority, start_date=None, attachment=None, project_id=None, completed_date=None, parent_id=None, recurrence=None):
         self.title = title
         self.description = description
         self.deadline = deadline
@@ -77,12 +77,12 @@ class Task(db.Model):
         self.completed_date = completed_date 
         self.parent_id = parent_id
         self.collaborators = collaborators
+        self.recurrence = recurrence
 
-
-    
     # TODO: one layer of subtasks only
 
     def to_dict(self):
+        # print(self.subtasks.all())
         return {
             "task_id": self.task_id,
             "title": self.title,
@@ -95,7 +95,11 @@ class Task(db.Model):
             "parent_id": self.parent_id,
             "priority": self.priority,
             "collaborators": [collaborator.employee_id for collaborator in self.collaborators],
-            "subtasks": [subtask.task_id for subtask in self.subtasks]
+            "subtasks": [subtask.to_dict() for subtask in self.subtasks.all()],
+            "start_date": self.start_date.isoformat() if self.start_date else None,
+            "completed_date": self.completed_date.isoformat() if self.completed_date else None,
+            "created_at": self.created_at.isoformat(),
+            "recurrence": self.recurrence
         }
 
 
