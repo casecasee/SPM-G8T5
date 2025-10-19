@@ -52,6 +52,8 @@ class TaskApiTestCase(unittest.TestCase):
         with self.client.session_transaction() as sess:
             sess["employee_id"] = employee_id
             sess["role"] = role
+            sess["department"] = "Finance"
+            sess["team"] = "A"
 
     def test_create_lonely_task(self):
         self.login_as(self.owner_id, "staff")
@@ -280,6 +282,9 @@ class TaskApiTestCase(unittest.TestCase):
             self.assertEqual(task.status, "done", msg=f"Expected status 'done', got '{task.status}'")
             self.assertIsNotNone(task.completed_date, msg="completed_date not set on status update to done")
             now = datetime.now()
+            print("now:", now)
+            print("task.completed_date:", task.completed_date)
+            print('time taken: ', (now - task.completed_date).total_seconds())
             self.assertTrue((now - task.completed_date).total_seconds() < 10, msg="completed_date not set correctly on status update to done")
 
     def test_status_update_unassigned_to_under_review(self):
