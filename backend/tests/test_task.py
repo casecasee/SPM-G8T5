@@ -38,7 +38,6 @@ class TaskApiTestCase(unittest.TestCase):
 
             # seed tasks
 
-
             # Capture their IDs (primitive ints only)
             cls.owner_id = owner.employee_id
             cls.collab_id = collab.employee_id
@@ -72,7 +71,7 @@ class TaskApiTestCase(unittest.TestCase):
         # staff creates a task, should be "ongoing" by default
         self.login_as(self.owner_id, "staff")
         payload = {
-            "title": "Status Test Task",
+            "title": "Status Test Task (Staff)",
             "description": "Testing status assignment.",
             "priority": 2,
             "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
@@ -97,7 +96,7 @@ class TaskApiTestCase(unittest.TestCase):
         # manager creates a task, should be "unassigned" by default
         self.login_as(self.manager_id, "manager")
         payload = {
-            "title": "Status Test Task",
+            "title": "Status Test Task (Manager)",
             "description": "Testing status assignment.",
             "priority": 2,
             "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),

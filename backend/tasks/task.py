@@ -274,7 +274,8 @@ def create_task():
     db.session.commit()
 # --------------------------- SUBTASKS CODE ----------------------------------------
     id = new_task.task_id
-    if data.get('subtasks') != []:
+
+    if 'subtasks' in data and data['subtasks'] != []:
         # create subtasks
         for st in data.get('subtasks'):
             subtask = Task(
