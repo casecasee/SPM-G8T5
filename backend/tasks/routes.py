@@ -195,7 +195,7 @@ def update_task(task_id):
 
     # Track field changes
     def set_if_changed(attr, key):
-        nonlocal changed_fields
+        # nonlocal changed_fields
         if key in data and getattr(task, attr) != data.get(key):
             setattr(task, attr, data.get(key))
             changed_fields.append(key)
@@ -262,7 +262,7 @@ def update_task_legacy_route(task_id):
     old_deadline_str = task.deadline.isoformat() if task.deadline else None
 
     def set_if_changed(attr, key):
-        nonlocal changed_fields
+        # nonlocal changed_fields
         if key in data and getattr(task, attr) != data.get(key):
             setattr(task, attr, data.get(key))
             changed_fields.append(key)
