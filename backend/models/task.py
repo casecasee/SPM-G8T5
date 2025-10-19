@@ -1,14 +1,14 @@
 from models.extensions import db
 
 Task_Collaborators = db.Table(
-    'Task_Collaborators',
-    db.Column('task_id', db.Integer, db.ForeignKey('Task.task_id', ondelete='CASCADE'), primary_key=True),
+    'task_collaborators',
+    db.Column('task_id', db.Integer, db.ForeignKey('task.task_id', ondelete='CASCADE'), primary_key=True),
     db.Column('staff_id', db.Integer, db.ForeignKey('staff.employee_id', ondelete='CASCADE'), primary_key=True),
     mysql_engine="InnoDB"
 )
 
 class Task(db.Model):
-    __tablename__ = 'Task'
+    __tablename__ = 'task'
 
     task_id        = db.Column(db.Integer, primary_key=True)
     title          = db.Column(db.String(255), nullable=False)
@@ -29,7 +29,7 @@ class Task(db.Model):
     project_id     = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='SET NULL'), nullable=True, index=True)
 
     # self-referential unary relationship for one-level subtasks
-    parent_id      = db.Column(db.Integer, db.ForeignKey('Task.task_id', ondelete='CASCADE'), nullable=True)
+    parent_id      = db.Column(db.Integer, db.ForeignKey('task.task_id', ondelete='CASCADE'), nullable=True)
 
     # relationship wiring: parent <-> subtasks
     parent   = db.relationship('Task',

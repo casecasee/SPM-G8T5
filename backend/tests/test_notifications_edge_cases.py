@@ -16,8 +16,8 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from notifications.app import app, db, _create_notification, _send_deadline_reminders
-from notifications.models.notification import Notification, NotificationPreferences
-from notifications.models.staff import Staff
+from models.notification import Notification, NotificationPreferences
+from models.staff import Staff
 
 
 class TestEdgeCases(unittest.TestCase):

@@ -70,15 +70,19 @@ class TestProjectsAPI(unittest.TestCase):
     def setUp(self):
         """Set up fresh state before each test"""
         with self.app.app_context():
-            # Clean up any existing projects
+            # Clean up any existing projects and their members
             Project.query.delete()
+            # Explicitly clean up the association table
+            db.session.execute(db.text("DELETE FROM project_members"))
             db.session.commit()
 
     def tearDown(self):
         """Clean up after each test"""
         with self.app.app_context():
-            # Clean up projects created during test
+            # Clean up projects and their members created during test
             Project.query.delete()
+            # Explicitly clean up the association table
+            db.session.execute(db.text("DELETE FROM project_members"))
             db.session.commit()
 
     # ----------------------------------------------------------------------

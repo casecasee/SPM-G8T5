@@ -6,7 +6,7 @@ class Comment(db.Model):
     __tablename__ = 'task_comments'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    task_id = db.Column(db.Integer, db.ForeignKey('Task.task_id', ondelete='CASCADE'), nullable=False, index=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('task.task_id', ondelete='CASCADE'), nullable=False, index=True)
     author_id = db.Column(db.Integer, db.ForeignKey('staff.employee_id', ondelete='CASCADE'), nullable=False, index=True)
     content = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
