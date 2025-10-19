@@ -288,16 +288,105 @@ class TaskApiTestCase(unittest.TestCase):
             self.assertTrue((now - task.completed_date).total_seconds() < 10, msg="completed_date not set correctly on status update to done")
 
     def test_status_update_unassigned_to_under_review(self):
-        # how would this even work? is it possible? KIV
-        pass
+        # unassigned -> under review should set start_date
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Status Update Test Task (unassigned to under review)",
+            "description": "Testing status update from unassigned to under review.",
+            "priority": 2,
+            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(task.status, "ongoing", msg=f"Expected status 'ongoing', got '{task.status}'")
+        self.login_as(self.collab_id, "staff")
+        payload = {
+            "status": "under review"}
+        response = self.client.patch(f"/task/status/{task_id}", json=payload)
+        self.assertEqual(response.status_code, 200, msg=f"Status update failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task.start_date, msg="start_date not set on status update to under review")
+            now = datetime.now()
+            self.assertTrue((now - task.start_date).total_seconds() < 10, msg="start_date not set correctly on status update to under review")
 
     def test_status_update_unassigned_to_done(self):
-        # TODO: idk
-        pass
+        # unassigned -> done should set start_date and completed_date
+        self.login_as(self.manager_id, "manager")
+        payload = {
+            "title": "Status Update Test Task (unassigned to done)",
+            "description": "Testing status update from unassigned to done.",
+            "priority": 2,
+            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(task.status, "unassigned", msg=f"Expected status 'unassigned', got '{task.status}'")
+        
+        self.login_as(self.collab_id, "staff")
+        payload = {"status": "done"}
+        response = self.client.patch(f"/task/status/{task_id}", json=payload)
+        self.assertEqual(response.status_code, 200, msg=f"Status update failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task.start_date, msg="start_date not set on status update to done")
+            self.assertIsNotNone(task.completed_date, msg="completed_date not set on status update to done")
+            now = datetime.now()
+            self.assertTrue((now - task.start_date).total_seconds() < 10, msg="start_date not set correctly on status update to done")
+            self.assertTrue((now - task.completed_date).total_seconds() < 10, msg="completed_date not set correctly on status update to done")
 
     def test_status_update_under_review_to_done(self):
         # under review -> done should set completed_date
-        pass
+        self.login_as(self.collab_id, "staff")
+        payload = {
+            "title": "Status Update Test Task (under review to done)",
+            "description": "Testing status update from under review to done.",
+            "priority": 2,
+            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(task.status, "ongoing", msg=f"Expected status 'ongoing', got '{task.status}'")
+        
+        self.login_as(self.collab_id, "staff")
+        payload = {"status": "under review"} # first update to under review
+        response = self.client.patch(f"/task/status/{task_id}", json=payload)
+        self.assertEqual(response.status_code, 200, msg=f"Status update to under review failed: {response.status_code} {response.get_data(as_text=True)}")
+        payload = {"status": "done"} # then update to done
+        response = self.client.patch(f"/task/status/{task_id}", json=payload)
+        self.assertEqual(response.status_code, 200, msg=f"Status update to done failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task.completed_date, msg="completed_date not set on status update to done")
+            now = datetime.now()
+            self.assertTrue((now - task.completed_date).total_seconds() < 10, msg="completed_date not set correctly on status update to done")
 
     def test_status_update_invalid_new_status(self):
         # dont think its an issue cuz frontend dropdown
