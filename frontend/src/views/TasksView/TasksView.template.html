@@ -167,7 +167,7 @@
               <Dropdown
                 v-if="isOwnerOrCollaborator(task)"
                 v-model="task.status"
-                :options="filteredStatusOptions"
+                :options="getStatusOptionsForTask(task)"
                 optionLabel="label"
                 optionValue="value"
                 class="status-pill-dropdown"
@@ -203,7 +203,7 @@
             <Dropdown
                 v-if="isOwnerOrCollaborator(task)"
                 v-model="task.status"
-                :options="filteredStatusOptions"
+                :options="getStatusOptionsForTask(task)"
                 optionLabel="label"
                 optionValue="value"
                 class="status-pill-dropdown"
@@ -239,7 +239,7 @@
             <Dropdown
                 v-if="isOwnerOrCollaborator(task)"
                 v-model="task.status"
-                :options="filteredStatusOptions"
+                :options="getStatusOptionsForTask(task)"
                 optionLabel="label"
                 optionValue="value"
                 class="status-pill-dropdown"
@@ -327,15 +327,8 @@
           </div>
           
           <div class="form-group">
-            <label class="form-label">Status *</label>
-            <template v-if="isEditing || !selectedTask">
-              <Dropdown 
-                v-model="taskForm.status" :options="filteredStatusOptions" optionLabel="label" optionValue="value" :class="['form-input', { 'error': getFieldError('status') }]" :disabled="!canEdit(selectedTask)" placeholder="Select status..." data-field="status" />
-              <div v-if="getFieldError('status')" class="field-error">{{ getFieldError('status') }}</div>
-            </template>
-            <template v-else>
-              <div class="form-display status-display" :class="getStatusClass(taskForm.status)">{{ taskForm.status }}</div>
-            </template>
+            <label class="form-label">Status</label>
+            <div class="form-display status-display" :class="getStatusClass(taskForm.status)">{{ taskForm.status }}</div>
           </div>
           
           <div class="form-group">
@@ -639,7 +632,7 @@
                 <h4 class="subtask-title">{{ subtask.name }}</h4>
                 <div class="subtask-meta">
                   <Dropdown 
-                    v-model="subtask.status" :options="filteredStatusOptions" optionLabel="label" 
+                    v-model="subtask.status" :options="getStatusOptionsForSubtask(subtask)" optionLabel="label" 
                     optionValue="value" 
                     class="subtask-status-dropdown"
                     :class="getStatusClass(subtask.status)"

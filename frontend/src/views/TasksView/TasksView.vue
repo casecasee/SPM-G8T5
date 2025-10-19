@@ -155,12 +155,15 @@
     const subtaskFileUploadRef = ref(null)
 
     function resetForm() {
+    // Set default status based on role
+    const defaultStatus = (currentRole || '').toLowerCase() === 'staff' ? 'ongoing' : 'unassigned'
+    
     return {
         id: null,
         name: '',
         description: '',
         due_date: null,
-        status: null, // Start with null for validation
+        status: defaultStatus,
         priority: null, // Start with null for validation
         owner: currentEmployeeId, 
         collaborators: [], 
@@ -187,10 +190,8 @@
     if (!newSubtask.value.name.trim()) return
     
     subtasks.value.push({
-        id: Date.now(), // Temporary ID for new subtasks
-        ...newSubtask.value
+        ...newSubtask.value // Copy the new subtask values from main subtask array
     })
-    
     newSubtask.value = resetSubtaskForm()
     showSubtaskForm.value = false
     }
@@ -234,7 +235,6 @@
         return false
     }
     
-    if (isManagerRole.value) return true
     return isOwner(task)
     }
 
@@ -301,17 +301,13 @@
 
     const shouldShowNoTasksMessage = computed(() => {
     if (displayTasks.value.length > 0) return false
-    
     if (currentTab.value === 'my') return true
-    
     if (currentTab.value === 'team') {
         return teamSelectedEmployeeId.value !== null
     }
-    
     if (currentTab.value === 'departments') {
         return selectedDepartment.value !== null && departmentSelectedEmployeeId.value !== null
     }
-    
     return false
     })
 
@@ -349,6 +345,51 @@
     }
     return statusOptions;
     });
+
+    // For viewing existing tasks, show all status options except unassigned for staff
+    const allStatusOptions = computed(() => {
+        const role = (sessionStorage.getItem('role') || '').toLowerCase();
+        if (role === 'staff') {
+            return statusOptions.filter(opt => opt.value !== 'unassigned');
+        }
+        return statusOptions;
+    });
+
+    // Function to get status options for a specific task (includes current status even if filtered)
+    function getStatusOptionsForTask(task) {
+        const role = (sessionStorage.getItem('role') || '').toLowerCase();
+        let options = [...statusOptions];
+        
+        if (role === 'staff') {
+            // Filter out unassigned, but include it if it's the current status
+            options = statusOptions.filter(opt => opt.value !== 'unassigned');
+            
+            // If current status is unassigned, add it back so it can be displayed
+            if (task && task.status === 'unassigned') {
+                options.push({ label: 'Unassigned', value: 'unassigned' });
+            }
+        }
+        
+        return options;
+    }
+
+    // Function to get status options for a specific subtask (includes current status even if filtered)
+    function getStatusOptionsForSubtask(subtask) {
+        const role = (sessionStorage.getItem('role') || '').toLowerCase();
+        let options = [...statusOptions];
+        
+        if (role === 'staff') {
+            // Filter out unassigned, but include it if it's the current status
+            options = statusOptions.filter(opt => opt.value !== 'unassigned');
+            
+            // If current status is unassigned, add it back so it can be displayed
+            if (subtask && subtask.status === 'unassigned') {
+                options.push({ label: 'Unassigned', value: 'unassigned' });
+            }
+        }
+        
+        return options;
+    }
 
     async function fetchDepartments() {
     try {
@@ -391,14 +432,10 @@
     try {
         const res = await axios.get("http://localhost:5002/tasks", {
         withCredentials: true,
-        // params: {
-        //     eid: currentEmployeeId,
-        //     role: currentRole
-        // }
-        // NOT NEEDED - BACKEND USES SESSION TO IDENTIFY USER
+
         })
         console.log("API Response:", res.data)
-        const fetchedTasks = (res.data.tasks || []).map(t => {
+        const allTasks = (res.data.tasks || []).map(t => {
         // Parse attachments from JSON string
         let attachments = []
         if (t.attachment) {
@@ -426,12 +463,22 @@
             priority: t.priority || 5,
             owner: t.owner,
             project_id: t.project_id,
+            parent_id: t.parent_id,
             collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)) : [],
             attachments: attachments
         }
         })
 
-        tasks.value = fetchedTasks
+        // Organize tasks into parent-child relationships
+        const parentTasks = allTasks.filter(task => !task.parent_id)
+        const subtasks = allTasks.filter(task => task.parent_id)
+        
+        // Add subtasks to their parent tasks
+        parentTasks.forEach(parent => {
+            parent.subtasks = subtasks.filter(subtask => subtask.parent_id === parent.id)
+        })
+
+        tasks.value = parentTasks
         if (!availableEmployees.value || availableEmployees.value.length === 0) {
         try { await fetchEmployees() } catch (_) {}
         }
@@ -441,12 +488,9 @@
     }
 
     async function saveTask() {
-    // Clear previous validation errors
     clearValidationErrors()
     
-    // Validate form before saving
     if (!validateForm()) {
-        // Scroll to first error field
         const firstErrorField = Object.keys(formErrors.value)[0]
         if (firstErrorField) {
             const errorElement = document.querySelector(`[data-field="${firstErrorField}"]`)
@@ -492,6 +536,31 @@
             deadlineDate = futureDate.toISOString().slice(0, 19)
         }
 
+        // Prepare subtasks for payload
+        const subtasksPayload = subtasks.value.map(subtask => {
+            let subtaskDeadlineDate
+            if (subtask.due_date) {
+                subtaskDeadlineDate = subtask.due_date.includes(':') && !subtask.due_date.includes(':', 5) 
+                    ? subtask.due_date + ':00' 
+                    : subtask.due_date
+            } else {
+                const futureDate = new Date()
+                futureDate.setDate(futureDate.getDate() + 7)
+                subtaskDeadlineDate = futureDate.toISOString().slice(0, 19)
+            }
+
+            return {
+                title: subtask.name,
+                description: subtask.description,
+                deadline: subtaskDeadlineDate,
+                status: subtask.status || 'ongoing',
+                priority: subtask.priority,
+                owner: subtask.owner || taskForm.value.owner,
+                attachments: subtask.attachments || [],
+                collaborators: subtask.collaborators || []
+            }
+        })
+
         const payload = {
         title: taskForm.value.name,
         description: taskForm.value.description,
@@ -511,7 +580,8 @@
             }
             return selected
         })(),
-        role: currentRole
+        role: currentRole,
+        subtasks: subtasksPayload
         }
 
         let createdTaskId = null
@@ -553,6 +623,7 @@
 
         showModal.value = false
         taskForm.value = resetForm()
+        subtasks.value = [] // Clear subtasks after successful creation
         comments.value = [] // Clear comments when closing modal
         isEditing.value = false
     } catch (err) {
@@ -593,9 +664,7 @@
             errors.due_date = 'Due date is required'
         }
         
-        if (!taskForm.value.status || taskForm.value.status === null || taskForm.value.status === '') {
-            errors.status = 'Status is required'
-        }
+        // Status is automatically set based on role, no validation needed
         
         if (!taskForm.value.priority || taskForm.value.priority === null || taskForm.value.priority === '') {
             errors.priority = 'Priority is required'
@@ -705,6 +774,7 @@
     isEditing.value = true
     selectedTask.value = null
     taskForm.value = resetForm()
+    subtasks.value = [] 
     comments.value = [] // Clear any temporary comments
     clearValidationErrors() // Clear any validation errors
     await fetchEmployees()
@@ -748,8 +818,7 @@
     
     // Set default values if they're null when starting to edit
     if (taskForm.value.status === null) {
-        const role = (currentRole || '').toLowerCase()
-        taskForm.value.status = ['manager', 'hr', 'senior director', 'senior manager'].includes(role) ? 'unassigned' : 'ongoing'
+        taskForm.value.status = (currentRole || '').toLowerCase() === 'staff' ? 'ongoing' : 'unassigned'
     }
     if (taskForm.value.priority === null) {
         taskForm.value.priority = 5
