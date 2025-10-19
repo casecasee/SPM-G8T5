@@ -400,7 +400,12 @@ def update_task_status(task_id):
     # input {status, eid}
 
     data = request.json
-    new_status = data.get("status")
+    if 'status' not in data:
+        return {"message": "Status is required"}, 400
+    new_status = data['status']
+    if new_status not in ['unassigned', 'ongoing', 'under review', 'done']:
+        return {"message": "Invalid status value"}, 400
+    # new_status = data.get("status")
     eid = session['employee_id']
     curr_task = Task.query.get(task_id)
 
@@ -479,18 +484,19 @@ def update_task(task_id):
         # TODO: do the update stuff by status function
 
     # TODO: check this
-    if data['owner'] != curr_task.owner and role == 'manager': # owner changed, and only manager can change it
-        new_owner = Staff.query.get(data['owner'])
-        if new_owner is None:
-            return {"message": "New owner not found"}, 404
-        # SEND NOTIFICATION FOR TASK ASSIGNMENT
-        old_owner = curr_task.owner
-        curr_task.owner_staff = new_owner
-        if old_owner != new_owner.employee_id:
-            notify_task_assigned(task_id, new_owner.employee_id, eid)
-        # TODO: need to update status here
-    elif role == 'staff':
-        return {"message": "Only a manager can assign tasks"}, 403
+    if 'owner' in data:
+        if data['owner'] != curr_task.owner and role == 'manager': # owner changed, and only manager can change it
+            new_owner = Staff.query.get(data['owner'])
+            if new_owner is None:
+                return {"message": "New owner not found"}, 404
+            # SEND NOTIFICATION FOR TASK ASSIGNMENT
+            old_owner = curr_task.owner
+            curr_task.owner_staff = new_owner
+            if old_owner != new_owner.employee_id:
+                notify_task_assigned(task_id, new_owner.employee_id, eid)
+            # TODO: need to update status here
+        elif role == 'staff':
+            return {"message": "Only a manager can assign tasks"}, 403
 
     if 'collaborators' in data: # update collaborators, dont need to check same depertment etc because frontend should handle it
         ppl = data['collaborators']

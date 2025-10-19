@@ -165,29 +165,122 @@ class TaskApiTestCase(unittest.TestCase):
             self.assertIn(self.manager_id, collab_ids, msg="Manager not in collaborators")
 
     def test_create_task_date_invalid(self):
-        
+
         pass
 
     def test_create_task_missing_fields(self):
         # idk if frontend doing, we should do it too i guess, not a priority
         pass
 
+    def update_task_status_task_not_found(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "status": "ongoing"}
+        response = self.client.patch("/task/status/999999", json=payload)
+        self.assertEqual(response.status_code, 404, msg=f"Expected 404 for non-existent task, got {response.status_code}")
+
     def test_status_update_unassigned_to_ongoing(self):
         # unassigned -> ongoing should set start_date
         # unassigned, ongoing, under review, done
-        pass
+
+        self.login_as(self.manager_id, "manager")
+        payload = {
+            "title": "Status Update Test Task (unassigned to ongoing)",
+            "description": "Testing status update from unassigned to ongoing.",
+            "priority": 2,
+            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(task.status, "unassigned", msg=f"Expected status 'unassigned', got '{task.status}'")
+        self.login_as(self.collab_id, "staff")
+
+        payload = {
+            "status": "ongoing"}
+        response = self.client.patch(f"/task/status/{task_id}", json=payload)
+        self.assertEqual(response.status_code, 200, msg=f"Status update failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            # check start date is almost now
+            self.assertIsNotNone(task.start_date, msg="start_date not set on status update to ongoing")
+            now = datetime.now()
+            self.assertTrue((now - task.start_date).total_seconds() < 10, msg="start_date not set correctly on status update to ongoing")
 
     def test_status_update_ongoing_to_under_review(self):
         # ongoing -> under review idt anything much happens
-        pass
+
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Status Update Test Task (ongoing to under review)",
+            "description": "Testing status update from ongoing to under review.",
+            "priority": 2,
+            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(task.status, "ongoing", msg=f"Expected status 'ongoing', got '{task.status}'")
+        
+        self.login_as(self.collab_id, "staff")
+        payload = {
+            "status": "under review"}
+        response = self.client.patch(f"/task/status/{task_id}", json=payload)
+        self.assertEqual(response.status_code, 200, msg=f"Status update failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertEqual(task.status, "under review", msg=f"Expected status 'under review', got '{task.status}'")
 
     def test_status_update_ongoing_to_done(self):
         # ongoing -> done should set completed_date
-        pass
 
-    def test_status_update_ongoing_to_done(self):
-        # ongoing -> done should set completed_date
-        pass
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Status Update Test Task (ongoing to done)",
+            "description": "Testing status update from ongoing to done.",
+            "priority": 2,
+            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(task.status, "ongoing", msg=f"Expected status 'ongoing', got '{task.status}'")
+
+        self.login_as(self.collab_id, "staff")
+        payload = {
+            "status": "done"}
+        response = self.client.patch(f"/task/status/{task_id}", json=payload)
+        self.assertEqual(response.status_code, 200, msg=f"Status update failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertEqual(task.status, "done", msg=f"Expected status 'done', got '{task.status}'")
+            self.assertIsNotNone(task.completed_date, msg="completed_date not set on status update to done")
+            now = datetime.now()
+            self.assertTrue((now - task.completed_date).total_seconds() < 10, msg="completed_date not set correctly on status update to done")
 
     def test_status_update_unassigned_to_under_review(self):
         # how would this even work? is it possible? KIV
@@ -197,22 +290,129 @@ class TaskApiTestCase(unittest.TestCase):
         # TODO: idk
         pass
 
+    def test_status_update_under_review_to_done(self):
+        # under review -> done should set completed_date
+        pass
+
     def test_status_update_invalid_new_status(self):
         # dont think its an issue cuz frontend dropdown
-        pass
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Status Update Test Task (invalid status)",
+            "description": "Testing status update with invalid status.",
+            "priority": 2,
+            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
 
+        payload = {
+            "status": "invalid_status"
+        }
+        response = self.client.patch(f"/task/status/{task_id}", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Status update failed: {response.status_code} {response.get_data(as_text=True)}")
+        
     def test_status_update_task_not_found(self):
         # dont think its an issue cuz card will not exist, but error checking is implemented already
-        pass
+        self.login_as(self.owner_id, "staff")
+        response = self.client.patch("/task/status/999999", json={"status": "ongoing"})
+        self.assertEqual(response.status_code, 404, msg=f"Expected 404 for non-existent task, got {response.status_code}")
 
     def test_status_update_employee_not_collaborator(self):
-        pass
+        # only collaborators can update status
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Status Update Test Task (not collaborator)",
+            "description": "Testing status update by non-collaborator.",
+            "priority": 2,
+            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
 
-    def test_metadata_update_by_owner(self):
-        pass
+        # Try to update the status as a non-collaborator
+        self.login_as(self.manager_id, "manager")
+        response = self.client.patch(f"/task/status/{task_id}", json={"status": "ongoing"})
+        self.assertEqual(response.status_code, 403, msg=f"Expected 403 for non-collaborator, got {response.status_code}")
 
-    def test_metadata_update(self):
-        pass
+    # def test_metadata_update_by_owner(self):
+    #     # only owner can update metadata
+    #     self.login_as(self.owner_id, "staff")
+    #     payload = {
+    #         "title": "Metadata Update Test Task",
+    #         "description": "Testing metadata update by owner.",
+    #         "priority": 2,
+    #         "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+    #         "collaborators": [self.collab_id],
+    #         "attachments": [],
+    #     }
+    #     response = self.client.post("/tasks", json=payload)
+    #     self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    #     data = response.get_json()
+    #     task_id = data.get("task_id")
+    #     self.assertIsNotNone(task_id, msg="Response missing task_id")
+    #     # Update metadata
+    #     update_payload = {
+    #         "title": "Updated Metadata Task",
+    #         "description": "Updated description.",
+    #         "priority": 3,
+    #         "deadline": (datetime.now(UTC) + timedelta(days=10)).replace(microsecond=0).isoformat(),
+    #         # "attachments": ["file1.pdf", "file2.png"],
+    #     }
+    #     response = self.client.put(f"/task/{task_id}", json=update_payload)
+    #     self.assertEqual(response.status_code, 200, msg=f"Metadata update failed: {response.status_code} {response.get_data(as_text=True)}")
+    #     data = response.get_json()
+    #     with self.app.app_context():
+    #         task = Task.query.get(task_id)
+    #         self.assertIsNotNone(task, msg="Task not found in database")
+    #         self.assertEqual(task.title, update_payload["title"], msg="Title not updated")
+    #         self.assertEqual(task.description, update_payload["description"], msg="Description not updated")
+    #         self.assertEqual(task.priority, update_payload["priority"], msg="Priority not updated")
+    #         self.assertEqual(task.deadline, update_payload["deadline"], msg="Deadline not updated")
+    #         self.assertEqual(task.attachments, update_payload["attachments"], msg="Attachments not updated")
+
+    def test_metadata_update_by_non_owner(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Metadata Update Test Task (non-owner)",
+            "description": "Testing metadata update by non-owner.",
+            "priority": 2,
+            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Try to update metadata as collaborator (non-owner)
+        self.login_as(self.collab_id, "staff")
+        update_payload = {
+            "title": "Updated Metadata Task (non-owner)",
+            "description": "Updated description by non-owner.",
+            "priority": 3,
+            "deadline": (datetime.now(UTC) + timedelta(days=10)).replace(microsecond=0).isoformat(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 403, msg=f"Expected 403 for non-owner, got {response.status_code}")
+
+        # Try to update metadata as manager (should fail too)
+        self.login_as(self.manager_id, "manager")
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 403, msg=f"Expected 403 for non-owner manager, got {response.status_code}")
 
     def test_assign_tasks(self):
         pass
