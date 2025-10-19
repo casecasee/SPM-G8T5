@@ -487,6 +487,20 @@ def update_task_status(task_id):
 
     # set timestamps based on status
     old_status = curr_task.status
+    
+    # update status and other fields accordingly
+    # tasks will always pass through ongoing (either by default or after assignment), tasks may or may not pass through under review, tasks will always end at done
+    # if status from unassigned -> ongoing, set start_date
+    if curr_task.status == 'unassigned' and new_status == 'ongoing':
+        curr_task.start_date = datetime.now()
+
+    # unassigned -> under review ?
+
+    # if status from ongoing -> done, set completed_date
+    # regardless of start state, if status is done, set completed_date
+    elif new_status == 'done':
+        curr_task.completed_date = datetime.now()
+    
     curr_task.status = new_status
     set_timestamps_by_status(curr_task, old_status, new_status)
 

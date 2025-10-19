@@ -9,7 +9,7 @@ class Notification(db.Model):
     type = db.Column(db.String(50), nullable=False)
     title = db.Column(db.String(255), nullable=False)
     message = db.Column(db.Text)
-    related_task_id = db.Column(db.Integer, db.ForeignKey('Task.task_id', ondelete='CASCADE'), nullable=True)
+    related_task_id = db.Column(db.Integer, db.ForeignKey('task.task_id', ondelete='CASCADE'), nullable=True)
     related_project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=True)
     related_comment_id = db.Column(db.Integer, db.ForeignKey('task_comments.id', ondelete='CASCADE'), nullable=True)
     is_read = db.Column(db.Boolean, default=False)
@@ -61,7 +61,7 @@ class DeadlineNotificationLog(db.Model):
     __tablename__ = 'deadline_notification_log'
     
     log_id = db.Column(db.String(36), primary_key=True)
-    task_id = db.Column(db.Integer, db.ForeignKey('Task.task_id', ondelete='CASCADE'), nullable=False, index=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('task.task_id', ondelete='CASCADE'), nullable=False, index=True)
     staff_id = db.Column(db.Integer, db.ForeignKey('staff.employee_id', ondelete='CASCADE'), nullable=False)
     notification_type = db.Column(db.String(50), nullable=False)
     sent_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
