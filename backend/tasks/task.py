@@ -14,7 +14,7 @@ from models.comment import Comment
 from models.comment_mention import CommentMention
 from models.comment_attachment import CommentAttachment
 from models.project import Project
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 import os
 
@@ -60,17 +60,28 @@ def get_collaborators(collaborator_ids):
             collaborators.append(staff)
     return collaborators
 
-def update_stuff_by_status(curr_task, new_status):
-    from datetime import datetime
-    if curr_task.status == 'unassigned' and new_status == 'ongoing':
-        curr_task.start_date = datetime.now()
-    elif curr_task.status == 'ongoing' and new_status == 'done':
-        curr_task.completed_date = datetime.now()
-    # elif curr_task.status == 'ongoing' and new_status == 'under review':
-    #     pass
-    # elif curr_task.status == 'under review' and new_status == 'done':
-    #     curr_task.completed_date = datetime.now()
-    curr_task.status = new_status
+def set_timestamps_by_status(task, old_status, new_status):
+    """Set start_date and completed_date based on status transitions"""
+
+    # if initial status is unassigned -> anything, set start_date
+    # if new status is done, set completed_date
+    # if initial status is None (new task), set start_date if status is anything other than unassigned, set end date as well if done
+    # eg if unassigned -> done, set both start and end date
+
+    if old_status == new_status:
+        return  # no change
+
+    now = datetime.now()
+    if old_status == None: # new task
+        if new_status != 'unassigned':
+            task.start_date = now
+        if new_status == 'done':
+            task.completed_date = now
+    else:
+        if old_status == 'unassigned' and new_status != 'unassigned':
+            task.start_date = now
+        if new_status == 'done':
+            task.completed_date = now
 
 # ------------------ Notification Helpers ------------------
 
@@ -233,69 +244,119 @@ def mentionable_ids_for_task(task_id: int):
 
 @app.route('/tasks', methods=['POST'])
 def create_task():
-    # this endpoint creates both tasks and subtasks
+    # this endpoint creates handles task and subtask when creating (add task button on frontend)
+
+    # input: {title, description, attachment(o), deadline, project_id(o), collaborators[], priority, owner, }
     data = request.json
-    print(data)
 
-    # input {title, description, attachment(o), deadline, project_id, parent_id, collaborators[], priority, owner}
-
-    role = session['role']
+    # session info
     eid = session['employee_id']
+    role = session['role']
+    team = session['team']
+    dept = session['department']
 
-    # check if task title already exists
+    # check if required fields are present
+    # title, desc, deadline, priority are compulsory
+    if 'title' not in data or 'description' not in data or 'deadline' not in data or 'priority' not in data:
+        return {"message": "Missing required fields"}, 400
+    
+    # check if task already exists with same title
     existing_task = Task.query.filter_by(title=data['title']).first()
     if existing_task:
-        return {"message": "Task title already exists"}, 400
-
-    status = 'ongoing' if role == 'staff' else 'unassigned' # set status by role of person creating it
+        return {"message": "Task with this title already exists"}, 400
     
-    ppl = data.get('collaborators', [])
-    ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
-    collaborators = get_collaborators(ppl)
+    # add owner as collaborator
+    collaborators_ids = data.get('collaborators', [])
+    # TODO: validate that collaborators are in the same dept (lonely tasks)
+    # TODO: validate that collaborators are in the same project if project_id is given
+    if eid not in collaborators_ids:
+        collaborators_ids.append(eid)
+    collaborators = Staff.query.filter(Staff.employee_id.in_(collaborators_ids)).all()
 
-    # frontend will make sure deadline is not before today
+        # TODO: check if collaborators are subset of project if project_id is given
+    
+    # handle deadline
+    UTC = timezone.utc
+    deadline = convert_datetime(data['deadline'])
+    if deadline <= datetime.now(UTC):
+        return {"message": "Deadline must be in the future"}, 400
 
-    # Convert attachments array to JSON string
+    # handle attachements
     attachments_json = json.dumps(data.get('attachments', []))
 
+    # handle status
+    status = 'ongoing' if role == 'staff' else 'unassigned' 
+
+    # create task object
     new_task = Task(
         title=data['title'],
         description=data['description'],
-        attachment=attachments_json,  # Store as JSON string
-        deadline=convert_datetime(data['deadline']), # datetime is required
-        status=status, # calculated above
-        project_id=data.get('project_id'), # o
-        parent_id=data.get('parent_id'), # o
-        owner=data.get('owner', eid),  # Use provided owner or fallback to current user
-        collaborators=collaborators,
-        priority=data['priority'] # required 
+        attachment=attachments_json,
+        deadline=deadline,
+        project_id=data.get('project_id'),
+        # parent_id=data.get('parent_id'), only for subtasks, handled separately
+        priority=data['priority'],
+        owner=eid,
+        collaborators=collaborators, 
+        status=status
     )
+
+    # set timestamps based on status
+    set_timestamps_by_status(new_task, None, status)
+
     db.session.add(new_task)
     db.session.commit()
-# --------------------------- SUBTASKS CODE ----------------------------------------
+
     id = new_task.task_id
 
-    if 'subtasks' in data and data['subtasks'] != []:
-        # create subtasks
-        for st in data.get('subtasks'):
-            subtask = Task(
-                title=st['title'],
-                description=st['description'],
-                attachment=json.dumps(st.get('attachments', [])),
-                deadline=convert_datetime(st['deadline']),
-                status='unassigned',
-                project_id=new_task.project_id,
+    # subtasks
+    if 'subtasks' in data:
+        subtasks_data = data['subtasks']
+        for subtask in subtasks_data:
+            # check required fields
+            if 'title' not in subtask or 'description' not in subtask or 'deadline' not in subtask or 'priority' not in subtask:
+                return {"message": "Missing required fields in subtask"}, 400
+            
+            # add owner as collaborator
+            sub_collaborators_ids = subtask.get('collaborators', [])
+            if eid not in sub_collaborators_ids:
+                sub_collaborators_ids.append(eid)
+            # make sure subtask collaborators are subset of task collaborators
+            for cid in sub_collaborators_ids:
+                if cid not in collaborators_ids:
+                    return {"message": f"Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
+            sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
+            
+            # handle deadline
+            sub_deadline = convert_datetime(subtask['deadline'])
+            if sub_deadline <= datetime.now(UTC):
+                return {"message": "Subtask deadline must be in the future"}, 400
+            
+            # handle attachments
+            sub_attachments_json = json.dumps(subtask.get('attachments', []))
+
+            # handle status
+            sub_status = 'ongoing' if role == 'staff' else 'unassigned'
+
+            # create subtask object
+            new_subtask = Task(
+                title=subtask['title'],
+                description=subtask['description'],
+                attachment=sub_attachments_json,
+                deadline=sub_deadline,
+                project_id=data.get('project_id'),
                 parent_id=id,
-                owner=new_task.owner,
-                collaborators=collaborators,
-                priority=st['priority']
+                priority=subtask['priority'],
+                owner=eid,
+                collaborators=sub_collaborators,
+                status=sub_status
             )
-            db.session.add(subtask)
+            # set timestamps based on status
+            set_timestamps_by_status(new_subtask, None, sub_status)
+            db.session.add(new_subtask)
         db.session.commit()
-# ------------------------------------------------------------------------------------
 
-
-    return {"message": "Task created", "task_id": new_task.task_id}, 201
+    return {"message": "Task created", "task_id": id}, 201
 
 
 @app.route("/projects/<int:project_id>/timeline", methods=["GET"])
@@ -396,44 +457,53 @@ def get_project_timeline(project_id):
 
 @app.route("/task/status/<int:task_id>", methods=["PATCH"])
 def update_task_status(task_id):
-    
-    # input {status, eid}
+    # This endpoint only updates task status
 
+    # input {status: new_status}
     data = request.json
-    if 'status' not in data:
-        return {"message": "Status is required"}, 400
-    new_status = data['status']
-    if new_status not in ['unassigned', 'ongoing', 'under review', 'done']:
-        return {"message": "Invalid status value"}, 400
-    # new_status = data.get("status")
+
+    # session info
     eid = session['employee_id']
-    curr_task = Task.query.get(task_id)
+    role = session['role']
+    team = session['team']
+    dept = session['department']
 
-    if curr_task is None: # check if task exists 
-        return {"message": "Task not found"}, 404
-
-    # check if employee is a collaborator
-    if curr_task.collaborators.filter_by(employee_id=eid).first() is None:
-        print('not collab')
-        return {"message": "You are not a collaborator of this task"}, 403
+    # validate input
+    if 'status' not in data:
+        return {"message": "Missing status field"}, 400
+    new_status = data['status']
+    if new_status not in ['unassigned', 'ongoing', 'done', 'under review']: # TODO: change 'done' to 'completed' later
+        return {"message": "Invalid status value"}, 400
     
-    # SAVE OLD STATUS FOR NOTIFICATION
+    # check if task exists
+    curr_task = Task.query.get(task_id)
+    if curr_task is None:
+        return {"message": "Task not found"}, 404
+    
+    # only collaborators can update status
+    collaborator_ids = [staff.employee_id for staff in curr_task.collaborators]
+    if eid not in collaborator_ids:
+        return {"message": "Only collaborators can update task status"}, 403
+
+    # set timestamps based on status
     old_status = curr_task.status
     
     # update status and other fields accordingly
     # tasks will always pass through ongoing (either by default or after assignment), tasks may or may not pass through under review, tasks will always end at done
     # if status from unassigned -> ongoing, set start_date
     if curr_task.status == 'unassigned' and new_status == 'ongoing':
-        curr_task.start_date = time.strftime('%Y-%m-%d %H:%M:%S')
+        curr_task.start_date = datetime.now()
 
     # unassigned -> under review ?
 
     # if status from ongoing -> done, set completed_date
     # regardless of start state, if status is done, set completed_date
     elif new_status == 'done':
-        curr_task.completed_date = time.strftime('%Y-%m-%d %H:%M:%S')
+        curr_task.completed_date = datetime.now()
     
     curr_task.status = new_status
+    set_timestamps_by_status(curr_task, old_status, new_status)
+
     db.session.commit()
 
     # SEND NOTIFICATION IF STATUS CHANGED

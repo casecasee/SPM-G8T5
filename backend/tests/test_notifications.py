@@ -23,8 +23,8 @@ from notifications.app import (
     app, db, _create_notification, _get_task, _get_task_recipients,
     _send_deadline_reminders, _within_day
 )
-from notifications.models.notification import Notification, NotificationPreferences, DeadlineNotificationLog
-from notifications.models.staff import Staff
+from models.notification import Notification, NotificationPreferences, DeadlineNotificationLog
+from models.staff import Staff
 
 
 class TestDeadlineNotifications(unittest.TestCase):
