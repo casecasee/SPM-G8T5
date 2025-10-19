@@ -116,29 +116,29 @@ class TaskApiTestCase(unittest.TestCase):
             self.assertIsNotNone(task, msg="Task not found in database")
             self.assertEqual(task.status, "unassigned", msg=f"Expected status 'unassigned', got '{task.status}'")
 
-    # def test_create_task_status_assignment_director(self):
-    #     # director creates a task, should be "unassigned" by default
-    #     self.login_as(self.manager_id, "manager")
-    #     payload = {
-    #         "title": "Status Test Task",
-    #         "description": "Testing status assignment.",
-    #         "priority": 2,
-    #         "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
-    #         "collaborators": [self.collab_id],
-    #         "attachments": [],
-    #     }
+    def test_create_task_status_assignment_director(self):
+        # director creates a task, should be "unassigned" by default
+        self.login_as(self.manager_id, "manager")
+        payload = {
+            "title": "Status Test Task",
+            "description": "Testing status assignment.",
+            "priority": 2,
+            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
 
-    #     response = self.client.post("/tasks", json=payload)
-    #     self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
-    #     data = response.get_json()
-    #     task_id = data.get("task_id")
-    #     self.assertIsNotNone(task_id, msg="Response missing task_id")
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
 
-    #     # Fetch the created task directly from the database to verify status
-    #     with self.app.app_context():
-    #         task = Task.query.get(task_id)
-    #         self.assertIsNotNone(task, msg="Task not found in database")
-    #         self.assertEqual(task.status, "unassigned", msg=f"Expected status 'unassigned', got '{task.status}'")
+        # Fetch the created task directly from the database to verify status
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(task.status, "unassigned", msg=f"Expected status 'unassigned', got '{task.status}'")
 
     def test_create_task_collaborators_list(self):
         # final collaborator list should include owner
@@ -165,6 +165,7 @@ class TaskApiTestCase(unittest.TestCase):
             self.assertIn(self.manager_id, collab_ids, msg="Manager not in collaborators")
 
     def test_create_task_date_invalid(self):
+        
         pass
 
     def test_create_task_missing_fields(self):
