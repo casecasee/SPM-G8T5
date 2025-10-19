@@ -176,7 +176,7 @@
                 @click.stop
               />
             <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
-            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) }}</b></p>
+            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
           </template>
         </Card>
       </div>
@@ -212,7 +212,7 @@
                 @click.stop
               />
             <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
-            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) }}</b></p>
+            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
           </template>
         </Card>
       </div>
@@ -248,7 +248,7 @@
                 @click.stop
               />
             <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
-            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) }}</b></p>
+            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
           </template>
         </Card>
       </div>
@@ -358,16 +358,27 @@
       </div>
 
       <!-- Assignment Section -->
-      <div class="form-section">
-        <h3 class="section-title">Assignment</h3>
+      <div class="form-section assignment-section">
+        <h3 class="section-title">
+          Task Assignment
+        </h3>
         
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Owner</label>
-            <template v-if="canAssignTasks() && isEditing">
+            <div v-if="canAssignTasks() && isEditing && selectedTask" class="assignment-notice">
+              <label>You are assigning this task to a team member. The selected person will become the new owner.</label>
+            </div>
+            <template v-if="canAssignTasks() && isEditing && selectedTask">
               <Dropdown
-                v-model="taskForm.owner" :options="employeeDisplayList"
-                optionLabel="display_label" optionValue="employee_id" class="form-input" :disabled="!canEdit(selectedTask)" placeholder="Select owner..." data-field="owner" filter filterBy="display_label,employee_name,role,team,department" />
+                v-model="taskForm.owner" :options="ownerAssignmentList"
+                optionLabel="display_label" optionValue="employee_id" 
+                class="form-input assignment-dropdown" 
+                :disabled="!canEdit(selectedTask)" 
+                placeholder="Select new owner..." 
+                data-field="owner" 
+                filter 
+                filterBy="display_label,employee_name,role,team,department" />
             </template>
             <template v-else>
               <div class="form-display">{{ getOwnerName(taskForm.owner) || currentEmployeeName }}</div>

@@ -239,7 +239,13 @@
     }
 
     function canAssignTasks() {
-    return isManagerRole.value
+    const role = (currentRole || '').toLowerCase()
+    return role === 'manager' || role === 'director' || role === 'senior manager'
+    }
+
+    function canAssignOwners() {
+    const role = (currentRole || '').toLowerCase()
+    return role === 'manager' || role === 'director' || role === 'senior manager'
     }
 
     const isManagerRole = computed(() => (currentRole || '').toLowerCase() !== 'staff')
@@ -762,6 +768,20 @@
     }))
     })
 
+    // Employee list for owner assignment (excludes current user)
+    const ownerAssignmentList = computed(() => {
+    const role = (currentRole || '').toLowerCase()
+    const showMeta = role === 'senior manager' || role === 'hr'
+    return (availableEmployees.value || [])
+        .filter(emp => emp.employee_id !== currentEmployeeId) // Exclude current user
+        .map(emp => ({
+            ...emp,
+            display_label: showMeta
+            ? `${emp.employee_name} [${[emp.role, emp.team, emp.department].filter(Boolean).join(' • ')}]`
+            : emp.employee_name
+        }))
+    })
+
     function getCollaboratorNames(collaboratorIds) {
     if (!Array.isArray(collaboratorIds) || collaboratorIds.length === 0) return ''
     const names = collaboratorIds
@@ -815,6 +835,12 @@
     async function startEditing() {
     isEditing.value = true
     await fetchEmployees()
+    
+    // Fetch department employees for owner assignment (managers/directors only)
+    if (canAssignOwners()) {
+        const depRaw = sessionStorage.getItem("department") || ""
+        await fetchDepartmentEmployees(depRaw)
+    }
     
     // Set default values if they're null when starting to edit
     if (taskForm.value.status === null) {
