@@ -15,6 +15,7 @@ from models.comment_mention import CommentMention
 from models.comment_attachment import CommentAttachment
 from models.project import Project
 from datetime import datetime, timezone
+import zoneinfo
 import re
 import os
 
@@ -47,10 +48,33 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299}
 
 db.init_app(app)
 
-def convert_datetime(input_str: str):
-    from datetime import datetime
-    dt = datetime.fromisoformat(input_str)
-    return dt
+UTC = timezone.utc
+
+def convert_datetime(iso_str: str):
+    """
+    Accepts ISO 8601 strings like '2025-10-25T18:30:00Z' or with an offset.
+    Returns a naive datetime that represents UTC time (for MySQL DATETIME).
+    """
+    if not isinstance(iso_str, str):
+        raise ValueError("deadline must be a string")
+
+    s = iso_str.replace("Z", "+00:00")
+    dt = datetime.fromisoformat(s)  # aware if offset present, naive if none
+
+    if dt.tzinfo is None:
+        # Decide your policy: reject or assume UTC. Rejecting is safer.
+        raise ValueError("deadline must include timezone (e.g., 'Z' or '+00:00')")
+
+    dt_utc = dt.astimezone(timezone.utc).replace(microsecond=0)
+    return dt_utc.replace(tzinfo=None)  # naive but represents UTC
+
+
+# def datetime_now():
+#     # replace 'America/New_York' with your actual IANA timezone name
+#     local_tz = zoneinfo.ZoneInfo("America/New_York")
+
+#     dt = datetime.now(local_tz)
+#     return dt
 
 def get_collaborators(collaborator_ids):
     collaborators = []
@@ -276,9 +300,9 @@ def create_task():
         # TODO: check if collaborators are subset of project if project_id is given
     
     # handle deadline
-    UTC = timezone.utc
+    # UTC = timezone.utc
     deadline = convert_datetime(data['deadline'])
-    if deadline <= datetime.now(UTC):
+    if deadline.replace(tzinfo=UTC) <= datetime.now(UTC):
         return {"message": "Deadline must be in the future"}, 400
 
     # handle attachements
@@ -329,7 +353,7 @@ def create_task():
             
             # handle deadline
             sub_deadline = convert_datetime(subtask['deadline'])
-            if sub_deadline <= datetime.now(UTC):
+            if sub_deadline.replace(tzinfo=UTC) <= datetime.now(UTC):
                 return {"message": "Subtask deadline must be in the future"}, 400
             
             # handle attachments
@@ -499,7 +523,7 @@ def update_task_status(task_id):
     # if status from ongoing -> done, set completed_date
     # regardless of start state, if status is done, set completed_date
     elif new_status == 'done':
-        curr_task.completed_date = datetime.now()
+        curr_task.completed_date = datetime.now(UTC).replace(tzinfo=None)
     
     curr_task.status = new_status
     set_timestamps_by_status(curr_task, old_status, new_status)
@@ -514,67 +538,182 @@ def update_task_status(task_id):
 
 @app.route("/task/<int:task_id>", methods=["PUT"])
 def update_task(task_id):
+    # this endpoint updates task details except status (status will still be given but it will be the same as current status - i think ?)
 
-    # Update task metadata (not status), frontend sends whole task object
+    # frontend greys out status field, but we still validate it here
 
-    # input {title, description, attachment(o), deadline, status, project_id, parent_id, employee_id, collaborators[], priority, owner}
+    # input: {title, description, attachment(o), deadline, project_id(o), collaborators[], priority, owner, status}
     data = request.json
-    curr_task = Task.query.get(task_id)
+
+    # session info
     eid = session['employee_id']
     role = session['role']
-    # team = session['team'] #TODO: set this in login and use here
+    team = session['team']
+    dept = session['department']
 
-    if curr_task is None: # check if task exists 
+    # check if task exists
+    curr_task = Task.query.get(task_id)
+    if curr_task is None:
         return {"message": "Task not found"}, 404
-
-    if curr_task.owner != eid: # only owner can update task
-        return {"message": "Only the owner can update the task"}, 403
     
-    # SAVE OLD DEADLINE FOR NOTIFICATION
+    # only owner can update task details
+    if curr_task.owner != eid:
+        return {"message": "Only task owner can update task details"}, 403
+    
+    # save old deadline for notification
     old_deadline = curr_task.deadline
-
-    # update fields
-    curr_task.title = data.get('title', curr_task.title)
-    curr_task.description = data.get('description', curr_task.description)
+    old_status = curr_task.status
     
-    # Handle attachments as JSON array
+    # validate and update fields
+    if 'title' in data:
+        curr_task.title = data['title']
+
+    if 'description' in data:
+        curr_task.description = data['description']
+
+    if 'deadline' in data:
+        deadline = convert_datetime(data['deadline'])
+        if deadline.replace(tzinfo=UTC) <= datetime.now(UTC):
+            return {"message": "Deadline must be in the future"}, 400
+        curr_task.deadline = deadline
+
+    if 'priority' in data:
+        curr_task.priority = data['priority']
+
+    if 'project_id' in data:
+        curr_task.project_id = data['project_id']
+        # TODO: check if collaborators are subset of project if project_id is given
+
     if 'attachments' in data:
         curr_task.attachment = json.dumps(data['attachments'])
-    
-    if 'deadline' in data:
-        curr_task.deadline = convert_datetime(data['deadline'])
 
-    curr_task.project_id = data.get('project_id', curr_task.project_id) #TODO: deal with it when doing projects
-    curr_task.parent_id = data.get('parent_id', curr_task.parent_id) #TODO: deal with it when doing subtasks
-    curr_task.priority = data.get('priority', curr_task.priority)
+    if 'status' in data:
+        if curr_task.status != data['status']:
+            return {"message": "Status cannot be changed in this endpoint"}, 400
+        
+    # assign and collaborators thing
+        # assign: remove old owner from collaborators, add new owner to collaborators
+        # collaborators: ensure owner is in collaborators
+        # what if they select a new owner and then
+        # either way, just take new collab list and add owner to it (if not already present)
 
-    if 'status' in data: #TODO: idk if frontend will send status here
-        new_status = data['status']
-        update_stuff_by_status(curr_task, new_status) 
-        # TODO: do the update stuff by status function
-
-    # TODO: check this
+    # assign part
     if 'owner' in data:
-        if data['owner'] != curr_task.owner and role == 'manager': # owner changed, and only manager can change it
-            new_owner = Staff.query.get(data['owner'])
-            if new_owner is None:
-                return {"message": "New owner not found"}, 404
-            # SEND NOTIFICATION FOR TASK ASSIGNMENT
+        print('updating owner')
+        print(f"Current owner: {curr_task.owner}, New owner: {data['owner']}")
+        if data['owner'] != curr_task.owner:
             old_owner = curr_task.owner
-            curr_task.owner_staff = new_owner
-            if old_owner != new_owner.employee_id:
-                notify_task_assigned(task_id, new_owner.employee_id, eid)
-            # TODO: need to update status here
-        elif role == 'staff':
-            return {"message": "Only a manager can assign tasks"}, 403
-
-    if 'collaborators' in data: # update collaborators, dont need to check same depertment etc because frontend should handle it
-        ppl = data['collaborators']
-        ppl.append(eid) # add owner to collaborators (no need check duplicates because frontend should handle it)
-        collaborators = Staff.query.filter(Staff.employee_id.in_(ppl)).all()
+            curr_task.owner = data['owner']
+            # change status to ongoing if staff
+            # handle status 
+             # status only changes from unassigned to ongoing if owner is staff
+             # else remains unchanged
+            new_owner_role = Staff.query.get(data['owner']).role.lower()
+            if new_owner_role == 'staff':
+                if curr_task.status == 'unassigned':
+                    curr_task.status = 'ongoing'
+    
+    set_timestamps_by_status(curr_task, old_status, curr_task.status)
+    
+    if 'collaborators' in data:
+        # TODO: validate that collaborators are in the same dept (lonely tasks)
+        # TODO: validate that collaborators are in the same project if project_id is given
+        collaborators_ids = data['collaborators']
+        # ensure owner is in collaborators
+        if curr_task.owner not in collaborators_ids:
+            collaborators_ids.append(curr_task.owner)
+        collaborators = Staff.query.filter(Staff.employee_id.in_(collaborators_ids)).all()
         curr_task.collaborators = collaborators
 
     db.session.commit()
+
+    # handle subtasks
+    # TODO: check this
+    # subtasks can be updated or created here
+    # if subtask has task_id, update existing subtask
+    # else create new subtask
+    # omg 
+
+    id = curr_task.task_id
+
+    if 'subtasks' in data:
+        subtasks_data = data['subtasks']
+        for subtask in subtasks_data:
+            if task_id in subtask:
+                subtask_id = subtask['task_id']
+                existing_subtask = Task.query.get(subtask_id)
+                if existing_subtask is None:
+                    return {"message": f"Subtask with id {subtask_id} not found"}, 404
+                
+                # update existing subtask
+                if 'title' in subtask:
+                    existing_subtask.title = subtask['title']
+                if 'description' in subtask:
+                    existing_subtask.description = subtask['description']
+                if 'deadline' in subtask:
+                    sub_deadline = convert_datetime(subtask['deadline'])
+                    if sub_deadline.replace(tzinfo=UTC) <= datetime.now(UTC):
+                        return {"message": "Subtask deadline must be in the future"}, 400
+                    existing_subtask.deadline = sub_deadline
+                if 'priority' in subtask:
+                    existing_subtask.priority = subtask['priority']
+                if 'attachments' in subtask:
+                    existing_subtask.attachment = json.dumps(subtask.get('attachments', []))
+                if 'collaborators' in subtask:
+                    sub_collaborators_ids = subtask['collaborators']
+                    # ensure owner is in collaborators
+                    if existing_subtask.owner not in sub_collaborators_ids:
+                        sub_collaborators_ids.append(existing_subtask.owner)
+                    # make sure subtask collaborators are subset of task collaborators
+                    for cid in sub_collaborators_ids:
+                        if cid not in collaborators_ids:
+                            return {"message": f"Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
+                    sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
+                    existing_subtask.collaborators = sub_collaborators
+                
+                
+            else:
+                # check required fields
+                if 'title' not in subtask or 'description' not in subtask or 'deadline' not in subtask or 'priority' not in subtask:
+                    return {"message": "Missing required fields in subtask"}, 400
+                
+                # add owner as collaborator
+                sub_collaborators_ids = subtask.get('collaborators', [])
+                if eid not in sub_collaborators_ids:
+                    sub_collaborators_ids.append(eid)
+                # make sure subtask collaborators are subset of task collaborators
+                for cid in sub_collaborators_ids:
+                    if cid not in collaborators_ids:
+                        return {"message": f"Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
+                sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
+                
+                # handle deadline
+                sub_deadline = convert_datetime(subtask['deadline'])
+                if sub_deadline.replace(tzinfo=UTC) <= datetime.now(UTC):
+                    return {"message": "Subtask deadline must be in the future"}, 400
+                
+                # handle attachments
+                sub_attachments_json = json.dumps(subtask.get('attachments', []))
+
+                # handle status
+                # TODO: confirm business requirements for subtask status on creation
+                sub_status = 'ongoing' if role == 'staff' else 'unassigned' 
+
+                # create subtask object
+                new_subtask = Task(
+                    title=subtask['title'],
+                    description=subtask['description'],
+                    attachment=sub_attachments_json,
+                    deadline=sub_deadline,
+                    project_id=data.get('project_id'),
+                    parent_id=id,
+                    priority=subtask['priority'],
+                    owner=eid,
+                    collaborators=sub_collaborators,
+                    status=sub_status
+                )
+                db.session.add(new_subtask)
+        db.session.commit()
 
     # SEND NOTIFICATION IF DEADLINE CHANGED
     if old_deadline != curr_task.deadline:
@@ -640,7 +779,9 @@ def get_all_tasks():
     #                 Task.parent_id.is_(None)        # <-- only parents
     #     ).all())
 
-    # if role == 'staff' or role == 'manager':
+    # TODO: move my_tasks_list here to avoid code duplication (minor)
+
+    # if (role == 'staff' or role == 'manager') and dept != 'HR': # hr can see all regardless of role
     #     print('Getting tasks for staff/manager')
     #     # get all tasks i am a collaborator and owner of
     #     # my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
@@ -659,29 +800,33 @@ def get_all_tasks():
     #     return jsonify({"my_tasks": my_tasks_list, "team_tasks": team_tasks}), 200
 
 
-    # # if role is director, get all task for department
-    # # return as {my_tasks: [], dept_tasks : {team_A: [emp1: [list of tasks], emp2: [...]], team_B: [...]}
-    # elif role == 'director' or role == 'senior manager' or role == 'hr':
+    # # if role is director, get all task in the company
+    # # return as {my_tasks: [], company_tasks: {dept1: {team1: {emp1: [list of tasks], emp2: [...]}, team2: {...}}, dept2: {...}}}
+    # elif role == 'director' or role == 'senior manager' or dept == 'HR':
     #     print('Getting tasks for director/senior manager/hr')
     #     # get all tasks i am a collaborator of (includes those im owner of)
     #     # my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
     #     # my_tasks_list = [t.to_dict() for t in my_tasks]
     #     my_tasks_list = [t.to_dict() for t in top_level_tasks_for(eid)]
-    #     # get all tasks of department
-    #     dept_members = Staff.query.filter_by(department=dept).all()
-    #     # loop through members and group responses into team_tasks
-    #     dept_tasks = {} 
-    #     for member in dept_members:
-    #         if member.employee_id == eid:
-    #             continue
-    #         # member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
-    #         member_tasks = top_level_tasks_for(member.employee_id)
-    #         member_team = member.team or "No Team"
-    #         if member_team not in dept_tasks:
-    #             dept_tasks[member_team] = {}
-    #         dept_tasks[member_team][member.employee_name] = [t.to_dict() for t in member_tasks]
-        
-    #     return jsonify({"my_tasks": my_tasks_list, "dept_tasks": dept_tasks}), 200
+    #     # get all tasks in the company organized by dept, team, employee
+    #     # get all departments
+    #     departments = Staff.query.with_entities(Staff.department).distinct().all() # list of tuples with one element
+    #     company_tasks = {}
+    #     for dept_tuple in departments:
+    #         dept_name = dept_tuple[0]
+    #         dept_members = Staff.query.filter_by(department=dept_name).all()
+    #         dept_dict = {}
+    #         for member in dept_members:
+    #             # member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
+    #             member_tasks = top_level_tasks_for(member.employee_id)
+    #             team_name = member.team
+    #             if team_name not in dept_dict:
+    #                 dept_dict[team_name] = {}
+    #             dept_dict[team_name][member.employee_name] = [t.to_dict() for t in member_tasks]
+    #         company_tasks[dept_name] = dept_dict
+
+    #     return jsonify({"my_tasks": my_tasks_list, "company_tasks": company_tasks}), 200
+
 
 # --------------------------------------------------------------------------------------------------------------
     
@@ -874,5 +1019,3 @@ if __name__ == "__main__":
     with app.app_context():
         db.create_all()
     app.run(port=5002, debug=True)
-
-

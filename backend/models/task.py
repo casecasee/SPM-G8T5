@@ -1,4 +1,15 @@
 from models.extensions import db
+from datetime import datetime, timezone
+
+def return_datetime(dt_naive_utc: datetime):
+    """
+    Takes a naive datetime that *represents UTC* (stored in DATETIME) and returns '...Z'.
+    """
+    if dt_naive_utc.tzinfo is not None:
+        # normalize in case someone passed an aware dt
+        dt_naive_utc = dt_naive_utc.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt_naive_utc.replace(microsecond=0)\
+        .replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
 
 Task_Collaborators = db.Table(
     'task_collaborators',
@@ -88,7 +99,7 @@ class Task(db.Model):
             "title": self.title,
             "description": self.description,
             "attachment": self.attachment,
-            "deadline": self.deadline.isoformat(),
+            "deadline": return_datetime(self.deadline),
             "status": self.status,
             "owner": self.owner,
             "project_id": self.project_id,
@@ -96,9 +107,9 @@ class Task(db.Model):
             "priority": self.priority,
             "collaborators": [collaborator.employee_id for collaborator in self.collaborators],
             "subtasks": [subtask.to_dict() for subtask in self.subtasks.all()],
-            "start_date": self.start_date.isoformat() if self.start_date else None,
-            "completed_date": self.completed_date.isoformat() if self.completed_date else None,
-            "created_at": self.created_at.isoformat(),
+            "start_date": return_datetime(self.start_date) if self.start_date else None,
+            "completed_date": return_datetime(self.completed_date) if self.completed_date else None,
+            "created_at": return_datetime(self.created_at),
             "recurrence": self.recurrence
         }
 
