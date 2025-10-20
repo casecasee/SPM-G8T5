@@ -11,7 +11,7 @@
   <!-- Tabs visible to all users -->
   <div class="tabs">
     <button :class="['tab', currentTab==='my' ? 'active' : '']" @click="currentTab='my'">My Tasks</button>
-    <button :class="['tab', currentTab==='team' ? 'active' : '']" @click="currentTab='team'" v-if="!isSeniorManagerOrHR">Team's Tasks</button>
+    <button :class="['tab', currentTab==='team' ? 'active' : '']" @click="currentTab='team'" v-if="canViewTeamTasks">Team's Tasks</button>
     <button :class="['tab', currentTab==='departments' ? 'active' : '']" @click="currentTab='departments'" v-if="isSeniorManagerOrHR">All Departments</button>
     
     <button :class="['tab', currentTab==='report' ? 'active' : '']" @click="currentTab='report'" v-if="isManagerRole">Task Report</button>
