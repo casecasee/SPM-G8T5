@@ -50,4 +50,5 @@ INSERT INTO project_members (project_id, staff_id) VALUES
 
 -- Insert task collaborators (from your current data)
 INSERT INTO task_collaborators (task_id, staff_id) VALUES
-(7, 1), (8, 1), (9, 1), (10, 1), (11, 1), (12, 1);
+(7, 1), (8, 1), (9, 1), (10, 1), (11, 1), (12, 1), (6, 34), (1, 34), (2, 34), (5, 34), (3, 34), (4, 34)
+;
