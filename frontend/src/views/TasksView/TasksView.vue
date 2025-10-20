@@ -257,9 +257,13 @@
     }
 
     const isManagerRole = computed(() => (currentRole || '').toLowerCase() !== 'staff')
+    const canViewTeamTasks = computed(() => {
+    const role = (currentRole || '').toLowerCase()
+    return role === 'manager' || role === 'staff'
+    })
     const isSeniorManagerOrHR = computed(() => {
     const role = (currentRole || '').toLowerCase()
-    return role === 'senior manager' || role === 'hr'
+    return role === 'senior manager' || role === 'hr' || role === 'director'
     })
 
     const myTasks = computed(() => {
@@ -428,12 +432,14 @@
     async function fetchEmployees() {
     try {
         const role = (currentRole || '').toLowerCase()
-        if (role === 'senior manager' || role === 'hr') {
+        if (role === 'senior manager' || role === 'hr' || role === 'director') {
         const res = await axios.get("http://localhost:5000/employees/all", { withCredentials: true })
         availableEmployees.value = Array.isArray(res.data) ? res.data : []
         } else {
+        // For managers and staff, fetch team members
         const depRaw = sessionStorage.getItem("department") || ""
-        const res = await axios.get(`http://localhost:5000/employees/${encodeURIComponent(depRaw)}`, { withCredentials: true })
+        const teamRaw = sessionStorage.getItem("team") || ""
+        const res = await axios.get(`http://localhost:5000/employees/department/${encodeURIComponent(depRaw)}/team/${encodeURIComponent(teamRaw)}`, { withCredentials: true })
         availableEmployees.value = Array.isArray(res.data) ? res.data : []
         }
     } catch (err) {
@@ -765,10 +771,10 @@
     return opts
     })
 
-    // Display labels for employee options (show role/team/department for HR & Senior Manager)
+    // Display labels for employee options (show role/team/department for HR, Senior Manager & Director)
     const employeeDisplayList = computed(() => {
     const role = (currentRole || '').toLowerCase()
-    const showMeta = role === 'senior manager' || role === 'hr'
+    const showMeta = role === 'senior manager' || role === 'hr' || role === 'director'
     return (availableEmployees.value || []).map(emp => ({
         ...emp,
         display_label: showMeta
@@ -780,7 +786,7 @@
     // Employee list for owner assignment (excludes current user)
     const ownerAssignmentList = computed(() => {
     const role = (currentRole || '').toLowerCase()
-    const showMeta = role === 'senior manager' || role === 'hr'
+    const showMeta = role === 'senior manager' || role === 'hr' || role === 'director'
     return (availableEmployees.value || [])
         .filter(emp => emp.employee_id !== currentEmployeeId) // Exclude current user
         .map(emp => ({
