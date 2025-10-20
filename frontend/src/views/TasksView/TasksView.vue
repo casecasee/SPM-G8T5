@@ -3,6 +3,7 @@
 
 <script setup>
     import { ref, computed, onMounted, onUnmounted } from 'vue'
+    import { useRouter } from 'vue-router'
     import { getProjects } from '../../api/projects'
     import Dialog from 'primevue/dialog'
     import Button from 'primevue/button'
@@ -13,6 +14,8 @@
     import FileUpload from 'primevue/fileupload'
     import MultiSelect from 'primevue/multiselect'
     import axios from 'axios'
+
+    const router = useRouter()
 
           
     // ----------------- State -----------------
@@ -75,6 +78,11 @@
     function printReport() {
         print();
         } 
+
+    function goToTimeline() {
+        // Navigate to tasks timeline view
+        router.push({ name: 'tasks-timeline' })
+    }
 
     function hideMentionList() {
     showMentionList.value = false
@@ -465,6 +473,7 @@
             name: t.title,
             description: t.description,
             due_date: t.deadline,
+            created_at: t.created_at,
             status: t.status,
             priority: t.priority || 5,
             owner: t.owner,

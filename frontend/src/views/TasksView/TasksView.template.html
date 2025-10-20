@@ -3,7 +3,7 @@
   <div class="tasks-header">
     <h2>Tasks</h2>
     <div class="header-buttons" v-if="currentTab === 'my'">
-      <Button icon="pi pi-filter" label="Filter" class="filter-btn p-button-text" />
+      <Button class="add-top-btn"  label="📅 Timeline View" @click="goToTimeline" />
       <Button label="+ Add Task" class="add-top-btn" @click="openAdd" />
     </div>
   </div>

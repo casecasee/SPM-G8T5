@@ -481,23 +481,6 @@
   gap: 0.8rem; /* space between filter and add task */
 }
 
-/* Minimalistic Filter Button */
-.filter-btn {
-  border: 1px solid #3b82f6;
-  background: none;
-  color: #3b82f6;
-  font-size: 0.95rem;
-  padding: 0.6rem 1rem;
-  border-radius: 50px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.filter-btn:hover {
-  background-color: #3b82f6;
-  color: #fff;
-}
-
 .modal-content {
   display: flex;
   flex-direction: column;

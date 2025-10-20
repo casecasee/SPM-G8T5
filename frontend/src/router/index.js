@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import TasksView from '../views/TasksView/TasksView.vue'
+import TasksTimelineView from '../views/TasksTimelineView.vue'
 import ReportsView from '../views/ReportsView.vue'
 import LoginPage from '../views/LoginPage.vue'
 import HomeView from '../views/HomeView.vue' 
@@ -23,6 +24,11 @@ const routes = [
     path: '/tasks',
     name: 'tasks',
     component: TasksView,
+  },
+  {
+    path: '/tasks-timeline',
+    name: 'tasks-timeline',
+    component: TasksTimelineView,
   },
   {
     path: '/reports',
