@@ -467,13 +467,22 @@
             }]
             }
         }
+
+        const toLocal = iso => {
+        if (!iso) return null
+        const date = new Date(iso)               // interprets "Z" as UTC
+        return date.toLocaleString(undefined, {  // convert to local
+        dateStyle: "medium",
+        timeStyle: "short",
+        })
+    }
         
         return {
             id: t.task_id,
             name: t.title,
             description: t.description,
-            due_date: t.deadline,
-            created_at: t.created_at,
+            due_date: toLocal(t.deadline),
+            created_at: toLocal(t.created_at),
             status: t.status,
             priority: t.priority || 5,
             owner: t.owner,
@@ -542,13 +551,12 @@
 
         let deadlineDate
         if (taskForm.value.due_date) {
-            deadlineDate = taskForm.value.due_date.includes(':') && !taskForm.value.due_date.includes(':', 5) 
-                ? taskForm.value.due_date + ':00' 
-                : taskForm.value.due_date
+            const local = new Date(taskForm.value.due_date)
+            deadlineDate = local.toISOString()
         } else {
             const futureDate = new Date()
             futureDate.setDate(futureDate.getDate() + 7)
-            deadlineDate = futureDate.toISOString().slice(0, 19)
+            deadlineDate = futureDate.toISOString()
         }
 
         // Prepare subtasks for payload

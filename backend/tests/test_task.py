@@ -2,6 +2,7 @@ import os
 import json
 import unittest
 from datetime import datetime, timedelta, timezone
+import zoneinfo
 
 # Import the Task service app & models
 from employee.employee import Staff
@@ -13,6 +14,22 @@ from models.comment_mention import CommentMention  # type: ignore
 from models.project import Project  # type: ignore
 
 UTC = timezone.utc
+
+def generate_deadline(days_ahead=5):
+    deadline = (datetime.now(UTC) + timedelta(days=days_ahead)) \
+        .replace(microsecond=0) \
+        .isoformat() \
+        .replace("+00:00", "Z")
+    return deadline
+
+
+def datetime_now():
+    # replace 'America/New_York' with your actual IANA timezone name
+    local_tz = zoneinfo.ZoneInfo("America/New_York")
+
+    dt = datetime.now(local_tz)
+    return dt
+
 
 class TaskApiTestCase(unittest.TestCase):
     @classmethod
@@ -62,7 +79,7 @@ class TaskApiTestCase(unittest.TestCase):
             "description": "This is a sample task for testing.",
             # "owner": self.owner_id,
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -76,7 +93,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Status Test Task (Staff)",
             "description": "Testing status assignment.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -101,7 +118,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Status Test Task (Manager)",
             "description": "Testing status assignment.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -125,7 +142,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Status Test Task",
             "description": "Testing status assignment.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -149,7 +166,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Collaborators test task",
             "description": "Testing status assignment.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id, self.manager_id],
             "attachments": [],
         }
@@ -190,7 +207,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Status Update Test Task (unassigned to ongoing)",
             "description": "Testing status update from unassigned to ongoing.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -214,8 +231,9 @@ class TaskApiTestCase(unittest.TestCase):
             task = Task.query.get(task_id)
             # check start date is almost now
             self.assertIsNotNone(task.start_date, msg="start_date not set on status update to ongoing")
-            now = datetime.now()
-            self.assertTrue((now - task.start_date).total_seconds() < 10, msg="start_date not set correctly on status update to ongoing")
+            now = datetime.now(UTC)
+            # startdate = task.start_date
+            self.assertTrue((now - task.start_date.replace(tzinfo=UTC)).total_seconds() < 10, msg="start_date not set correctly on status update to ongoing")
 
     def test_status_update_ongoing_to_under_review(self):
         # ongoing -> under review idt anything much happens
@@ -225,7 +243,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Status Update Test Task (ongoing to under review)",
             "description": "Testing status update from ongoing to under review.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -257,7 +275,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Status Update Test Task (ongoing to done)",
             "description": "Testing status update from ongoing to done.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -281,11 +299,11 @@ class TaskApiTestCase(unittest.TestCase):
             task = Task.query.get(task_id)
             self.assertEqual(task.status, "done", msg=f"Expected status 'done', got '{task.status}'")
             self.assertIsNotNone(task.completed_date, msg="completed_date not set on status update to done")
-            now = datetime.now()
-            print("now:", now)
-            print("task.completed_date:", task.completed_date)
-            print('time taken: ', (now - task.completed_date).total_seconds())
-            self.assertTrue((now - task.completed_date).total_seconds() < 10, msg="completed_date not set correctly on status update to done")
+            now = datetime.now(UTC)
+            # print("now:", now)
+            # print("task.completed_date:", task.completed_date)
+            # print('time taken: ', (now - task.completed_date).total_seconds())
+            self.assertTrue((now - task.completed_date.replace(tzinfo=UTC)).total_seconds() < 10, msg="completed_date not set correctly on status update to done")
 
     def test_status_update_unassigned_to_under_review(self):
         # unassigned -> under review should set start_date
@@ -294,7 +312,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Status Update Test Task (unassigned to under review)",
             "description": "Testing status update from unassigned to under review.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -316,8 +334,8 @@ class TaskApiTestCase(unittest.TestCase):
         with self.app.app_context():
             task = Task.query.get(task_id)
             self.assertIsNotNone(task.start_date, msg="start_date not set on status update to under review")
-            now = datetime.now()
-            self.assertTrue((now - task.start_date).total_seconds() < 10, msg="start_date not set correctly on status update to under review")
+            now = datetime.now(UTC)
+            self.assertTrue((now - task.start_date.replace(tzinfo=UTC)).total_seconds() < 10, msg="start_date not set correctly on status update to under review")
 
     def test_status_update_unassigned_to_done(self):
         # unassigned -> done should set start_date and completed_date
@@ -326,7 +344,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Status Update Test Task (unassigned to done)",
             "description": "Testing status update from unassigned to done.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -349,9 +367,9 @@ class TaskApiTestCase(unittest.TestCase):
             task = Task.query.get(task_id)
             self.assertIsNotNone(task.start_date, msg="start_date not set on status update to done")
             self.assertIsNotNone(task.completed_date, msg="completed_date not set on status update to done")
-            now = datetime.now()
-            self.assertTrue((now - task.start_date).total_seconds() < 10, msg="start_date not set correctly on status update to done")
-            self.assertTrue((now - task.completed_date).total_seconds() < 10, msg="completed_date not set correctly on status update to done")
+            now = datetime.now(UTC)
+            self.assertTrue((now - task.start_date.replace(tzinfo=UTC)).total_seconds() < 10, msg="start_date not set correctly on status update to done")
+            self.assertTrue((now - task.completed_date.replace(tzinfo=UTC)).total_seconds() < 10, msg="completed_date not set correctly on status update to done")
 
     def test_status_update_under_review_to_done(self):
         # under review -> done should set completed_date
@@ -360,7 +378,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Status Update Test Task (under review to done)",
             "description": "Testing status update from under review to done.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -385,8 +403,8 @@ class TaskApiTestCase(unittest.TestCase):
         with self.app.app_context():
             task = Task.query.get(task_id)
             self.assertIsNotNone(task.completed_date, msg="completed_date not set on status update to done")
-            now = datetime.now()
-            self.assertTrue((now - task.completed_date).total_seconds() < 10, msg="completed_date not set correctly on status update to done")
+            now = datetime.now(UTC)
+            self.assertTrue((now - task.completed_date.replace(tzinfo=UTC)).total_seconds() < 10, msg="completed_date not set correctly on status update to done")
 
     def test_status_update_invalid_new_status(self):
         # dont think its an issue cuz frontend dropdown
@@ -395,7 +413,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Status Update Test Task (invalid status)",
             "description": "Testing status update with invalid status.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -424,7 +442,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Status Update Test Task (not collaborator)",
             "description": "Testing status update by non-collaborator.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -481,7 +499,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Metadata Update Test Task (non-owner)",
             "description": "Testing metadata update by non-owner.",
             "priority": 2,
-            "deadline": (datetime.now(UTC) + timedelta(days=5)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
@@ -496,7 +514,7 @@ class TaskApiTestCase(unittest.TestCase):
             "title": "Updated Metadata Task (non-owner)",
             "description": "Updated description by non-owner.",
             "priority": 3,
-            "deadline": (datetime.now(UTC) + timedelta(days=10)).replace(microsecond=0).isoformat(),
+            "deadline": generate_deadline(10),
             "collaborators": [self.collab_id],
             "attachments": [],
         }
