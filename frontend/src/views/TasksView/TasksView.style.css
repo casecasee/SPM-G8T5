@@ -1657,6 +1657,68 @@ input[type="datetime-local"] {
   25%, 75% { color: transparent; }
 }
 
+/* Uploading file styling */
+.file-name.pending-upload {
+  color: #6c757d;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.file-name.pending-upload small {
+  color: #6c757d;
+  font-size: 0.75rem;
+  margin-left: 0.25rem;
+}
+
+.file-name.pending-upload .pi-clock {
+  color: #ffc107;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Subtask attachments styling */
+.subtask-meta-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 1rem;
+  overflow-x: auto;
+}
+
+.subtask-attachments-row {
+  margin-top: 0.5rem;
+  flex-shrink: 0;
+}
+
+.subtask-attachments {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.subtask-attachment-link {
+  color: #007bff;
+  text-decoration: none;
+  font-size: inherit;
+  background-color: #f8f9fa;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid #e9ecef;
+  transition: all 0.2s ease;
+}
+
+.subtask-attachment-link:hover {
+  color: #0056b3;
+  background-color: #e9ecef;
+  text-decoration: none;
+}
+
 @media print {
   
 }

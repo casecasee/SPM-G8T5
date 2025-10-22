@@ -419,21 +419,28 @@
                 chooseLabel="Upload" 
                 :auto="false" 
                 :customUpload="true" 
-                @select="handleAttachment"
+                @select="handleMainTaskAttachment"
                 :disabled="selectedTask && isCollaboratorOnly(selectedTask)" 
                 class="file-upload"
               />
               <div v-if="taskForm.attachments.length > 0" class="file-list">
                 <div v-for="(file, index) in taskForm.attachments" :key="index" class="file-item">
-                  <a :href="file.url" target="_blank" class="file-link">{{ file.name }}</a>
-                  <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove" @click="removeAttachment(index)" v-if="isEditing || !selectedTask"/>
+                  <a v-if="file.url" :href="file.url" target="_blank" class="file-link">
+                    <i class="pi pi-paperclip"></i> {{ file.name }}
+                  </a>
+                  <span v-else class="file-name pending-upload">
+                    <i class="pi pi-clock"></i> {{ file.name }} <small>(uploading...)</small>
+                  </span>
+                  <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove" @click="removeMainTaskAttachment(index)" v-if="isEditing || !selectedTask"/>
                 </div>
               </div>
             </template>
             <template v-else>
               <div v-if="taskForm.attachments.length > 0" class="file-list">
                 <div v-for="(file, index) in taskForm.attachments" :key="index" class="file-item">
-                  <a :href="file.url" target="_blank" class="file-link">{{ file.name }}</a>
+                  <a :href="file.url" target="_blank" class="file-link">
+                    <i class="pi pi-paperclip"></i> {{ file.name }}
+                  </a>
                 </div>
               </div>
               <div v-else class="form-display">No attachments</div>
@@ -641,7 +648,12 @@
               />
               <div v-if="newSubtask.attachments.length > 0" class="file-list">
                 <div v-for="(file, index) in newSubtask.attachments" :key="index" class="file-item">
-                  <span class="file-name">{{ file.name }}</span>
+                  <a v-if="file.url" :href="file.url" target="_blank" class="file-link">
+                    <i class="pi pi-paperclip"></i> {{ file.name }}
+                  </a>
+                  <span v-else class="file-name pending-upload">
+                    <i class="pi pi-clock"></i> {{ file.name }} <small>(uploading...)</small>
+                  </span>
                   <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove" @click="removeSubtaskAttachment(index)" />
                 </div>
               </div>
@@ -704,6 +716,34 @@
                     </div>
                   </div>
                   
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Attachments</label>
+                      <FileUpload 
+                        ref="subtaskEditFileUploadRef"
+                        mode="basic" 
+                        accept=".pdf" 
+                        :multiple="true"
+                        chooseLabel="Upload" 
+                        :auto="false" 
+                        :customUpload="true" 
+                        @select="handleSubtaskEditAttachment"
+                        class="file-upload"
+                      />
+                      <div v-if="subtask.attachments && subtask.attachments.length > 0" class="file-list">
+                        <div v-for="(file, index) in subtask.attachments" :key="index" class="file-item">
+                          <a v-if="file.url" :href="file.url" target="_blank" class="file-link">
+                            <i class="pi pi-paperclip"></i> {{ file.name }}
+                          </a>
+                          <span v-else class="file-name pending-upload">
+                            <i class="pi pi-clock"></i> {{ file.name }} <small>(uploading...)</small>
+                          </span>
+                          <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove" @click="removeSubtaskEditAttachment(index)" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
                   <div class="subtask-edit-actions">
                     <Button label="Save" @click="saveEditingSubtask(subtask)" class="p-button-sm" />
                     <Button label="Cancel" @click="cancelEditingSubtask" class="p-button-text p-button-sm" />
@@ -729,14 +769,24 @@
                 </div>
                 <p v-if="subtask.description" class="subtask-description">{{ subtask.description }}</p>
                 <div class="subtask-details">
-                  <span v-if="subtask.due_date" class="subtask-due">📅 {{ formatDate(subtask.due_date) }} <span class="relative-time">({{ formatDateRelative(subtask.due_date) }})</span></span>
-                  <span class="subtask-owner">👤 {{ getOwnerName(subtask.owner) }}</span>
-                  <span v-if="subtask.collaborators && subtask.collaborators.length > 0" class="subtask-collabs">
-                    🤝 {{ getCollaboratorNames(subtask.collaborators) }}
-                  </span>
-                  <span v-if="subtask.attachments && subtask.attachments.length > 0" class="subtask-attachments">
-                    📎 {{ subtask.attachments.length }} file(s)
-                  </span>
+                  <div class="subtask-meta-row">
+                    <span v-if="subtask.due_date" class="subtask-due">📅 {{ formatDate(subtask.due_date) }} <span class="relative-time">({{ formatDateRelative(subtask.due_date) }})</span></span>
+                    <span class="subtask-owner">👤 {{ getOwnerName(subtask.owner) }}</span>
+                    <span v-if="subtask.collaborators && subtask.collaborators.length > 0" class="subtask-collabs">
+                      🤝 {{ getCollaboratorNames(subtask.collaborators) }}
+                    </span>
+                  </div>
+                  
+                  <!-- Attachments on separate row but same size -->
+                  <div v-if="subtask.attachments && subtask.attachments.length > 0" class="subtask-attachments-row">
+                    <span class="subtask-attachments">
+                      <i class="pi pi-paperclip"></i> 
+                      <span v-for="(attachment, idx) in subtask.attachments" :key="idx">
+                        <a :href="attachment.url" target="_blank" class="subtask-attachment-link">{{ attachment.name }}</a>
+                        <span v-if="idx < subtask.attachments.length - 1"> </span>
+                      </span>
+                    </span>
+                  </div>
                 </div>
                 
                 <!-- Edit button for parent task owner -->
