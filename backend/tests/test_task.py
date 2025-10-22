@@ -49,8 +49,9 @@ class TaskApiTestCase(unittest.TestCase):
             owner = Staff(employee_name="Owner One", email="owner@example.com", role="staff", department="Finance", team="A", password="Test123")
             collab = Staff(employee_name="Collab Two", email="collab@example.com", role="staff", department="Finance", team="A", password="Test123")
             manager = Staff(employee_name="Manager Three", email="manager@example.com", role="manager", department="Finance", team="A", password="Test123")
-            
-            db.session.add_all([owner, collab, manager])
+            different_dept = Staff(employee_name="Other Dept", email="other@example.com", role="staff", department="IT", team="B", password="Test123")
+
+            db.session.add_all([owner, collab, manager, different_dept])
             db.session.commit()
 
             # seed tasks
@@ -59,6 +60,7 @@ class TaskApiTestCase(unittest.TestCase):
             cls.owner_id = owner.employee_id
             cls.collab_id = collab.employee_id
             cls.manager_id = manager.employee_id
+            cls.different_dept_id = different_dept.employee_id
 
     @classmethod
     def tearDownClass(cls):
@@ -71,6 +73,8 @@ class TaskApiTestCase(unittest.TestCase):
             sess["role"] = role
             sess["department"] = "Finance"
             sess["team"] = "A"
+
+# ------------------------ CREATE TASKS TESTS --------------------------------------------------------
 
     def test_create_lonely_task(self):
         self.login_as(self.owner_id, "staff")
@@ -85,6 +89,74 @@ class TaskApiTestCase(unittest.TestCase):
         }
         response = self.client.post("/tasks", json=payload)
         self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+
+    # test title empty
+    def test_create_task_title_empty(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "",
+            "description": "This is a sample task with empty title.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for empty title, got {response.status_code}")
+
+        # test string with spaces too
+        payload["title"] = "     "
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for empty title with spaces, got {response.status_code}")
+
+    # test description empty
+    def test_create_task_description_empty(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Task with empty description",
+            "description": "",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for empty description, got {response.status_code}")
+
+        # test string with spaces too
+        payload["description"] = "     "
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for empty description with spaces, got {response.status_code}")
+
+    # test deadline past
+    def test_create_task_deadline_past(self):
+        self.login_as(self.owner_id, "staff")
+        past_deadline = generate_deadline(days_ahead=-1)
+        payload = {
+            "title": "Task with past deadline",
+            "description": "This task has a past deadline.",
+            "priority": 2,
+            "deadline": past_deadline,
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for past deadline, got {response.status_code}")
+
+    # test deadline wrong format ?
+    def test_create_task_deadline_wrong_format(self):
+        self.login_as(self.owner_id, "staff")
+        wrong_format_deadline = "2023/10/10 10:00:00"  # incorrect format
+        payload = {
+            "title": "Task with wrong format deadline",
+            "description": "This task has a wrongly formatted deadline.",
+            "priority": 2,
+            "deadline": wrong_format_deadline,
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for wrongly formatted deadline, got {response.status_code}")
 
     def test_create_task_status_assignment_staff(self):
         # staff creates a task, should be "ongoing" by default
@@ -159,15 +231,40 @@ class TaskApiTestCase(unittest.TestCase):
             self.assertIsNotNone(task, msg="Task not found in database")
             self.assertEqual(task.status, "unassigned", msg=f"Expected status 'unassigned', got '{task.status}'")
 
-    def test_create_task_collaborators_list(self):
-        # final collaborator list should include owner
+    # test priority invalid (out of range, non-int)
+    def test_create_task_priority_invalid(self):
+        self.login_as(self.owner_id, "staff")
+        # test out of range
+        payload = {
+            "title": "Task with invalid priority",
+            "description": "This task has an invalid priority.",
+            "priority": 11,  # invalid priority
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for out of range priority, got {response.status_code}")
+
+        # test non-int
+        payload["priority"] = "high"  # invalid priority
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for non-integer priority, got {response.status_code}")
+
+    # test project id (project does not exist)
+    def test_create_task_project_id_invalid(self):
+        # need to seed projects first
+        pass 
+
+    # test creator is set as owner
+    def test_create_task_creator_set_as_owner(self):
         self.login_as(self.owner_id, "staff")
         payload = {
-            "title": "Collaborators test task",
-            "description": "Testing status assignment.",
+            "title": "Owner Test Task",
+            "description": "Testing owner assignment.",
             "priority": 2,
             "deadline": generate_deadline(),
-            "collaborators": [self.collab_id, self.manager_id],
+            "collaborators": [self.collab_id],
             "attachments": [],
         }
         response = self.client.post("/tasks", json=payload)
@@ -178,18 +275,253 @@ class TaskApiTestCase(unittest.TestCase):
         with self.app.app_context():
             task = Task.query.get(task_id)
             self.assertIsNotNone(task, msg="Task not found in database")
-            collab_ids = {c.employee_id for c in task.collaborators}
-            self.assertIn(self.owner_id, collab_ids, msg="Owner not in collaborators")
-            self.assertIn(self.collab_id, collab_ids, msg="Collaborator not in collaborators")
-            self.assertIn(self.manager_id, collab_ids, msg="Manager not in collaborators")
+            # task.owner is a Staff object, need to get employee_id
+            self.assertEqual(task.owner, self.owner_id, msg=f"Expected owner_id '{self.owner_id}', got '{task.owner}'")
 
-    def test_create_task_date_invalid(self):
+    # test collaborators list for lonely tasks (collaborators must be same dept), must include owner
+    def test_create_task_collaborators_lonely_task(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Collaborators Test Task",
+            "description": "Testing collaborators assignment.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id, self.different_dept_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for collaborator from different department, got {response.status_code}")
 
+    # test collaborators list for project tasks (project members only), must include owner
+    def test_create_task_collaborators_project_task(self):
+        # Need to seed a project first
         pass
 
-    def test_create_task_missing_fields(self):
-        # idk if frontend doing, we should do it too i guess, not a priority
+    # test collaborators list for invalid ids
+    def test_create_task_collaborators_invalid_ids(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Invalid Collaborators Test Task",
+            "description": "Testing invalid collaborators assignment.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [999999],  # non-existent employee_id
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 404, msg=f"Expected 400 for invalid collaborator IDs, got {response.status_code}")
+
+    # test attachments ?
+
+    # test comments ?
+
+    # test recurrence ?
+
+    # test subtasks title
+    def test_create_subtask_title_empty(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "",
+            "description": "Testing subtask with empty title.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "subtasks": [{
+                "title": "",
+                "description": "This is a subtask with empty title.",
+                "priority": 2,
+                "deadline": generate_deadline(),
+                "collaborators": [self.collab_id],
+                "attachments": [],
+            }]
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for subtask with empty title, got {response.status_code}")
+
+        # test string with spaces too
+        payload["subtasks"][0]["title"] = "     "
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for subtask with empty title with spaces, got {response.status_code}")
+
+    # test subtask desc
+    def test_create_subtask_description_empty(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Task with Subtask",
+            "description": "Testing subtask with empty description.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "subtasks": [{
+                "title": "Subtask with empty description",
+                "description": "",
+                "priority": 2,
+                "deadline": generate_deadline(),
+                "collaborators": [self.collab_id],
+                "attachments": [],
+            }]
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for subtask with empty description, got {response.status_code}")
+
+        # test string with spaces too
+        payload["subtasks"][0]["description"] = "     "
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for subtask with empty description with spaces, got {response.status_code}")
+     
+    # test subtask deadline past
+    def test_create_subtask_deadline_past(self):
+        self.login_as(self.owner_id, "staff")
+        past_deadline = generate_deadline(days_ahead=-1)
+        payload = {
+            "title": "Subtask with Past Deadline",
+            "description": "Testing subtask with past deadline.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "subtasks": [{
+                "title": "Subtask with Past Deadline",
+                "description": "Testing subtask with past deadline.",
+                "priority": 2,
+                "deadline": past_deadline,
+                "collaborators": [self.collab_id],
+                "attachments": [],
+            }]
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for subtask with past deadline, got {response.status_code}")
+
+    # test subtask deadline wrong format
+    def test_create_subtask_deadline_wrong_format(self):
+        self.login_as(self.owner_id, "staff")
+        wrong_format_deadline = "2023/10/10 10:00:00"  # incorrect format
+        payload = {
+            "title": "Subtask with Wrong Format Deadline",
+            "description": "Testing subtask with wrongly formatted deadline.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "subtasks": [{
+                "title": "Subtask with Wrong Format Deadline",
+                "description": "Testing subtask with wrongly formatted deadline.",
+                "priority": 2,
+                "deadline": wrong_format_deadline,
+                "collaborators": [self.collab_id],
+                "attachments": [],
+            }]
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for subtask with wrongly formatted deadline, got {response.status_code}")
+
+    # test subtask owner (can be chosen, must be subset of parent collaborators)
+    def test_create_subtask_owner_assignment(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Task with Subtask Owner",
+            "description": "Testing subtask owner assignment.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "subtasks": [{
+                "title": "Subtask with specific owner",
+                "description": "This subtask has a specific owner.",
+                "priority": 2,
+                "deadline": generate_deadline(),
+                "collaborators": [self.collab_id],
+                "attachments": [],
+                # specify owner as collab_id
+                "owner": self.collab_id,
+            }]
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task with subtask owner failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+
+        # Fetch the created subtask directly from the database to verify owner
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            # self.assertEqual(len(task.subtasks), 1, msg="Expected 1 subtask")
+            subtask = task.subtasks[0]
+            self.assertEqual(subtask.owner, self.collab_id, msg=f"Expected subtask owner '{self.collab_id}', got '{subtask.owner}'")
+
+    # test subtask status (staff/manager/director)
+
+
+    # test subtask priority invalid (out of range, non-int)
+    def test_create_subtask_priority_invalid(self):
+        self.login_as(self.owner_id, "staff")
+        # test out of range
+        payload = {
+            "title": "Task with Subtask",
+            "description": "Testing subtask with invalid priority.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "subtasks": [{
+                "title": "Subtask with invalid priority",
+                "description": "This subtask has an invalid priority.",
+                "priority": 11,  # invalid priority
+                "deadline": generate_deadline(),
+                "collaborators": [self.collab_id],
+                "attachments": [],
+            }]
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for subtask with out of range priority, got {response.status_code}")
+
+        # test non-int
+        payload["subtasks"][0]["priority"] = "high"  # invalid priority
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for subtask with non-integer priority, got {response.status_code}")
+
+    # test subtask project id (should inherit from parent)
+    def test_create_subtask_project_id_inherit(self):
+        # Need to seed a project first
         pass
+
+    # test subtask collaborators (must be subset of parent collaborators)
+    def test_create_subtask_collaborators_subset(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Task with Subtask",
+            "description": "Testing subtask collaborators assignment.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "subtasks": [{
+                "title": "Subtask with invalid collaborators",
+                "description": "This subtask has collaborators not in parent task.",
+                "priority": 2,
+                "deadline": generate_deadline(),
+                "collaborators": [self.manager_id],  # not in parent collaborators
+                "attachments": [],
+            }]
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for subtask with collaborators not in parent task, got {response.status_code}")
+
+    # test subtask attachments ?
+
+    # test subtask comments ?
+
+    # test subtask recurrence ? (subtasks cannot be recurrent)
+
+
+
+# ----------------------------------------------------------------------------------------------------------
+
+
+# ------------------------ UPDATE TASKS STATUS TESTS --------------------------------------------------------
 
     def update_task_status_task_not_found(self):
         self.login_as(self.owner_id, "staff")
@@ -457,6 +789,61 @@ class TaskApiTestCase(unittest.TestCase):
         response = self.client.patch(f"/task/status/{task_id}", json={"status": "ongoing"})
         self.assertEqual(response.status_code, 403, msg=f"Expected 403 for non-collaborator, got {response.status_code}")
 
+
+# ----------------------------------------------------------------------------------------------------------
+
+
+# ------------------------ UPDATE TASKS METADATA TESTS --------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     # def test_metadata_update_by_owner(self):
     #     # only owner can update metadata
     #     self.login_as(self.owner_id, "staff")
@@ -528,257 +915,6 @@ class TaskApiTestCase(unittest.TestCase):
 
     def test_assign_tasks(self):
         pass
-
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-    # # ---------- helpers (API-only flow) ----------
-
-    # def _login_as(self, employee_id, role):
-    #     """Simulate login by setting session keys (no password/hash dependency)."""
-    #     with self.client.session_transaction() as sess:
-    #         sess["employee_id"] = employee_id
-    #         sess["role"] = role
-
-    # def _logout(self):
-    #     with self.client.session_transaction() as sess:
-    #         sess.clear()
-
-    # def _iso_deadline(self, days=7):
-    #     return (datetime.now(UTC) + timedelta(days=days)).replace(microsecond=0).isoformat()
-
-    # def _create_task(self, owner_id=None, collaborators=None, title="Write docs"):
-    #     if owner_id is None:
-    #         owner_id = self.owner_id
-    #     if collaborators is None:
-    #         collaborators = [self.collab_id]
-
-    #     payload = {
-    #         "title": title,
-    #         "description": "Do the docs",
-    #         "owner": owner_id,
-    #         "priority": 3,
-    #         "deadline": self._iso_deadline(7),
-    #         "collaborators": collaborators,
-    #         "attachments": [],
-    #         "parent_id": None,
-    #         "project_id": None,
-    #     }
-    #     r = self.client.post("/tasks", json=payload)
-    #     self.assertEqual(r.status_code, 201, msg=f"Create task failed: {r.status_code} {r.get_data(as_text=True)}")
-    #     data = r.get_json()
-    #     self.assertIn("task_id", data)
-    #     return data["task_id"]
-
-    # def _get_task(self, task_id):
-    #     r = self.client.get(f"/task/{task_id}")
-    #     self.assertEqual(r.status_code, 200, msg=r.get_data(as_text=True))
-    #     return r.get_json()
-
-    # # ---------- tests (API only) ----------
-
-    # def test_status_patch_by_collaborator(self):
-    #     # owner creates task
-    #     self._login_as(self.owner_id, "staff")
-    #     task_id = self._create_task(owner_id=self.owner_id, collaborators=[self.collab_id])
-    #     self._logout()
-
-    #     # collaborator moves to ongoing
-    #     self._login_as(self.collab_id, "staff")
-    #     r1 = self.client.patch(f"/task/status/{task_id}", json={"status": "ongoing"})
-    #     self.assertEqual(r1.status_code, 200, msg=r1.get_data(as_text=True))
-
-    #     t1 = self._get_task(task_id)
-    #     self.assertEqual(t1["status"], "ongoing")
-    #     self.assertIsNotNone(t1.get("start_date"))
-
-    #     # collaborator marks done
-    #     r2 = self.client.patch(f"/task/status/{task_id}", json={"status": "done"})
-    #     self.assertEqual(r2.status_code, 200, msg=r2.get_data(as_text=True))
-
-    #     t2 = self._get_task(task_id)
-    #     self.assertEqual(t2["status"], "done")
-    #     self.assertIsNotNone(t2.get("completed_date"))
-    #     self._logout()
-
-    # def test_status_patch_forbidden_if_not_collaborator(self):
-    #     self._login_as(self.owner_id, "employee")
-    #     task_id = self._create_task(owner_id=self.owner_id, collaborators=[self.collab_id])
-    #     self._logout()
-
-    #     # Login as a non-collaborator (manager OR create another employee)
-    #     self._login_as(self.manager_id, "manager")
-    #     r = self.client.patch(f"/task/status/{task_id}", json={"status": "ongoing"})
-    #     self.assertIn(r.status_code, (401, 403), msg=f"Expected 401/403, got {r.status_code}: {r.get_data(as_text=True)}")
-    #     self._logout()
-
-    # def test_update_task_metadata_by_owner(self):
-    #     self._login_as(self.owner_id, "employee")
-    #     task_id = self._create_task(owner_id=self.owner_id, collaborators=[self.collab_id])
-
-    #     payload = {
-    #         "title": "Docs v2",
-    #         "description": "Tighten docs",
-    #         "priority": 2,
-    #         "deadline": self._iso_deadline(14),
-    #         "attachments": ["spec.pdf", "diagram.png"],
-    #         "collaborators": [self.collab_id],  # ensure owner stays included on server-side
-    #     }
-    #     r = self.client.put(f"/task/{task_id}", json=payload)
-    #     self.assertEqual(r.status_code, 200, msg=r.get_data(as_text=True))
-
-    #     t = self._get_task(task_id)
-    #     self.assertEqual(t["title"], "Docs v2")
-    #     self.assertEqual(t["priority"], 2)
-    #     self.assertEqual(t["attachments"], ["spec.pdf", "diagram.png"])
-    #     # owner should still be owner
-    #     self.assertEqual(t["owner"], self.owner_id)
-    #     # collaborators reflect payload (owner is not duplicated here unless API returns all assignees)
-    #     self._logout()
-
-    # def test_non_owner_cannot_update_task(self):
-    #     self._login_as(self.owner_id, "employee")
-    #     task_id = self._create_task(owner_id=self.owner_id, collaborators=[self.collab_id])
-    #     self._logout()
-
-    #     self._login_as(self.collab_id, "employee")
-    #     r = self.client.put(f"/task/{task_id}", json={"title": "Nope from collab"})
-    #     self.assertIn(r.status_code, (401, 403), msg=f"Expected 401/403, got {r.status_code}: {r.get_data(as_text=True)}")
-    #     self._logout()
-
-    # def test_manager_can_reassign_owner(self):
-    #     # Create task with owner=self.owner_id
-    #     self._login_as(self.owner_id, "employee")
-    #     task_id = self._create_task(owner_id=self.owner_id, collaborators=[self.collab_id])
-    #     self._logout()
-
-    #     # Manager reassigns to collaborator
-    #     self._login_as(self.manager_id, "manager")
-    #     r1 = self.client.put(f"/task/{task_id}", json={"owner": self.collab_id})
-    #     self.assertEqual(r1.status_code, 200, msg=r1.get_data(as_text=True))
-
-    #     t1 = self._get_task(task_id)
-    #     self.assertEqual(t1["owner"], self.collab_id)
-
-    #     # Manager tries to set unknown owner
-    #     r2 = self.client.put(f"/task/{task_id}", json={"owner": 999999})
-    #     # Your API might return 404 or 400; assert one of them
-    #     self.assertIn(r2.status_code, (400, 404), msg=f"Expected 400/404, got {r2.status_code}: {r2.get_data(as_text=True)}")
-    #     self._logout()
-
-    # def test_comment_requires_auth_and_content(self):
-    #     self._login_as(self.owner_id, "employee")
-    #     task_id = self._create_task()
-    #     self._logout()
-
-    #     # No auth
-    #     r1 = self.client.post(f"/task/{task_id}/comments", json={"content": "Hello"})
-    #     self.assertIn(r1.status_code, (401, 403), msg=f"Expected 401/403, got {r1.status_code}")
-
-    #     # With auth but missing content
-    #     self._login_as(self.owner_id, "employee")
-    #     r2 = self.client.post(f"/task/{task_id}/comments", json={})
-    #     self.assertEqual(r2.status_code, 400, msg=r2.get_data(as_text=True))
-    #     self._logout()
-
-    # def test_comment_invalid_id_mention_rejected(self):
-    #     self._login_as(self.owner_id, "employee")
-    #     task_id = self._create_task()
-    #     self._logout()
-
-    #     self._login_as(self.collab_id, "employee")
-    #     r = self.client.post(f"/task/{task_id}/comments", json={"content": "Ping @99999"})
-    #     # Expect 400 per your spec
-    #     self.assertEqual(r.status_code, 400, msg=r.get_data(as_text=True))
-    #     self._logout()
-
-    # def test_list_mentionable(self):
-        # self._login_as(self.owner_id, "employee")
-        # task_id = self._create_task(owner_id=self.owner_id, collaborators=[self.collab_id])
-
-        # r = self.client.get(f"/task/{task_id}/mentionable")
-        # self.assertEqual(r.status_code, 200, msg=r.get_data(as_text=True))
-        # data = r.get_json()
-        # # Expect owner + collaborators
-        # id_set = {x["employee_id"] if isinstance(x, dict) else x for x in data}
-        # self.assertIn(self.owner_id, id_set)
-        # self.assertIn(self.collab_id, id_set)
-        # self._logout()
 
 
 if __name__ == "__main__":
