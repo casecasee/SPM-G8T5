@@ -744,7 +744,7 @@ def update_task(task_id):
     if 'subtasks' in data:
         subtasks_data = data['subtasks']
         for subtask in subtasks_data:
-            if task_id in subtask:
+            if 'task_id' in subtask:
                 subtask_id = subtask['task_id']
                 existing_subtask = Task.query.get(subtask_id)
                 if existing_subtask is None:
