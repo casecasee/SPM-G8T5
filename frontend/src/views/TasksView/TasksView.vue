@@ -41,6 +41,9 @@
     // Form validation state
     const formErrors = ref({})
     const showValidationErrors = ref(false)
+    
+    // Backend error display
+    const backendError = ref('')
 
     // Mention suggestions
     const mentionable = ref([]) // [{employee_id, employee_name, role}]
@@ -109,10 +112,8 @@
     if (start < 0) return
     const before = text.slice(0, start)
     const after = text.slice(start)
-    // Replace the token starting at '@' up to next whitespace
     const match = after.match(/^@\S*/)
     const rest = match ? after.slice(match[0].length) : ''
-    // Insert @{Employee Name} (the server supports names)
     const insertion = `@${user.employee_name}`
     newComment.value = before + insertion + (rest.startsWith(' ') ? rest : (' ' + rest))
     hideMentionList()
@@ -154,13 +155,15 @@
     description: '',
     due_date: null,
     status: 'ongoing',
-    priority: 5,
+    priority: null,
     owner: currentEmployeeId,
     collaborators: [],
     attachments: []
     })
     const showSubtaskForm = ref(false)
     const subtaskFileUploadRef = ref(null)
+    const editingSubtaskId = ref(null)
+    const editingSubtaskBackup = ref(null)
 
     function resetForm() {
     // Set default status based on role
@@ -172,7 +175,7 @@
         description: '',
         due_date: null,
         status: defaultStatus,
-        priority: null, // Start with null for validation
+        priority: null,
         owner: currentEmployeeId, 
         collaborators: [], 
         project_id: null,
@@ -181,33 +184,105 @@
     }
 
     function resetSubtaskForm() {
+    const parentCollaborators = [
+        taskForm.value.owner,
+        ...(Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : [])
+    ].filter((id, index, self) => self.indexOf(id) === index) // Remove duplicates
+    
+    // Determine default status based on PARENT TASK OWNER's role
+    const parentOwner = (availableEmployees.value || []).find(emp => emp.employee_id === taskForm.value.owner)
+    const parentOwnerRole = parentOwner ? (parentOwner.role || '').toLowerCase() : 'manager'
+    const defaultStatus = parentOwnerRole === 'staff' ? 'ongoing' : 'unassigned'
+    
     return {
         name: '',
         description: '',
         due_date: null,
-        status: 'ongoing',
+        status: defaultStatus,
         priority: 5,
         owner: currentEmployeeId,
-        collaborators: [],
+        collaborators: parentCollaborators,  // Auto-populate from parent task
         project_id: null,
         attachments: []
     }
     }
 
-    function addSubtask() {
-    if (!newSubtask.value.name.trim()) return
+    function validateSubtaskForm() {
+    const errors = {}
     
+    if (!newSubtask.value.name || (typeof newSubtask.value.name === 'string' && newSubtask.value.name.trim() === '')) {
+        errors.subtask_name = 'Subtask name is required'
+    }
+    
+    if (!newSubtask.value.description || (typeof newSubtask.value.description === 'string' && newSubtask.value.description.trim() === '')) {
+        errors.subtask_description = 'Subtask description is required'
+    }
+    
+    if (!newSubtask.value.due_date) {
+        errors.subtask_due_date = 'Subtask deadline is required'
+    }
+    
+    // Validate priority
+    if (!newSubtask.value.priority || newSubtask.value.priority === null || newSubtask.value.priority === '') {
+        errors.subtask_priority = 'Subtask priority is required'
+    }
+    
+    // Validate owner (assign to)
+    if (!newSubtask.value.owner || newSubtask.value.owner === null || newSubtask.value.owner === '') {
+        errors.subtask_owner = 'Subtask must be assigned to someone'
+    }
+    
+    if (newSubtask.value.due_date) {
+        const dueDate = new Date(newSubtask.value.due_date)
+        const now = new Date()
+        if (dueDate < now) {
+            errors.subtask_due_date = 'Subtask deadline must be in the future'
+        }
+        
+        if (taskForm.value.due_date) {
+            const subtaskDate = new Date(newSubtask.value.due_date)
+            const parentDate = new Date(taskForm.value.due_date)
+            if (subtaskDate > parentDate) {
+                errors.subtask_due_date = 'Subtask deadline cannot be after parent task deadline'
+            }
+        }
+    }
+    
+    formErrors.value = errors
+    showValidationErrors.value = Object.keys(errors).length > 0
+    
+    return Object.keys(errors).length === 0
+    }
+
+    function addSubtask() {
+    clearValidationErrors()
+    
+    console.log('Validating subtask:', newSubtask.value)
+    
+    if (!validateSubtaskForm()) {
+        console.log('Validation failed. Errors:', formErrors.value)
+        return
+    }
+    
+    console.log('Validation passed. Adding subtask.')
     subtasks.value.push({
-        ...newSubtask.value // Copy the new subtask values from main subtask array
+        ...newSubtask.value 
     })
     newSubtask.value = resetSubtaskForm()
     showSubtaskForm.value = false
+    clearValidationErrors()
     }
 
     function toggleSubtaskForm() {
     showSubtaskForm.value = !showSubtaskForm.value
-    if (!showSubtaskForm.value) {
+    if (showSubtaskForm.value) {
+        // Reset form when opening
         newSubtask.value = resetSubtaskForm()
+        clearValidationErrors()
+    } else {
+        // Clear form when closing
+        newSubtask.value = resetSubtaskForm()
+        clearValidationErrors()
     }
     }
 
@@ -228,8 +303,59 @@
     newSubtask.value.attachments.splice(index, 1)
     }
 
-    function updateSubtaskStatus(subtask, newStatus) {
-    subtask.status = newStatus
+    async function updateSubtaskStatus(subtask, newStatus) {
+    // If subtask already exists (has id), update via API
+    if (subtask.id) {
+        try {
+            await axios.patch(`http://localhost:5002/task/status/${subtask.id}`, { 
+                status: newStatus, 
+                employee_id: currentEmployeeId 
+            }, { withCredentials: true })
+            subtask.status = newStatus
+        } catch (error) {
+            console.error("Error updating subtask status:", error)
+            
+            const backendMessage = error.response?.data?.message || 'Error updating subtask status'
+            
+            formErrors.value = { backend: backendMessage }
+            showValidationErrors.value = true
+            
+            const modalContent = document.querySelector('.modal-content')
+            if (modalContent) {
+                modalContent.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+        }
+    } else {
+        subtask.status = newStatus
+    }
+    }
+
+    function startEditingSubtask(subtask) {
+    editingSubtaskId.value = subtask.id || subtasks.value.indexOf(subtask)
+    editingSubtaskBackup.value = JSON.parse(JSON.stringify(subtask))
+    }
+
+    function cancelEditingSubtask() {
+    if (editingSubtaskBackup.value) {
+        const index = subtasks.value.findIndex(s => 
+            (s.id && s.id === editingSubtaskId.value) || 
+            subtasks.value.indexOf(s) === editingSubtaskId.value
+        )
+        if (index !== -1) {
+            subtasks.value[index] = editingSubtaskBackup.value
+        }
+    }
+    editingSubtaskId.value = null
+    editingSubtaskBackup.value = null
+    }
+
+    function saveEditingSubtask(subtask) {
+    editingSubtaskId.value = null
+    editingSubtaskBackup.value = null
+    }
+
+    function isEditingSubtask(subtask) {
+    return editingSubtaskId.value === (subtask.id || subtasks.value.indexOf(subtask))
     }
 
     function canEdit(task) {
@@ -329,6 +455,18 @@
     return false
     })
 
+    const minDate = computed(() => {
+    return new Date().toISOString().slice(0, 16)  
+    })
+
+    const subtaskMinDate = computed(() => {
+    return new Date().toISOString().slice(0, 16)  
+    })
+
+    const subtaskMaxDate = computed(() => {
+    return taskForm.value.due_date 
+    })
+
     // Subtask progress tracking
     const subtaskProgress = computed(() => {
     if (subtasks.value.length === 0) return { completed: 0, total: 0, percentage: 0 }
@@ -379,15 +517,12 @@
         let options = [...statusOptions];
         
         if (role === 'staff') {
-            // Filter out unassigned, but include it if it's the current status
             options = statusOptions.filter(opt => opt.value !== 'unassigned');
             
-            // If current status is unassigned, add it back so it can be displayed
             if (task && task.status === 'unassigned') {
                 options.push({ label: 'Unassigned', value: 'unassigned' });
             }
         }
-        
         return options;
     }
 
@@ -397,15 +532,12 @@
         let options = [...statusOptions];
         
         if (role === 'staff') {
-            // Filter out unassigned, but include it if it's the current status
             options = statusOptions.filter(opt => opt.value !== 'unassigned');
             
-            // If current status is unassigned, add it back so it can be displayed
             if (subtask && subtask.status === 'unassigned') {
                 options.push({ label: 'Unassigned', value: 'unassigned' });
             }
         }
-        
         return options;
     }
 
@@ -456,7 +588,6 @@
         })
         console.log("API Response:", res.data)
         const allTasks = (res.data.tasks || []).map(t => {
-        // Parse attachments from JSON string
         let attachments = []
         if (t.attachment) {
             try {
@@ -466,7 +597,6 @@
                 url: `http://localhost:5002/attachments/${filename}`
             })) : []
             } catch (e) {
-            // If it's not JSON, handle old single file format
             attachments = [{
                 name: t.attachment.split(/[/\\]/).pop() || "File",
                 url: `http://localhost:5002/attachments/${t.attachment}`
@@ -474,41 +604,55 @@
             }
         }
 
-        const toLocal = iso => {
-        if (!iso) return null
-        const date = new Date(iso)               // interprets "Z" as UTC
-        return date.toLocaleString(undefined, {  // convert to local
-        dateStyle: "medium",
-        timeStyle: "short",
-        })
-    }
-        
         return {
             id: t.task_id,
             name: t.title,
             description: t.description,
-            due_date: toLocal(t.deadline),
-            created_at: toLocal(t.created_at),
+            due_date: t.deadline,  // Keep ISO format from backend
+            created_at: t.created_at,  // Keep ISO format
             status: t.status,
             priority: t.priority || 5,
             owner: t.owner,
             project_id: t.project_id,
             parent_id: t.parent_id,
             collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)) : [],
-            attachments: attachments
+            attachments: attachments,
+            // Map subtasks from backend (already nested)
+            subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(sub => {
+                let subAttachments = []
+                if (sub.attachment) {
+                    try {
+                        const parsed = JSON.parse(sub.attachment)
+                        subAttachments = Array.isArray(parsed) ? parsed.map(filename => ({
+                            name: filename.split(/[/\\]/).pop() || "File",
+                            url: `http://localhost:5002/attachments/${filename}`
+                        })) : []
+                    } catch (e) {
+                        subAttachments = [{
+                            name: sub.attachment.split(/[/\\]/).pop() || "File",
+                            url: `http://localhost:5002/attachments/${sub.attachment}`
+                        }]
+                    }
+                }
+                return {
+                    id: sub.task_id,
+                    name: sub.title,
+                    description: sub.description,
+                    due_date: sub.deadline,
+                    status: sub.status,
+                    priority: sub.priority || 5,
+                    owner: sub.owner,
+                    project_id: sub.project_id,
+                    parent_id: sub.parent_id,
+                    collaborators: Array.isArray(sub.collaborators) ? sub.collaborators.map(id => Number(id)) : [],
+                    attachments: subAttachments
+                }
+            }) : []
         }
         })
 
-        // Organize tasks into parent-child relationships
-        const parentTasks = allTasks.filter(task => !task.parent_id)
-        const subtasks = allTasks.filter(task => task.parent_id)
-        
-        // Add subtasks to their parent tasks
-        parentTasks.forEach(parent => {
-            parent.subtasks = subtasks.filter(subtask => subtask.parent_id === parent.id)
-        })
-
-        tasks.value = parentTasks
+        // Only keep parent tasks (subtasks are already nested)
+        tasks.value = allTasks.filter(task => !task.parent_id)
         if (!availableEmployees.value || availableEmployees.value.length === 0) {
         try { await fetchEmployees() } catch (_) {}
         }
@@ -535,10 +679,8 @@
     try {
         let uploadedAttachments = []
 
-        // Upload all new files
         for (const attachment of taskForm.value.attachments) {
         if (attachment.file) {
-            // New file to upload
             const formData = new FormData()
             formData.append('attachment', attachment.file)
 
@@ -549,7 +691,6 @@
             
             uploadedAttachments.push(uploadRes.data.file_path)
         } else if (attachment.url) {
-            // Existing file - extract filename from URL
             const urlParts = attachment.url.split('/')
             uploadedAttachments.push(urlParts[urlParts.length - 1])
         }
@@ -569,16 +710,15 @@
         const subtasksPayload = subtasks.value.map(subtask => {
             let subtaskDeadlineDate
             if (subtask.due_date) {
-                subtaskDeadlineDate = subtask.due_date.includes(':') && !subtask.due_date.includes(':', 5) 
-                    ? subtask.due_date + ':00' 
-                    : subtask.due_date
+                const local = new Date(subtask.due_date)
+                subtaskDeadlineDate = local.toISOString()
             } else {
                 const futureDate = new Date()
                 futureDate.setDate(futureDate.getDate() + 7)
-                subtaskDeadlineDate = futureDate.toISOString().slice(0, 19)
+                subtaskDeadlineDate = futureDate.toISOString()
             }
 
-            return {
+            const payload = {
                 title: subtask.name,
                 description: subtask.description,
                 deadline: subtaskDeadlineDate,
@@ -588,6 +728,12 @@
                 attachments: subtask.attachments || [],
                 collaborators: subtask.collaborators || []
             }
+
+            if (subtask.id) {
+                payload.task_id = subtask.id
+            }
+
+            return payload
         })
 
         const payload = {
@@ -652,28 +798,21 @@
 
         showModal.value = false
         taskForm.value = resetForm()
-        subtasks.value = [] // Clear subtasks after successful creation
-        comments.value = [] // Clear comments when closing modal
+        subtasks.value = [] 
+        comments.value = [] 
         isEditing.value = false
-    } catch (err) {
-        console.error("Error saving task:", err)
-        alert('Error saving task. Please check the console for details.')
-    }
-    }
-
-    // Simple helper to parse datetime strings as local time
-    function parseDateTime(dateString) {
-        if (!dateString) return null
-        // If no timezone info, treat as local time by parsing directly
-        if (typeof dateString === 'string' && dateString.includes('T') && 
-            !dateString.includes('Z') && !dateString.includes('+') && !dateString.includes('-', 10)) {
-            // Parse as local time directly
-            const [datePart, timePart] = dateString.split('T')
-            const [year, month, day] = datePart.split('-').map(Number)
-            const [hours, minutes, seconds = 0] = timePart.split(':').map(Number)
-            return new Date(year, month - 1, day, hours, minutes, seconds)
+    } catch (error) {
+        console.error("Error saving task:", error)
+        
+        const backendMessage = error.response?.data?.message || 'An unexpected error occurred'
+        formErrors.value = { backend: backendMessage }
+        showValidationErrors.value = true
+        
+        const modalContent = document.querySelector('.modal-content')
+        if (modalContent) {
+            modalContent.scrollTo({ top: 0, behavior: 'smooth' })
         }
-        return new Date(dateString)
+    }
     }
 
     // Form validation functions
@@ -693,18 +832,16 @@
             errors.due_date = 'Due date is required'
         }
         
-        // Status is automatically set based on role, no validation needed
-        
         if (!taskForm.value.priority || taskForm.value.priority === null || taskForm.value.priority === '') {
             errors.priority = 'Priority is required'
         }
         
-        // Additional validation for due date
+        // Additional validation for due date - match backend wording
         if (taskForm.value.due_date) {
             const dueDate = new Date(taskForm.value.due_date)
             const now = new Date()
             if (dueDate < now) {
-                errors.due_date = 'Due date cannot be in the past'
+                errors.due_date = 'Deadline must be in the future'
             }
         }
         
@@ -745,8 +882,22 @@
         await axios.patch(`http://localhost:5002/task/status/${task.id}`, { status: newStatus, employee_id: currentEmployeeId }, { withCredentials: true })
         task.status = newStatus
         if (openStatusFor.value === task.id) openStatusFor.value = null
-    } catch (err) {
-        console.error("Error updating status:", err)
+    } catch (error) {
+        console.error("Error updating status:", error)
+        
+        const backendMessage = error.response?.data?.message || 'Error updating task status'
+        
+        if (showModal.value) {
+            formErrors.value = { backend: backendMessage }
+            showValidationErrors.value = true
+            
+            const modalContent = document.querySelector('.modal-content')
+            if (modalContent) {
+                modalContent.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+        } else {
+            alert(backendMessage)
+        }
     }
     }
 
@@ -779,7 +930,6 @@
     return opts
     })
 
-    // Display labels for employee options (show role/team/department for HR, Senior Manager & Director)
     const employeeDisplayList = computed(() => {
     const role = (currentRole || '').toLowerCase()
     const showMeta = role === 'senior manager' || role === 'hr' || role === 'director'
@@ -805,6 +955,27 @@
         }))
     })
 
+    // Employee list for subtask assignment (only parent task collaborators + owner)
+    const subtaskOwnerList = computed(() => {
+    const role = (currentRole || '').toLowerCase()
+    const showMeta = role === 'senior manager' || role === 'hr' || role === 'director'
+    
+    // Get parent task collaborators + owner
+    const allowedIds = new Set([
+        taskForm.value.owner,
+        ...(Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : [])
+    ])
+    
+    return (availableEmployees.value || [])
+        .filter(emp => allowedIds.has(emp.employee_id))
+        .map(emp => ({
+            ...emp,
+            display_label: showMeta
+            ? `${emp.employee_name} [${[emp.role, emp.team, emp.department].filter(Boolean).join(' • ')}]`
+            : emp.employee_name
+        }))
+    })
+
     function getCollaboratorNames(collaboratorIds) {
     if (!Array.isArray(collaboratorIds) || collaboratorIds.length === 0) return ''
     const names = collaboratorIds
@@ -819,19 +990,34 @@
     taskForm.value = resetForm()
     subtasks.value = [] 
     comments.value = [] // Clear any temporary comments
-    clearValidationErrors() // Clear any validation errors
+    clearValidationErrors() 
+    editingSubtaskId.value = null 
+    editingSubtaskBackup.value = null
     await fetchEmployees()
     showModal.value = true
+    }
+
+    // convert ISO date to locale string for display
+    function toLocal(iso) {
+    if (!iso) return null
+    const date = new Date(iso)
+    if (isNaN(date.getTime())) return null
+    return date.toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short"
+    })
     }
 
     function openDetails(task) {
     selectedTask.value = task
     isEditing.value = false
     clearValidationErrors() // Clear any validation errors
+    editingSubtaskId.value = null 
+    editingSubtaskBackup.value = null
     
     let formattedDueDate = task.due_date
-    if (task.due_date && typeof task.due_date === 'string' && task.due_date.includes(':')) {
-        formattedDueDate = task.due_date.replace(/:\d{2}$/, '')
+    if (formattedDueDate) {
+        formattedDueDate = formattedDueDate.replace(/:\d{2}[.Z].*$/, '')
     }
     
     taskForm.value = {
@@ -846,8 +1032,14 @@
         collaborators: (task.collaborators || []).filter(id => id !== task.owner),
         attachments: task.attachments || []
     }
-    // Initialize subtasks (you can fetch from API later)
-    subtasks.value = task.subtasks || []
+    // Initialize subtasks and format dates for datetime-local inputs
+    subtasks.value = (task.subtasks || []).map(subtask => {
+        let formattedDate = subtask.due_date
+        if (formattedDate) {
+            formattedDate = formattedDate.replace(/:\d{2}[.Z].*$/, '')
+        }
+        return { ...subtask, due_date: formattedDate }
+    })
     // Load comments for this task
     loadComments(task.id)
     // Load mentionable users for this task
@@ -875,14 +1067,13 @@
     }
 
     function formatDate(date) {
-    if (!date) return '-'
-    const d = parseDateTime(date)
-    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    // Use toLocal helper to format ISO dates for display
+    return toLocal(date) || '-'
     }
 
     function formatDateRelative(date) {
     if (!date) return '-'
-    const d = parseDateTime(date)
+    const d = new Date(date)
     const now = new Date()
     const diffMs = d.getTime() - now.getTime()
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
@@ -1075,7 +1266,8 @@
 
     function isOverdue(task) {
         if (!task?.due_date || !task?.status) return false
-        const due = parseDateTime(task.due_date)
+        const due = new Date(task.due_date)
+        if (isNaN(due.getTime())) return false
         const now = new Date()
         return due < now && task.status.toLowerCase() !== 'done'
     }

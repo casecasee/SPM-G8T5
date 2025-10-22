@@ -269,13 +269,15 @@
       <div class="form-section">
         <h3 class="section-title">Basic Information</h3>
         
-        <!-- Validation Error Summary -->
-        <div v-if="showValidationErrors" class="validation-summary">
+        <!-- Validation Error Summary (Parent Task Only) -->
+        <div v-if="showValidationErrors && Object.keys(formErrors).some(key => !key.startsWith('subtask_'))" class="validation-summary">
           <div class="validation-icon">⚠️</div>
           <div class="validation-content">
-            <h4>Please in the following fields:</h4>
+            <h4>{{ formErrors.backend ? 'Error' : 'Please fill in the following fields:' }}</h4>
             <ul>
-              <li v-for="(error, field) in formErrors" :key="field">{{ error }}</li>
+              <template v-for="(error, field) in formErrors" :key="field">
+                <li v-if="!field.startsWith('subtask_')">{{ error }}</li>
+              </template>
             </ul>
           </div>
         </div>
@@ -318,7 +320,7 @@
             <label class="form-label">Due Date *</label>
             <template v-if="isEditing || !selectedTask">
               <input 
-                type="datetime-local"v-model="taskForm.due_date" :class="['form-input', { 'error': getFieldError('due_date') }]" :disabled="!canEdit(selectedTask)" data-field="due_date" />
+                type="datetime-local" v-model="taskForm.due_date" :min="minDate" :class="['form-input', { 'error': getFieldError('due_date') }]" :disabled="!canEdit(selectedTask)" data-field="due_date" />
               <div v-if="getFieldError('due_date')" class="field-error">{{ getFieldError('due_date') }}</div>
             </template>
             <template v-else>
@@ -559,41 +561,58 @@
         
         <!-- Subtask Form -->
         <div v-if="showSubtaskForm && (isEditing || !selectedTask)" class="subtask-form">
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Subtask Name *</label>
-              <InputText v-model="newSubtask.name" placeholder="Enter subtask name" class="form-input" />
+          <div v-if="showValidationErrors && Object.keys(formErrors).some(key => key.startsWith('subtask_'))" class="validation-summary">
+            <div class="validation-icon">⚠️</div>
+            <div class="validation-content">
+              <h4>Please fill in the following fields:</h4>
+              <ul>
+                <template v-for="(error, field) in formErrors" :key="field">
+                  <li v-if="field.startsWith('subtask_')">{{ error }}</li>
+                </template>
+              </ul>
             </div>
           </div>
           
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Description</label>
-              <Textarea v-model="newSubtask.description" placeholder="Enter description" rows="2" class="form-input" />
+              <label class="form-label">Subtask Name *</label>
+              <InputText v-model="newSubtask.name" placeholder="Enter subtask name" :class="['form-input', { 'error': getFieldError('subtask_name') }]" data-field="subtask_name" />
+              <div v-if="getFieldError('subtask_name')" class="field-error">{{ getFieldError('subtask_name') }}</div>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Description *</label>
+              <Textarea v-model="newSubtask.description" placeholder="Enter description" rows="2" :class="['form-input', { 'error': getFieldError('subtask_description') }]" data-field="subtask_description" />
+              <div v-if="getFieldError('subtask_description')" class="field-error">{{ getFieldError('subtask_description') }}</div>
             </div>
           </div>
           
           <div class="form-row form-row-3">
             <div class="form-group">
-              <label class="form-label">Due Date</label>
-              <input type="datetime-local" v-model="newSubtask.due_date" class="form-input" />
+              <label class="form-label">Due Date *</label>
+              <input type="datetime-local" v-model="newSubtask.due_date" :min="subtaskMinDate" :max="subtaskMaxDate" :class="['form-input', { 'error': getFieldError('subtask_due_date') }]" data-field="subtask_due_date" />
+              <div v-if="getFieldError('subtask_due_date')" class="field-error">{{ getFieldError('subtask_due_date') }}</div>
             </div>
             <div class="form-group">
               <label class="form-label">Status</label>
-              <Dropdown v-model="newSubtask.status" :options="filteredStatusOptions" optionLabel="label" optionValue="value" class="form-input" />
+              <div class="form-display status-display" :class="getStatusClass(newSubtask.status)">{{ newSubtask.status }}</div>
             </div>
             <div class="form-group">
-              <label class="form-label">Priority</label>
-              <Dropdown v-model="newSubtask.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="form-input" />
+              <label class="form-label">Priority *</label>
+              <Dropdown v-model="newSubtask.priority" :options="priorityOptions" optionLabel="label" optionValue="value" :class="['form-input', { 'error': getFieldError('subtask_priority') }]" data-field="subtask_priority" placeholder="Select priority..." />
+              <div v-if="getFieldError('subtask_priority')" class="field-error">{{ getFieldError('subtask_priority') }}</div>
             </div>
           </div>
           
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label">Owner</label>
+              <label class="form-label">Assign to *</label>
               <Dropdown
-                v-model="newSubtask.owner" :options="employeeDisplayList"
-                optionLabel="display_label" optionValue="employee_id" class="form-input" :disabled="!canEdit(selectedTask)" placeholder="Select owner..." data-field="owner" filter filterBy="display_label,employee_name,role,team,department" />
+                v-model="newSubtask.owner" :options="subtaskOwnerList"
+                optionLabel="display_label" optionValue="employee_id" :class="['form-input', { 'error': getFieldError('subtask_owner') }]" :disabled="!canEdit(selectedTask)" placeholder="Select owner..." data-field="subtask_owner" filter filterBy="display_label,employee_name,role,team,department" />
+              <div v-if="getFieldError('subtask_owner')" class="field-error">{{ getFieldError('subtask_owner') }}</div>
             </div>
           </div>
           
@@ -602,7 +621,7 @@
               <label class="form-label">Collaborators</label>
               <MultiSelect
                 v-model="newSubtask.collaborators"
-                :options="employeeDisplayList.filter(emp => emp.employee_id !== newSubtask.owner)" optionLabel="display_label" optionValue="employee_id" class="form-input" :disabled="!canEdit(selectedTask)" placeholder="Select collaborators..." filter filterBy="display_label,employee_name,role,team,department" />
+                :options="subtaskOwnerList.filter(emp => emp.employee_id !== newSubtask.owner)" optionLabel="display_label" optionValue="employee_id" class="form-input" :disabled="!canEdit(selectedTask)" placeholder="Select collaborators..." filter filterBy="display_label,employee_name,role,team,department" />
             </div>
           </div>
           
@@ -639,30 +658,92 @@
         <div v-if="subtasks.length > 0" class="subtasks-list">
           <div v-for="(subtask, index) in subtasks" :key="subtask.id || index" class="subtask-item">
             <div class="subtask-content">
-              <div class="subtask-header">
-                <h4 class="subtask-title">{{ subtask.name }}</h4>
-                <div class="subtask-meta">
-                  <Dropdown 
-                    v-model="subtask.status" :options="getStatusOptionsForSubtask(subtask)" optionLabel="label" 
-                    optionValue="value" 
-                    class="subtask-status-dropdown"
-                    :class="getStatusClass(subtask.status)"
-                    @change="updateSubtaskStatus(subtask, subtask.status)"
-                  />
-                  <span class="priority-badge" :class="getPriorityClass(subtask.priority)">P{{ subtask.priority }}</span>
+              <!-- Editing Mode -->
+              <template v-if="isEditingSubtask(subtask)">
+                <div class="subtask-edit-form">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Subtask Name *</label>
+                      <InputText v-model="subtask.name" placeholder="Enter subtask name" class="form-input" />
+                    </div>
+                  </div>
+                  
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Description *</label>
+                      <Textarea v-model="subtask.description" placeholder="Enter description" rows="2" class="form-input" />
+                    </div>
+                  </div>
+                  
+                  <div class="form-row form-row-3">
+                    <div class="form-group">
+                      <label class="form-label">Due Date *</label>
+                      <input type="datetime-local" v-model="subtask.due_date" :min="subtaskMinDate" :max="subtaskMaxDate" class="form-input" />
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Status</label>
+                      <div class="form-display status-display" :class="getStatusClass(subtask.status)">{{ subtask.status }}</div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label">Priority *</label>
+                      <Dropdown v-model="subtask.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="form-input" />
+                    </div>
+                  </div>
+                  
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Assign to</label>
+                      <Dropdown v-model="subtask.owner" :options="subtaskOwnerList" optionLabel="display_label" optionValue="employee_id" class="form-input" placeholder="Select owner..." filter filterBy="display_label,employee_name,role,team,department" />
+                    </div>
+                  </div>
+                  
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label class="form-label">Collaborators</label>
+                      <MultiSelect v-model="subtask.collaborators" :options="subtaskOwnerList.filter(emp => emp.employee_id !== subtask.owner)" optionLabel="display_label" optionValue="employee_id" class="form-input" placeholder="Select collaborators..." filter filterBy="display_label,employee_name,role,team,department" />
+                    </div>
+                  </div>
+                  
+                  <div class="subtask-edit-actions">
+                    <Button label="Save" @click="saveEditingSubtask(subtask)" class="p-button-sm" />
+                    <Button label="Cancel" @click="cancelEditingSubtask" class="p-button-text p-button-sm" />
+                  </div>
                 </div>
-              </div>
-              <p v-if="subtask.description" class="subtask-description">{{ subtask.description }}</p>
-              <div class="subtask-details">
-                <span v-if="subtask.due_date" class="subtask-due">📅 {{ formatDate(subtask.due_date) }} <span class="relative-time">({{ formatDateRelative(subtask.due_date) }})</span></span>
-                <span class="subtask-owner">👤 {{ getOwnerName(subtask.owner) }}</span>
-                <span v-if="subtask.collaborators && subtask.collaborators.length > 0" class="subtask-collabs">
-                  🤝 {{ getCollaboratorNames(subtask.collaborators) }}
-                </span>
-                <span v-if="subtask.attachments && subtask.attachments.length > 0" class="subtask-attachments">
-                  📎 {{ subtask.attachments.length }} file(s)
-                </span>
-              </div>
+              </template>
+              
+              <!-- View Mode -->
+              <template v-else>
+                <div class="subtask-header">
+                  <h4 class="subtask-title">{{ subtask.name }}</h4>
+                  <div class="subtask-meta">
+                    <Dropdown 
+                      v-model="subtask.status" :options="getStatusOptionsForSubtask(subtask)" optionLabel="label" 
+                      optionValue="value" 
+                      class="subtask-status-dropdown"
+                      :class="getStatusClass(subtask.status)"
+                      @change="updateSubtaskStatus(subtask, subtask.status)"
+                      @click.stop
+                    />
+                    <span class="priority-badge" :class="getPriorityClass(subtask.priority)">P{{ subtask.priority }}</span>
+                  </div>
+                </div>
+                <p v-if="subtask.description" class="subtask-description">{{ subtask.description }}</p>
+                <div class="subtask-details">
+                  <span v-if="subtask.due_date" class="subtask-due">📅 {{ formatDate(subtask.due_date) }} <span class="relative-time">({{ formatDateRelative(subtask.due_date) }})</span></span>
+                  <span class="subtask-owner">👤 {{ getOwnerName(subtask.owner) }}</span>
+                  <span v-if="subtask.collaborators && subtask.collaborators.length > 0" class="subtask-collabs">
+                    🤝 {{ getCollaboratorNames(subtask.collaborators) }}
+                  </span>
+                  <span v-if="subtask.attachments && subtask.attachments.length > 0" class="subtask-attachments">
+                    📎 {{ subtask.attachments.length }} file(s)
+                  </span>
+                </div>
+                
+                <!-- Edit button for parent task owner -->
+                <div v-if="isEditing && canEdit(selectedTask)" class="subtask-actions">
+                  <Button label="Edit" icon="pi pi-pencil" @click="startEditingSubtask(subtask)" class="p-button-text p-button-sm" />
+                </div>
+              </template>
             </div>
           </div>
         </div>
