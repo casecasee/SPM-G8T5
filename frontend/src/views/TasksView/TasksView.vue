@@ -476,8 +476,16 @@
 
         const toLocal = iso => {
         if (!iso) return null
-        const date = new Date(iso)               // interprets "Z" as UTC
-        return date.toLocaleString(undefined, {  // convert to local
+        // Handle both ISO format and MySQL DATETIME format
+        let date
+        if (iso.includes('T')) {
+            // ISO format: "2025-10-30T15:18:00.000Z"
+            date = new Date(iso)
+        } else {
+            // MySQL DATETIME format: "2025-10-30 15:18:00"
+            date = new Date(iso.replace(' ', 'T'))
+        }
+        return date.toLocaleString(undefined, {
         dateStyle: "medium",
         timeStyle: "short",
         })
@@ -557,8 +565,29 @@
 
         let deadlineDate
         if (taskForm.value.due_date) {
-            const local = new Date(taskForm.value.due_date)
-            deadlineDate = local.toISOString()
+            // Handle different input formats
+            let localDate
+            
+            if (taskForm.value.due_date.includes('T')) {
+                // datetime-local input format (YYYY-MM-DDTHH:MM)
+                localDate = new Date(taskForm.value.due_date)
+            } else if (taskForm.value.due_date.includes(',')) {
+                // Localized format like "Oct 30, 2025, 3:18 PM"
+                localDate = new Date(taskForm.value.due_date)
+            } else {
+                // Try parsing as-is
+                localDate = new Date(taskForm.value.due_date)
+            }
+            
+            if (isNaN(localDate.getTime())) {
+                console.error('Invalid date format:', taskForm.value.due_date)
+                alert('Invalid date format. Please use a valid date.')
+                return
+            }
+            
+            // Convert to ISO string for backend
+            deadlineDate = localDate.toISOString()
+            console.log('Converted deadline:', taskForm.value.due_date, '→', deadlineDate)
         } else {
             const futureDate = new Date()
             futureDate.setDate(futureDate.getDate() + 7)
@@ -610,15 +639,18 @@
             return selected
         })(),
         role: currentRole,
-        subtasks: subtasksPayload
+        subtasks: subtasksPayload,
+        actor_id: currentEmployeeId  // Add actor_id for notifications
         }
 
         let createdTaskId = null
         if (taskForm.value.id) {
+        console.log('Updating task with payload:', payload)
         const updateRes = await axios.put(`http://localhost:5002/task/${taskForm.value.id}`, payload, { withCredentials: true })
         console.log("Task updated:", updateRes.data)
         createdTaskId = taskForm.value.id
         } else {
+        console.log('Creating task with payload:', payload)
         const createRes = await axios.post("http://localhost:5002/tasks", payload, { withCredentials: true })
         console.log("Task created:", createRes.data)
         createdTaskId = createRes.data.task_id || createRes.data.id
@@ -829,9 +861,24 @@
     isEditing.value = false
     clearValidationErrors() // Clear any validation errors
     
-    let formattedDueDate = task.due_date
-    if (task.due_date && typeof task.due_date === 'string' && task.due_date.includes(':')) {
-        formattedDueDate = task.due_date.replace(/:\d{2}$/, '')
+    // Convert displayed date back to datetime-local format for editing
+    let formattedDueDate = null
+    if (task.due_date) {
+        try {
+            // Parse the displayed date and convert to datetime-local format
+            const date = new Date(task.due_date)
+            if (!isNaN(date.getTime())) {
+                // Convert to YYYY-MM-DDTHH:MM format for datetime-local input
+                const year = date.getFullYear()
+                const month = String(date.getMonth() + 1).padStart(2, '0')
+                const day = String(date.getDate()).padStart(2, '0')
+                const hours = String(date.getHours()).padStart(2, '0')
+                const minutes = String(date.getMinutes()).padStart(2, '0')
+                formattedDueDate = `${year}-${month}-${day}T${hours}:${minutes}`
+            }
+        } catch (e) {
+            console.error('Error parsing due date:', task.due_date, e)
+        }
     }
     
     taskForm.value = {

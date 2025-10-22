@@ -181,19 +181,13 @@ def notify_due_date_changed(task_id, old_date, new_date, changed_by_id):
             return
         
         requests.post(
-            f'{NOTIFICATION_SERVICE_URL}/api/internal/events/due-date-changed',
+            f'{NOTIFICATION_SERVICE_URL}/api/events/task-updated',
             json={
-                'item_id': task_id,
-                'item_title': task.title,
-                'item_type': 'Subtask' if task.parent_id else 'Task',
-                'owner_id': task.owner,
-                'collaborators': get_task_collaborators_ids(task_id),
-                'old_due_date': old_date.strftime('%Y-%m-%d') if old_date else None,
-                'new_due_date': new_date.strftime('%Y-%m-%d') if new_date else None,
-                'changed_by_id': changed_by_id,
-                'changed_by_name': get_employee_name(changed_by_id)
+                'task_id': task_id,
+                'changed_fields': ['deadline'],
+                'actor_id': changed_by_id
             },
-            timeout=2
+            timeout=3
         )
         print(f"[Notification] Sent due date change notification for task {task_id}")
     except Exception as e:
@@ -753,15 +747,17 @@ def upload_attachment():
 
 @app.route("/tasks", methods=["GET"])
 def get_all_tasks():
-    role = session['role']
-    eid = session['employee_id']
-    team = session['team']
-    dept = session['department']
+    # Get session data safely
+    role = session.get('role', '')
+    eid = session.get('employee_id', None)
+    team = session.get('team', '')
+    dept = session.get('department', '')
 
-# ------------------------------- old task code: get all tasks (no filtering) -------
-
+    # For now, return all tasks (you can add filtering later based on role)
     tasks = Task.query.all()
     tasks_list = [task.to_dict() for task in tasks]
+    
+    print(f"DEBUG: Returning {len(tasks_list)} tasks for user {eid} with role {role}")
     return jsonify({"tasks": tasks_list}), 200
 
 # -----------------------------------------------------------------------------------------------
