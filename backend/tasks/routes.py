@@ -129,7 +129,7 @@ def create_task():
 def get_tasks():
     """Return all tasks (minimal for scheduler); could be filtered later."""
     tasks = Task.query.all()
-    return jsonify([t.to_dict() for t in tasks]), 200
+    return jsonify({"tasks": [t.to_dict() for t in tasks]}), 200
 
 # Legacy compatibility for frontend expecting /task?eid=...&role=...
 @app.route('/task', methods=['GET'])
@@ -225,23 +225,17 @@ def update_task(task_id):
     NOTIF_BASE = 'http://localhost:5003'
     actor_id = data.get('actor_id')
     try:
-        if 'deadline' in changed_fields:
-            requests.post(f"{NOTIF_BASE}/api/events/due-date-changed", json={
-                'task_id': task_id,
-                'old_deadline': old_deadline_str,
-                'new_deadline': task.deadline.isoformat() if task.deadline else None,
-                'actor_id': actor_id
-            }, timeout=3)
-        # For other meaningful updates
-        meaningful = [f for f in changed_fields if f in ['status', 'title', 'description', 'priority', 'attachment']]
-        if meaningful:
+        # Send task-updated notification for all changes including deadline
+        if changed_fields:
             requests.post(f"{NOTIF_BASE}/api/events/task-updated", json={
                 'task_id': task_id,
-                'changed_fields': meaningful,
+                'changed_fields': changed_fields,
                 'actor_id': actor_id
             }, timeout=3)
-    except Exception:
+            print(f"DEBUG: Sent task-updated notification for task {task_id}, changed_fields: {changed_fields}")
+    except Exception as e:
         # Best-effort; do not fail the update because of notifications
+        print(f"DEBUG: Failed to send notification: {e}")
         pass
 
     return jsonify(task.to_dict()), 200
@@ -287,35 +281,48 @@ def update_task_legacy_route(task_id):
 
     set_if_changed('status', 'status')
 
-    # Handle collaborators update
+    # Handle collaborators update - only add to changed_fields if actually changed
     if 'collaborators' in data:
         collaborator_ids = data.get('collaborators', [])
         if isinstance(collaborator_ids, list):
-            staff_list = Staff.query.filter(Staff.employee_id.in_(collaborator_ids)).all()
-            task.collaborators = staff_list
-            changed_fields.append('collaborators')
+            # Get current collaborator IDs
+            current_collaborator_ids = set()
+            try:
+                current_collaborator_ids = {s.employee_id for s in task.collaborators.all()}
+            except Exception:
+                pass
+            
+            # Get new collaborator IDs
+            new_collaborator_ids = set(collaborator_ids)
+            
+            # Only update if collaborators actually changed
+            if current_collaborator_ids != new_collaborator_ids:
+                staff_list = Staff.query.filter(Staff.employee_id.in_(collaborator_ids)).all()
+                task.collaborators = staff_list
+                changed_fields.append('collaborators')
+                print(f"DEBUG: Collaborators changed from {current_collaborator_ids} to {new_collaborator_ids}")
+            else:
+                print(f"DEBUG: Collaborators unchanged: {current_collaborator_ids}")
 
     db.session.commit()
 
     NOTIF_BASE = 'http://localhost:5003'
     actor_id = data.get('actor_id')
     try:
-        # Only send due-date-changed notification if deadline was actually changed
-        if 'deadline' in changed_fields:
-            requests.post(f"{NOTIF_BASE}/api/events/due-date-changed", json={
+        # Send task-updated notification for all changes including deadline
+        if changed_fields:
+            notification_payload = {
                 'task_id': task_id,
-                'old_deadline': old_deadline_str,
-                'new_deadline': task.deadline.isoformat() if task.deadline else None,
+                'changed_fields': changed_fields,
                 'actor_id': actor_id
-            }, timeout=3)
-        meaningful = [f for f in changed_fields if f in ['status', 'title', 'description', 'priority', 'attachment']]
-        if meaningful:
-            requests.post(f"{NOTIF_BASE}/api/events/task-updated", json={
-                'task_id': task_id,
-                'changed_fields': meaningful,
-                'actor_id': actor_id
-            }, timeout=3)
-    except Exception:
+            }
+            print(f"DEBUG: Sending notification payload: {notification_payload}")
+            requests.post(f"{NOTIF_BASE}/api/events/task-updated", json=notification_payload, timeout=3)
+            print(f"DEBUG: Sent task-updated notification for task {task_id}, changed_fields: {changed_fields}")
+        else:
+            print(f"DEBUG: No changes detected, skipping notification")
+    except Exception as e:
+        print(f"DEBUG: Failed to send notification: {e}")
         pass
 
     return jsonify(task.to_dict()), 200

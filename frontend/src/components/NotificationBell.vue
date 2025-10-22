@@ -267,8 +267,8 @@ async fetchUnreadCount() {
     },
 
     goToSettings() {
-      this.$router.push('/settings/notifications');
-      this.showDropdown = false;
+      this.$router.push('/settings/notifications')
+      this.showDropdown = false
     },
 
     getNotificationIcon(type) {

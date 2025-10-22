@@ -7,6 +7,7 @@ import HomeView from '../views/HomeView.vue'
 import ProjectsView from '../views/ProjectsView.vue' 
 import ProjectDetailView from '../views/ProjectDetailView.vue'
 import ProjectTimelineView from '../views/ProjectTimelineView.vue'
+import NotificationSettings from '../components/NotificationSettings.vue'
 
 
 const routes = [
@@ -54,6 +55,11 @@ const routes = [
     path: '/timeline',
     name: 'timeline',
     component: ProjectTimelineView,
+  },
+  {
+    path: '/settings/notifications',
+    name: 'notification-settings',
+    component: NotificationSettings,
   },
 ]
 
