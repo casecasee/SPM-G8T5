@@ -225,6 +225,9 @@ def event_task_updated():
     task_id = payload.get('task_id')
     changed_fields = payload.get('changed_fields') or []
     actor_id = payload.get('actor_id')
+    
+    print(f"DEBUG: Received task-updated event: task_id={task_id}, changed_fields={changed_fields}, actor_id={actor_id}")
+    
     if not task_id or not changed_fields:
         return jsonify({'error': 'task_id and changed_fields required'}), 400
     task = _get_task(task_id)
@@ -243,7 +246,22 @@ def event_task_updated():
     elif 'deadline' in changed_fields:
         notif_type = 'due_date_changed'
         title = f"Due date changed: {task.get('title')}"
-        message = "Task deadline has been updated"
+        # Get actor name for more context
+        actor_name = "Someone"
+        if actor_id:
+            try:
+                print(f"DEBUG: Fetching actor name for employee_id: {actor_id}")
+                actor_resp = requests.get(f"{EMPLOYEE_SERVICE_URL}/api/internal/employee/{actor_id}", timeout=2)
+                print(f"DEBUG: Actor response status: {actor_resp.status_code}")
+                if actor_resp.ok:
+                    actor_data = actor_resp.json()
+                    actor_name = actor_data.get('employee_name', 'Someone')
+                    print(f"DEBUG: Actor name: {actor_name}")
+                else:
+                    print(f"DEBUG: Failed to get actor name: {actor_resp.text}")
+            except Exception as e:
+                print(f"DEBUG: Exception getting actor name: {e}")
+        message = f"{actor_name} updated the deadline"
     elif 'status' in changed_fields:
         notif_type = 'task_status_updated'
         title = f"Status updated: {task.get('title')}"
@@ -275,27 +293,11 @@ def event_task_updated():
         title = f"Task updated: {task.get('title')}"
         message = f"Changed: {', '.join(changed_fields)}"
     
+    print(f"DEBUG: Sending notifications to recipients: {recipients}")
+    print(f"DEBUG: Notification details - type: {notif_type}, title: {title}, message: {message}")
+    
     for staff_id in recipients:
         _create_notification(staff_id=staff_id, notif_type=notif_type, title=title, message=message, related_task_id=task_id)
-    return jsonify({'status': 'ok'}), 200
-
-# Event: due date changed
-@app.route('/api/events/due-date-changed', methods=['POST'])
-def event_due_date_changed():
-    payload = request.get_json(force=True) or {}
-    task_id = payload.get('task_id')
-    old_deadline = payload.get('old_deadline')
-    new_deadline = payload.get('new_deadline')
-    if not task_id or old_deadline is None or new_deadline is None:
-        return jsonify({'error': 'task_id, old_deadline, new_deadline required'}), 400
-    task = _get_task(task_id)
-    if not task:
-        return jsonify({'error': 'task not found'}), 404
-    recipients = _get_task_recipients(task)
-    title = f"Due date changed: {task.get('title')}"
-    message = f"{old_deadline}  {new_deadline}"
-    for staff_id in recipients:
-        _create_notification(staff_id=staff_id, notif_type='due_date_changed', title=title, message=message, related_task_id=task_id)
     return jsonify({'status': 'ok'}), 200
 
 # Scheduler: approaching deadlines and overdue
@@ -313,7 +315,9 @@ def _send_deadline_reminders():
         resp = requests.get(f"{TASK_SERVICE_URL}/tasks")
         if not resp.ok:
             return
-        tasks = resp.json()
+        tasks_data = resp.json()
+        # Handle both direct list and wrapped response
+        tasks = tasks_data.get('tasks', tasks_data) if isinstance(tasks_data, dict) else tasks_data
     except Exception:
         return
     now = datetime.now(timezone.utc)
@@ -323,8 +327,15 @@ def _send_deadline_reminders():
         if not deadline_str or not status or status.lower() in ('done', 'completed'):
             continue
         try:
-            deadline = datetime.fromisoformat(deadline_str.replace('Z', '+00:00')).replace(tzinfo=None)
-        except Exception:
+            # Handle both ISO format and MySQL DATETIME format
+            if 'T' in deadline_str:
+                # ISO format: "2025-10-30T15:18:00.000Z"
+                deadline = datetime.fromisoformat(deadline_str.replace('Z', '+00:00')).replace(tzinfo=None)
+            else:
+                # MySQL DATETIME format: "2025-10-30 15:18:00"
+                deadline = datetime.strptime(deadline_str, '%Y-%m-%d %H:%M:%S')
+        except Exception as e:
+            print(f"Error parsing deadline {deadline_str}: {e}")
             continue
         # Get unique reminder days from all users' preferences
         all_reminder_days = set()
