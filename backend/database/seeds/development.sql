@@ -52,3 +52,9 @@ INSERT INTO project_members (project_id, staff_id) VALUES
 INSERT INTO task_collaborators (task_id, staff_id) VALUES
 (7, 1), (8, 1), (9, 1), (10, 1), (11, 1), (12, 1), (6, 34), (1, 34), (2, 34), (5, 34), (3, 34), (4, 34)
 ;
+
+-- Insert default preferences for existing staff members
+INSERT IGNORE INTO `notification_preferences` (`staff_id`, `deadline_reminders`, `task_status_updates`, `due_date_changes`, `deadline_reminder_days`)
+SELECT `employee_id`, 1, 1, 1, '7,3,1'
+FROM `staff`
+WHERE `employee_id` NOT IN (SELECT `staff_id` FROM `notification_preferences`);
