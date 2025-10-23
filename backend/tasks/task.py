@@ -702,8 +702,8 @@ def update_task(task_id):
     #  a. if curr_task.project_id is not None, then we are moving from one project to another (reject)
     #  b. if curr_task.project_id is None, then we are moving from no project to a project (check collaborators)
     # 2. if no project_id is given, then we are dealing with lonely tasks (check collaborators in dept)
-
-    if 'project_id' in data:
+    print('project', data['project_id'])
+    if 'project_id' in data and data['project_id'] is not None:
         if curr_task.project_id is None:
             # moving from no project to a project
             project = Project.query.get(data['project_id'])
@@ -749,6 +749,9 @@ def update_task(task_id):
                 existing_subtask = Task.query.get(subtask_id)
                 if existing_subtask is None:
                     return {"message": f"Subtask with id {subtask_id} not found"}, 404
+                
+                if existing_subtask.owner != eid:
+                    return {"message": f"Only subtask owner can update subtask with id {subtask_id}"}, 403
                 
                 # update existing subtask
                 if 'title' in subtask:
