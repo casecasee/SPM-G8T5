@@ -42,8 +42,6 @@
     const formErrors = ref({})
     const showValidationErrors = ref(false)
     
-    // Backend error display
-    const backendError = ref('')
 
     // Mention suggestions
     const mentionable = ref([]) // [{employee_id, employee_name, role}]
@@ -83,7 +81,6 @@
         } 
 
     function goToTimeline() {
-        // Navigate to tasks timeline view
         router.push({ name: 'tasks-timeline' })
     }
 
@@ -162,11 +159,11 @@
     })
     const showSubtaskForm = ref(false)
     const subtaskFileUploadRef = ref(null)
+    const subtaskEditFileUploadRef = ref(null)
     const editingSubtaskId = ref(null)
     const editingSubtaskBackup = ref(null)
 
     function resetForm() {
-    // Set default status based on role
     const defaultStatus = (currentRole || '').toLowerCase() === 'staff' ? 'ongoing' : 'unassigned'
     
     return {
@@ -189,7 +186,7 @@
         ...(Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : [])
     ].filter((id, index, self) => self.indexOf(id) === index) // Remove duplicates
     
-    // Determine default status based on PARENT TASK OWNER's role
+    // figure out the default status based on PARENT TASK OWNER's role
     const parentOwner = (availableEmployees.value || []).find(emp => emp.employee_id === taskForm.value.owner)
     const parentOwnerRole = parentOwner ? (parentOwner.role || '').toLowerCase() : 'manager'
     const defaultStatus = parentOwnerRole === 'staff' ? 'ongoing' : 'unassigned'
@@ -201,7 +198,7 @@
         status: defaultStatus,
         priority: 5,
         owner: currentEmployeeId,
-        collaborators: parentCollaborators,  // Auto-populate from parent task
+        collaborators: parentCollaborators,  
         project_id: null,
         attachments: []
     }
@@ -222,12 +219,10 @@
         errors.subtask_due_date = 'Subtask deadline is required'
     }
     
-    // Validate priority
     if (!newSubtask.value.priority || newSubtask.value.priority === null || newSubtask.value.priority === '') {
         errors.subtask_priority = 'Subtask priority is required'
     }
     
-    // Validate owner (assign to)
     if (!newSubtask.value.owner || newSubtask.value.owner === null || newSubtask.value.owner === '') {
         errors.subtask_owner = 'Subtask must be assigned to someone'
     }
@@ -280,27 +275,40 @@
         newSubtask.value = resetSubtaskForm()
         clearValidationErrors()
     } else {
-        // Clear form when closing
         newSubtask.value = resetSubtaskForm()
         clearValidationErrors()
     }
     }
 
-    function handleSubtaskAttachment(event) {
-    const newFiles = event.files.map(file => ({ 
-        name: file.name, 
-        file: file,
-        url: null
-    }))
-    newSubtask.value.attachments.push(...newFiles)
-    
-    if (subtaskFileUploadRef.value && typeof subtaskFileUploadRef.value.clear === 'function') {
-        subtaskFileUploadRef.value.clear()
-    }
+    async function handleSubtaskAttachment(event) {
+    await handleAttachmentWithUpload(event, newSubtask.value.attachments, subtaskFileUploadRef.value)
     }
 
     function removeSubtaskAttachment(index) {
-    newSubtask.value.attachments.splice(index, 1)
+    removeAttachment(index, newSubtask.value.attachments)
+    }
+
+    async function handleSubtaskEditAttachment(event) {
+    const editingSubtask = subtasks.value.find(s => 
+        (s.id && s.id === editingSubtaskId.value) || 
+        subtasks.value.indexOf(s) === editingSubtaskId.value
+    )
+    if (editingSubtask) {
+        if (!editingSubtask.attachments) {
+            editingSubtask.attachments = []
+        }
+        await handleAttachmentWithUpload(event, editingSubtask.attachments, subtaskEditFileUploadRef.value)
+    }
+    }
+
+    function removeSubtaskEditAttachment(index) {
+    const editingSubtask = subtasks.value.find(s => 
+        (s.id && s.id === editingSubtaskId.value) || 
+        subtasks.value.indexOf(s) === editingSubtaskId.value
+    )
+    if (editingSubtask && editingSubtask.attachments) {
+        removeAttachment(index, editingSubtask.attachments)
+    }
     }
 
     async function updateSubtaskStatus(subtask, newStatus) {
@@ -668,7 +676,6 @@
         }
         })
 
-        // Only keep parent tasks (subtasks are already nested)
         tasks.value = allTasks.filter(task => !task.parent_id)
         if (!availableEmployees.value || availableEmployees.value.length === 0) {
         try { await fetchEmployees() } catch (_) {}
@@ -715,17 +722,13 @@
 
         let deadlineDate
         if (taskForm.value.due_date) {
-            // Handle different input formats
             let localDate
             
             if (taskForm.value.due_date.includes('T')) {
-                // datetime-local input format (YYYY-MM-DDTHH:MM)
                 localDate = new Date(taskForm.value.due_date)
             } else if (taskForm.value.due_date.includes(',')) {
-                // Localized format like "Oct 30, 2025, 3:18 PM"
                 localDate = new Date(taskForm.value.due_date)
             } else {
-                // Try parsing as-is
                 localDate = new Date(taskForm.value.due_date)
             }
             
@@ -745,7 +748,7 @@
         }
 
         // Prepare subtasks for payload
-        const subtasksPayload = subtasks.value.map(subtask => {
+        const subtasksPayload = await Promise.all(subtasks.value.map(async (subtask) => {
             let subtaskDeadlineDate
             if (subtask.due_date) {
                 const local = new Date(subtask.due_date)
@@ -756,6 +759,27 @@
                 subtaskDeadlineDate = futureDate.toISOString()
             }
 
+            // Process subtask attachments (same as main task)
+            let uploadedSubtaskAttachments = []
+            if (subtask.attachments && subtask.attachments.length > 0) {
+                for (const attachment of subtask.attachments) {
+                    if (attachment.file) {
+                        const formData = new FormData()
+                        formData.append('attachment', attachment.file)
+
+                        const uploadRes = await axios.post('http://localhost:5002/upload-attachment', formData, {
+                            headers: { 'Content-Type': 'multipart/form-data' },
+                            withCredentials: true
+                        })
+                        
+                        uploadedSubtaskAttachments.push(uploadRes.data.file_path)
+                    } else if (attachment.url) {
+                        const urlParts = attachment.url.split('/')
+                        uploadedSubtaskAttachments.push(urlParts[urlParts.length - 1])
+                    }
+                }
+            }
+
             const payload = {
                 title: subtask.name,
                 description: subtask.description,
@@ -763,7 +787,7 @@
                 status: subtask.status || 'ongoing',
                 priority: subtask.priority,
                 owner: subtask.owner || taskForm.value.owner,
-                attachments: subtask.attachments || [],
+                attachments: uploadedSubtaskAttachments, 
                 collaborators: subtask.collaborators || []
             }
 
@@ -772,7 +796,7 @@
             }
 
             return payload
-        })
+        }))
 
         const payload = {
         title: taskForm.value.name,
@@ -877,7 +901,6 @@
             errors.priority = 'Priority is required'
         }
         
-        // Additional validation for due date - match backend wording
         if (taskForm.value.due_date) {
             const dueDate = new Date(taskForm.value.due_date)
             const now = new Date()
@@ -922,7 +945,6 @@
     try {
         await axios.patch(`http://localhost:5002/task/status/${task.id}`, { status: newStatus, employee_id: currentEmployeeId }, { withCredentials: true })
         task.status = newStatus
-        if (openStatusFor.value === task.id) openStatusFor.value = null
     } catch (error) {
         console.error("Error updating status:", error)
         
@@ -940,10 +962,6 @@
             alert(backendMessage)
         }
     }
-    }
-
-    function toggleStatusMenu(task) {
-    openStatusFor.value = openStatusFor.value === task.id ? null : task.id
     }
 
     function findEmployeeNameById(id) {
@@ -996,12 +1014,12 @@
         }))
     })
 
-    // Employee list for subtask assignment (only parent task collaborators + owner)
+    // employee list for subtask assignment (only parent task collaborators + owner)
     const subtaskOwnerList = computed(() => {
     const role = (currentRole || '').toLowerCase()
     const showMeta = role === 'senior manager' || role === 'hr' || role === 'director'
     
-    // Get parent task collaborators + owner
+    // parent task collaborators + owner
     const allowedIds = new Set([
         taskForm.value.owner,
         ...(Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : [])
@@ -1113,7 +1131,6 @@
         await fetchDepartmentEmployees(depRaw)
     }
     
-    // Set default values if they're null when starting to edit
     if (taskForm.value.status === null) {
         taskForm.value.status = (currentRole || '').toLowerCase() === 'staff' ? 'ongoing' : 'unassigned'
     }
@@ -1123,7 +1140,6 @@
     }
 
     function formatDate(date) {
-    // Use toLocal helper to format ISO dates for display
     return toLocal(date) || '-'
     }
 
@@ -1141,21 +1157,49 @@
     return `${Math.abs(diffDays)} days ago`
     }
 
-    function handleAttachment(event) {
-    const newFiles = event.files.map(file => ({ 
-        name: file.name, 
-        file: file,
-        url: null
-    }))
-    taskForm.value.attachments.push(...newFiles)
+    async function handleAttachmentWithUpload(event, targetArray, fileUploadRef) {
+    const files = event.files
     
-    if (fileUploadRef.value && typeof fileUploadRef.value.clear === 'function') {
-        fileUploadRef.value.clear()
+    if (fileUploadRef && typeof fileUploadRef.clear === 'function') {
+        fileUploadRef.clear()
+    }
+    
+    for (const file of files) {
+        try {
+            const formData = new FormData()
+            formData.append('attachment', file)
+
+            const uploadRes = await axios.post('http://localhost:5002/upload-attachment', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                withCredentials: true
+            })
+            
+            targetArray.push({
+                name: file.name,
+                file: null, 
+                url: `http://localhost:5002/attachments/${uploadRes.data.file_path}`
+            })
+        } catch (error) {
+            console.error('Error uploading file:', error)
+            targetArray.push({
+                name: file.name,
+                file: file,
+                url: null
+            })
+        }
     }
     }
 
-    function removeAttachment(index) {
-    taskForm.value.attachments.splice(index, 1)
+    function removeAttachment(index, targetArray) {
+    targetArray.splice(index, 1)
+    }
+
+    async function handleMainTaskAttachment(event) {
+    await handleAttachmentWithUpload(event, taskForm.value.attachments, fileUploadRef.value)
+    }
+
+    function removeMainTaskAttachment(index) {
+    removeAttachment(index, taskForm.value.attachments)
     }
 
     function getStatusClass(status) {
