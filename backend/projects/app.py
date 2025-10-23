@@ -1,5 +1,5 @@
 # backend/projects/app.py
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 import json
 from urllib.request import urlopen
 from urllib.error import URLError
@@ -7,12 +7,17 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from models import db, Project, Staff
+from models.project import project_members
 from models.task import Task
 from sqlalchemy import func
 import os
 
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:5173","http://127.0.0.1:5173"])
+app.secret_key = "issa_secret_key"
+app.config["SESSION_COOKIE_SAMESITE"] = "None"
+app.config["SESSION_COOKIE_SECURE"] = True
+
+CORS(app, supports_credentials=True, origins=["http://localhost:5173","http://127.0.0.1:5173"])
 
 # TODO: teammate sets this to your MySQL DSN
 # Example: 'mysql+mysqlconnector://root:password@localhost:3306/SPM'
@@ -28,7 +33,30 @@ db.init_app(app)
 
 @app.get('/projects')
 def list_projects():
-    rows = Project.query.order_by(Project.updated_at.desc()).all()
+    # Get current user info (same pattern as other endpoints)
+    current_user_id = session.get('employee_id')
+    current_role = session.get('role', '').lower()
+    current_department = session.get('department', '')
+    
+    # Authentication check
+    if not current_user_id:
+        return {"error": "Unauthorized"}, 401
+    
+    # Role-based project filtering
+    if current_role in ['senior manager', 'hr', 'director']:
+        # Senior managers, HR, and directors can see all projects
+        rows = Project.query.order_by(Project.updated_at.desc()).all()
+    elif current_role == 'manager':
+        # Managers can see projects in their department
+        # Join with project_members and staff tables to filter by department
+        rows = Project.query.join(project_members).join(Staff).filter(
+            Staff.department == current_department
+        ).order_by(Project.updated_at.desc()).all()
+    else:
+        # Staff can only see projects they are members of
+        rows = Project.query.join(project_members).filter(
+            project_members.c.staff_id == current_user_id
+        ).order_by(Project.updated_at.desc()).all()
 
     # Query tasks directly from database to count per project
     project_id_to_counts = {}
