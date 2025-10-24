@@ -19,10 +19,10 @@ INSERT INTO staff (employee_id, employee_name, email, department, role, password
 (44, 'Grace Miller', 'grace.miller@company.com', 'Marketing', 'staff', 'scrypt:32768:8:1$JLwA8MmDz3B0fnF7$4d9886d38db1cd7d4f59d2cec3f1724dec04860de2287c566445c9a3a3c57d374df60ab3b6d6815a4088223a0ee926daf4aee06e1d054bf17c5331a8d38993ea', 'D'),
 (45, 'Lucas Grant', 'lucas.grant@company.com', 'Operations', 'senior manager', 'scrypt:32768:8:1$LEsHQpVaJr5dyP8u$9de5ca1862a1c723ba7b198a472c0128b0c29fa73a3e9af14d1ef2f67adb725865debe10379f56f8d9187a42dda2feb4cf3a6f063be9ca946c84975a4676d92f', 'E'),
 (46, 'Hannah Lim', 'hannah.lim@company.com', 'Operations', 'staff', 'scrypt:32768:8:1$StRIE6tjdvk9a2hY$d471004894080be2fe1ba794812a238e8622b53d9ee967ce060e4514b21f1aa33019de48a1b206170a7d86dac774bb542e03313998c84c1066b34e498ea29159', 'E'),
-(47, 'James Connor', 'james.connor@company.com', 'Admin', 'manager', 'scrypt:32768:8:1$Igd0teMCNnB1nXDD$7f1aa55a12b1988f2918f00a65d1d29c560f03ea1d549be12f765ac398842263e5eb01294cb831079c68a922c51f223de8b7d52f14a94b0287cdb253c82d4909', 'F');
-(48, 'charlie_owner', 'charlie@example.com', 'IT', 'manager', 'scrypt:32768:8:1$eMpXOUzFXG2kyq0z$b3837a17cd53ccbb57e5c29d26bde15b8031b50a93a6d8a78c8f4202208cb4517efaced6610146dbddfc3909b89db2674a8d84f4551a5acb328ca56175e8e9b7', 'C'),
-(49, 'alice_collaborator', 'alice@example.com', 'IT', 'staff', 'scrypt:32768:8:1$71i1rdw2L2MCaofW$28f43c0dfd74527dab7b5039ed6089ecf74a878fb459db9c0dd3e30706c509fcb9708cf7e20b798826d27571bd6fc2cd87f6efd4c3a02c8159a04473aac7c2ca', 'C'),
-(50, 'bob_collaborator', 'bob@example.com', 'IT', 'staff', 'scrypt:32768:8:1$IS001Gh20fO1Xowf$06e29eeba3634ae79981113a03b0f40e9395f83070a0504e4937357a8b120566f95f9a87c98c140033352c5bc91782fa4c9b373a5aff6043dc1345b46c350fb6', 'C');
+(47, 'James Connor', 'james.connor@company.com', 'Admin', 'manager', 'scrypt:32768:8:1$Igd0teMCNnB1nXDD$7f1aa55a12b1988f2918f00a65d1d29c560f03ea1d549be12f765ac398842263e5eb01294cb831079c68a922c51f223de8b7d52f14a94b0287cdb253c82d4909', 'F'),
+(48, 'Charlie Owner', 'charlie@example.com', 'IT', 'manager', 'scrypt:32768:8:1$eMpXOUzFXG2kyq0z$b3837a17cd53ccbb57e5c29d26bde15b8031b50a93a6d8a78c8f4202208cb4517efaced6610146dbddfc3909b89db2674a8d84f4551a5acb328ca56175e8e9b7', 'C'),
+(49, 'Alice Collaborator', 'alice@example.com', 'IT', 'staff', 'scrypt:32768:8:1$71i1rdw2L2MCaofW$28f43c0dfd74527dab7b5039ed6089ecf74a878fb459db9c0dd3e30706c509fcb9708cf7e20b798826d27571bd6fc2cd87f6efd4c3a02c8159a04473aac7c2ca', 'C'),
+(50, 'Bob Collaborator', 'bob@example.com', 'IT', 'staff', 'scrypt:32768:8:1$IS001Gh20fO1Xowf$06e29eeba3634ae79981113a03b0f40e9395f83070a0504e4937357a8b120566f95f9a87c98c140033352c5bc91782fa4c9b373a5aff6043dc1345b46c350fb6', 'C');
 
 
 -- Insert projects data (FIXED: will have proper updated_at timestamps)
