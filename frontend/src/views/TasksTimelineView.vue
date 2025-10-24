@@ -30,14 +30,14 @@
             <input 
               type="date" 
               v-model="startDate" 
-              @change="updateTimeline"
+              @change="loadTimeline"
               class="date-input"
             />
             <span>to</span>
             <input 
               type="date" 
               v-model="endDate" 
-              @change="updateTimeline"
+              @change="loadTimeline"
               class="date-input"
             />
           </div>
@@ -89,7 +89,6 @@
             <div class="date-label">{{ formatDateLabel(date.date) }}</div>
             <div class="day-label">{{ formatDayLabel(date.date) }}</div>
           </div>
-          <!-- Fill remaining space -->
           <div class="timeline-filler"></div>
         </div>
 
@@ -102,10 +101,14 @@
             class="task-row"
           >
             <div class="task-info">
-              <div class="task-title">{{ task.name }}</div>
+              <div class="task-title clickable-title" @click="openSubtaskView(task)">
+                {{ task.name }}
+                <i class="pi pi-external-link title-link-icon"></i>
+              </div>
               <div class="task-meta">
                 <span class="task-status">{{ task.status }}</span>
                 <span class="task-priority">P{{ task.priority }}</span>
+                <span class="subtask-count">{{ getSubtasksForParent(task.id).length }} subtasks</span>
               </div>
             </div>
             <div class="task-timeline-row">
@@ -131,6 +134,77 @@
         </div>
       </div>
     </div>
+
+    <!-- Subtask Timeline Modal -->
+    <div v-if="showSubtaskView" class="subtask-modal-overlay" @click="closeSubtaskView">
+      <div class="subtask-modal" @click.stop>
+        <div class="subtask-header">
+          <h3>{{ selectedParentTask?.name }}</h3>
+          <button @click="closeSubtaskView" class="close-button">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        
+        <div class="subtask-content">
+          <div class="subtask-timeline-grid">
+            <!-- Subtask Timeline Header -->
+            <div class="subtask-timeline-header" :style="{ width: subtaskTimelineWidth }">
+              <div class="subtask-employee-column">
+                <div class="subtask-header-label">Subtasks</div>
+                <div class="subtask-date-range">
+                  {{ formatDateLabel(subtaskTimelineDates[0]?.date) }} - {{ formatDateLabel(subtaskTimelineDates[subtaskTimelineDates.length - 1]?.date) }}
+                </div>
+              </div>
+              <div 
+                v-for="date in subtaskTimelineDates" 
+                :key="date.key"
+                class="subtask-date-column"
+                :class="{ 'weekend': isWeekend(date.date), 'today': isToday(date.date) }"
+              >
+                <div class="date-label">{{ formatDateLabel(date.date) }}</div>
+                <div class="day-label">{{ formatDayLabel(date.date) }}</div>
+              </div>
+              <div class="timeline-filler"></div>
+            </div>
+
+            <!-- Subtask Rows -->
+            <div class="subtask-section" :style="{ width: subtaskTimelineWidth }">
+              <div 
+                v-for="subtask in getSubtasksForParent(selectedParentTask?.id)"
+                :key="subtask.id"
+                class="subtask-row"
+              >
+                <div class="subtask-info">
+                  <div class="subtask-title">{{ subtask.name }}</div>
+                  <div class="subtask-meta">
+                    <span class="task-status">{{ subtask.status }}</span>
+                    <span class="task-priority">P{{ subtask.priority }}</span>
+                  </div>
+                </div>
+                <div class="subtask-timeline-row">
+                  <div 
+                    class="subtask-bar"
+                    :class="getTaskClass(subtask)"
+                    :style="getTaskBarStyle(subtask, true)"
+                    :title="getTaskTooltip(subtask)"
+                    @click="openTaskDetails(subtask)"
+                  >
+                    <div class="task-bar-content">
+                      <div class="task-title">{{ subtask.name }}</div>
+                      <div class="task-meta">
+                        <span class="task-status">{{ subtask.status }}</span>
+                        <span class="task-priority">P{{ subtask.priority }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="timeline-filler"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -149,6 +223,8 @@ const timelineData = ref([])
 const timelineEmployees = ref([])
 const startDate = ref('')
 const endDate = ref('')
+const selectedParentTask = ref(null)
+const showSubtaskView = ref(false)
 
 // Current user info
 const currentEmployeeId = Number(sessionStorage.getItem('employee_id'))
@@ -156,13 +232,13 @@ const currentRole = sessionStorage.getItem('role')
 const currentDepartment = sessionStorage.getItem('department')
 const currentEmployeeName = sessionStorage.getItem('employee_name')
 
-// Computed properties
-const timelineDates = computed(() => {
-  if (!startDate.value || !endDate.value) return []
+// Helper function to generate date ranges
+function generateDateRange(startDate, endDate) {
+  if (!startDate || !endDate) return []
   
   const dates = []
-  const start = new Date(startDate.value)
-  const end = new Date(endDate.value)
+  const start = new Date(startDate)
+  const end = new Date(endDate)
   
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     dates.push({
@@ -172,29 +248,65 @@ const timelineDates = computed(() => {
   }
   
   return dates
+}
+
+// Helper function to calculate timeline width
+function calculateTimelineWidth(dateCount) {
+  if (dateCount === 0) return '100%'
+  const minWidth = 200 + (dateCount * 100)
+  return `${minWidth}px`
+}
+
+// Computed properties for subtask timeline
+const subtaskTimelineDates = computed(() => {
+  if (!selectedParentTask.value) return []
+  
+  const parentStart = selectedParentTask.value.created_at.replace(/:\d{2}[.Z].*$/, '')
+  const parentEnd = selectedParentTask.value.due_date.replace(/:\d{2}[.Z].*$/, '')
+  
+  return generateDateRange(parentStart, parentEnd)
 })
 
-// Calculate the total width needed for the timeline
+const subtaskTimelineWidth = computed(() => {
+  return calculateTimelineWidth(subtaskTimelineDates.value.length)
+})
+
+// Computed properties for main timeline
+const timelineDates = computed(() => {
+  return generateDateRange(startDate.value, endDate.value)
+})
+
 const timelineWidth = computed(() => {
-  if (timelineDates.value.length === 0) return '100%'
-  
-  // Calculate minimum width: employee column (200px) + date columns (100px each)
-  const minWidth = 200 + (timelineDates.value.length * 100)
-  
-  // Always use the calculated minimum width to ensure scrolling works
-  return `${minWidth}px`
+  return calculateTimelineWidth(timelineDates.value.length)
 })
 
 // Helper functions
+const toLocal = iso => {
+  if (!iso) return null
+  // Handle both ISO format and MySQL DATETIME format
+  let date
+  if (iso.includes('T')) {
+      // ISO format: "2025-10-30T15:18:00.000Z"
+      date = new Date(iso)
+  } else {
+      // MySQL DATETIME format: "2025-10-30 15:18:00"
+      date = new Date(iso.replace(' ', 'T'))
+  }
+  return date.toLocaleString(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+  })
+}
+
 function formatDateLabel(date) {
-  return date.toLocaleDateString('en-US', { 
+  return date.toLocaleString('en-US', { 
     month: 'short', 
     day: 'numeric' 
   })
 }
 
 function formatDayLabel(date) {
-  return date.toLocaleDateString('en-US', { 
+  return date.toLocaleString('en-US', { 
     weekday: 'short' 
   })
 }
@@ -209,40 +321,75 @@ function isToday(date) {
   return date.toDateString() === today.toDateString()
 }
 
-function getTasksForEmployee(employeeId) {
-  return timelineData.value
-    .filter(task => 
-      task.owner === employeeId || task.collaborators.includes(employeeId)
-    )
-    .sort((a, b) => {
-      // Sort by priority (highest first), then by due date (earliest first)
-      const priorityA = a.priority || 5
-      const priorityB = b.priority || 5
-      
-      if (priorityA !== priorityB) {
-        return priorityB - priorityA // Higher priority first
-      }
-      
-      // If same priority, sort by due date (earliest first)
-      const dueDateA = new Date(a.due_date)
-      const dueDateB = new Date(b.due_date)
-      return dueDateA - dueDateB
-    })
+// Helper function to sort tasks by priority and due date
+function sortTasksByPriorityAndDueDate(tasks) {
+  return tasks.sort((a, b) => {
+    // Sort by priority (highest first), then by due date (earliest first)
+    const priorityA = a.priority || 5
+    const priorityB = b.priority || 5
+    
+    if (priorityA !== priorityB) {
+      return priorityB - priorityA // Higher priority first
+    }
+    
+    // If same priority, sort by due date (earliest first)
+    const dueDateA = new Date(a.due_date)
+    const dueDateB = new Date(b.due_date)
+    return dueDateA - dueDateB
+  })
 }
 
-function getTaskBarStyle(task) {
-  // Parse dates as local dates (no timezone conversion)
-  const taskStart = new Date(task.created_at)
-  const taskEnd = new Date(task.due_date)
+function getTasksForEmployee(employeeId) {
+  // Show only parent tasks (tasks without parent_id)
+  const allTasks = timelineData.value.filter(task => 
+    task.owner === employeeId || task.collaborators.includes(employeeId)
+  )
+  
+  console.log('All tasks for employee:', allTasks.map(t => ({ 
+    id: t.id, 
+    name: t.name, 
+    parent_id: t.parent_id 
+  })))
+  
+  const parentTasks = allTasks.filter(task => !task.parent_id)
+  const subtasks = allTasks.filter(task => task.parent_id)
+  
+  console.log('Parent tasks:', parentTasks.map(t => ({ id: t.id, name: t.name })))
+  console.log('Subtasks:', subtasks.map(t => ({ id: t.id, name: t.name, parent_id: t.parent_id })))
+  
+  return sortTasksByPriorityAndDueDate(parentTasks)
+}
+
+function getSubtasksForParent(parentId) {
+  const subtasks = timelineData.value.filter(task => 
+    task.parent_id === parentId &&
+    (task.owner === currentEmployeeId || task.collaborators.includes(currentEmployeeId))
+  )
+  
+  return sortTasksByPriorityAndDueDate(subtasks)
+}
+
+function openSubtaskView(parentTask) {
+  selectedParentTask.value = parentTask
+  showSubtaskView.value = true
+}
+
+function closeSubtaskView() {
+  showSubtaskView.value = false
+  selectedParentTask.value = null
+}
+
+function getTaskBarStyle(task, isSubtaskView = false) {
+  const taskStart = new Date(task.created_at.replace(/:\d{2}[.Z].*$/, ''))
+  const taskEnd = new Date(task.due_date.replace(/:\d{2}[.Z].*$/, ''))
   const now = new Date()
   
-  if (!startDate.value || !endDate.value || timelineDates.value.length === 0) {
+  // Use different date ranges for main timeline vs subtask view
+  const datesToUse = isSubtaskView ? subtaskTimelineDates.value : timelineDates.value
+  
+  if (datesToUse.length === 0) {
     return { display: 'none' }
   }
-  
-  // Parse timeline dates as local dates (no timezone conversion)
-  const timelineStart = new Date(startDate.value + 'T00:00:00')
-  const timelineEnd = new Date(endDate.value + 'T23:59:59')
   
   // Convert task dates to local dates for comparison (date only, no time)
   const taskStartLocal = new Date(taskStart.getFullYear(), taskStart.getMonth(), taskStart.getDate())
@@ -251,43 +398,45 @@ function getTaskBarStyle(task) {
   // For overdue tasks, extend the bar to show the original due date
   let displayEndDate = taskEndLocal
   if (task.status.toLowerCase() !== 'done' && taskEndLocal < now) {
-    // Task is overdue - extend bar to current date or timeline end, whichever is smaller
-    displayEndDate = new Date(Math.min(now.getTime(), timelineEnd.getTime()))
+    if (isSubtaskView) {
+      // In subtask view, extend to parent's end date or now, whichever is smaller
+      const parentEnd = new Date(selectedParentTask.value.due_date.replace(/:\d{2}[.Z].*$/, ''))
+      displayEndDate = new Date(Math.min(now.getTime(), parentEnd.getTime()))
+    } else {
+      const timelineEnd = new Date(endDate.value)
+      displayEndDate = new Date(Math.min(now.getTime(), timelineEnd.getTime()))
+    }
   }
   
   // Find the exact day index in the timeline dates array
-  const taskStartDayIndex = timelineDates.value.findIndex(dateObj => {
+  const taskStartDayIndex = datesToUse.findIndex(dateObj => {
     const timelineDate = new Date(dateObj.date.getFullYear(), dateObj.date.getMonth(), dateObj.date.getDate())
     const taskDate = new Date(taskStartLocal.getFullYear(), taskStartLocal.getMonth(), taskStartLocal.getDate())
     return timelineDate.getTime() === taskDate.getTime()
   })
   
-  const taskEndDayIndex = timelineDates.value.findIndex(dateObj => {
+  const taskEndDayIndex = datesToUse.findIndex(dateObj => {
     const timelineDate = new Date(dateObj.date.getFullYear(), dateObj.date.getMonth(), dateObj.date.getDate())
     const taskDate = new Date(displayEndDate.getFullYear(), displayEndDate.getMonth(), displayEndDate.getDate())
     return timelineDate.getTime() === taskDate.getTime()
   })
   
-  // If task dates are outside timeline range, don't show
   if (taskStartDayIndex === -1 && taskEndDayIndex === -1) {
     return { display: 'none' }
   }
   
-  // Use the found indices or clamp to timeline bounds
   const actualStartDay = taskStartDayIndex === -1 ? 0 : taskStartDayIndex
-  const actualEndDay = taskEndDayIndex === -1 ? timelineDates.value.length - 1 : taskEndDayIndex
+  const actualEndDay = taskEndDayIndex === -1 ? datesToUse.length - 1 : taskEndDayIndex
   
   const taskDuration = Math.max(1, actualEndDay - actualStartDay + 1)
   
-  // Calculate position based on the actual timeline width
-  // Each date column is 100px wide, so we calculate pixel positions
-  const leftPixels = actualStartDay * 100
+  const leftPixels = actualStartDay * 100;
   const widthPixels = taskDuration * 100
   
   return {
     left: `${leftPixels}px`,
     width: `${widthPixels}px`,
-    height: '52px',
+    height: isSubtaskView ? '45px' : '52px',
     zIndex: 1
   }
 }
@@ -297,35 +446,27 @@ function getTaskClass(task) {
   
   // Status-based styling
   switch (task.status.toLowerCase()) {
-    case 'ongoing':
-      classes.push('status-ongoing')
-      break
-    case 'under review':
-      classes.push('status-review')
-      break
-    case 'done':
-      classes.push('status-completed')
-      break
-    case 'unassigned':
-      classes.push('status-unassigned')
-      break
-    default:
-      classes.push('status-default')
+    case 'ongoing': classes.push('status-ongoing'); break
+    case 'under review': classes.push('status-review'); break
+    case 'done': classes.push('status-completed'); break
+    case 'unassigned':      classes.push('status-unassigned');break
+    default: classes.push('status-default'); break
   }
   
   // Priority-based styling
-  if (task.priority >= 8) {
-    classes.push('priority-high')
-  } else if (task.priority >= 5) {
-    classes.push('priority-medium')
-  } else {
-    classes.push('priority-low')
+  if (task.priority >= 8) { 
+    classes.push('priority-high');
+  } 
+    else if (task.priority >= 5) { 
+    classes.push('priority-medium');
+    } else {
+    classes.push('priority-low');
   }
   
   // Completion status indicators
   if (task.status.toLowerCase() === 'done') {
     const dueDate = new Date(task.due_date)
-    const completedDate = new Date(task.created_at) // Using created_at as completion date for now
+    const completedDate = new Date(task.created_at)
     const now = new Date()
     
     if (completedDate < dueDate) {
@@ -351,7 +492,7 @@ function getTaskClass(task) {
 function getTaskTooltip(task) {
   const dueDate = new Date(task.due_date)
   const now = new Date()
-  let tooltip = `${task.name}\nStatus: ${task.status}\nPriority: ${task.priority}\nDue: ${dueDate.toLocaleDateString()}`
+  let tooltip = `${task.name}\nStatus: ${task.status}\nPriority: ${task.priority}\nDue: ${toLocal(task.due_date)}`
   
   if (task.status.toLowerCase() === 'done') {
     const completedDate = new Date(task.created_at)
@@ -372,30 +513,11 @@ function getTaskTooltip(task) {
   return tooltip
 }
 
-function isCompletedEarly(task) {
-  if (task.status.toLowerCase() !== 'done') return false
-  const dueDate = new Date(task.due_date)
-  const completedDate = new Date(task.created_at)
-  return completedDate < dueDate
-}
-
-function isOverdue(task) {
-  if (task.status.toLowerCase() === 'done') return false
-  const dueDate = new Date(task.due_date)
-  const now = new Date()
-  return dueDate < now
-}
-
 function openTaskDetails(task) {
-  // Navigate back to tasks page and open the specific task
   router.push({ 
     name: 'tasks',
     query: { taskId: task.id }
   })
-}
-
-function updateTimeline() {
-  loadTimeline()
 }
 
 async function loadTimeline() {
@@ -408,28 +530,34 @@ async function loadTimeline() {
       withCredentials: true
     })
     
-    const allTasks = (res.data.tasks || []).map(t => ({
-      id: t.task_id,
-      name: t.title,
-      description: t.description,
-      due_date: t.deadline,
-      created_at: t.created_at,
-      status: t.status,
-      priority: t.priority || 5,
-      owner: t.owner,
-      collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)) : [],
-      project_id: t.project_id
-    }))
+    const allTasks = (res.data.tasks || []).map(t => {
+      console.log(`Task: ${t.title}`)
+      console.log(`Raw created_at from backend: ${t.created_at}`)
+      console.log(`Raw deadline from backend: ${t.deadline}`)
+      console.log('---')
+      
+      return {
+        id: t.task_id,
+        name: t.title,
+        description: t.description,
+        due_date: t.deadline, 
+        created_at: t.created_at, 
+        status: t.status,
+        priority: t.priority || 5,
+        parent_id: t.parent_id,
+        owner: t.owner,
+        collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)) : [],
+        project_id: t.project_id
+      }
+    })
     
     // Filter tasks based on user role
     let filteredTasks = []
     if (currentRole === 'staff') {
-      // Staff can only see their own tasks
       filteredTasks = allTasks.filter(task => 
         task.owner === currentEmployeeId || task.collaborators.includes(currentEmployeeId)
       )
     } else if (currentRole === 'manager') {
-      // Managers can see department tasks
       const res = await axios.get(`http://localhost:5000/employees/${encodeURIComponent(currentDepartment)}`, {
         withCredentials: true
       })
@@ -439,13 +567,11 @@ async function loadTimeline() {
         task.collaborators.some(collab => departmentEmployeeIds.includes(collab))
       )
     } else {
-      // Senior managers and HR can see all tasks
       filteredTasks = allTasks
     }
     
     timelineData.value = filteredTasks
     
-    // Get unique employees from filtered tasks
     const employeeIds = new Set()
     filteredTasks.forEach(task => {
       employeeIds.add(task.owner)
@@ -466,8 +592,8 @@ async function loadTimeline() {
     
     // Set default date range if not set
     if (!startDate.value || !endDate.value) {
-      const dates = filteredTasks.map(task => new Date(task.created_at))
-      const dueDates = filteredTasks.map(task => new Date(task.due_date))
+      const dates = filteredTasks.map(task => new Date(task.created_at.replace(/:\d{2}[.Z].*$/, '')))
+      const dueDates = filteredTasks.map(task => new Date(task.due_date.replace(/:\d{2}[.Z].*$/, '')))
       const allDates = [...dates, ...dueDates]
       
       if (allDates.length > 0) {
@@ -475,8 +601,8 @@ async function loadTimeline() {
         const maxDate = new Date(Math.max(...allDates))
         
         // Extend range by 7 days on each side
-        minDate.setDate(minDate.getDate() - 7)
-        maxDate.setDate(maxDate.getDate() + 7)
+        minDate.setDate(minDate.getDate() - 5)
+        maxDate.setDate(maxDate.getDate() + 5)
         
         startDate.value = minDate.toISOString().split('T')[0]
         endDate.value = maxDate.toISOString().split('T')[0]
@@ -507,13 +633,6 @@ onMounted(() => {
   margin: 0 auto;
 }
 
-.header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
 .header-left h2 {
   margin: 0;
   font-size: 28px;
@@ -533,20 +652,6 @@ onMounted(() => {
 
 .breadcrumb a:hover {
   text-decoration: underline;
-}
-
-.btn-secondary {
-  background: #6b7280;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.btn-secondary:hover {
-  background: #4b5563;
 }
 
 .card {
@@ -670,57 +775,6 @@ onMounted(() => {
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
 }
 
-.legend-marker {
-  width: 16px;
-  height: 12px;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  position: relative;
-}
-
-.legend-marker.completion-marker {
-  background: rgba(255, 255, 255, 0.8);
-  border: 2px solid #059669;
-}
-
-.legend-marker.completion-marker::before {
-  content: '✓';
-  position: absolute;
-  top: -2px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #059669;
-  color: white;
-  font-size: 8px;
-  font-weight: bold;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.legend-marker.due-marker {
-  background: rgba(255, 255, 255, 0.9);
-  border: 2px solid #dc2626;
-}
-
-.legend-marker.due-marker::before {
-  content: 'DUE';
-  position: absolute;
-  top: -2px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #dc2626;
-  color: white;
-  font-size: 6px;
-  font-weight: bold;
-  padding: 1px 2px;
-  border-radius: 2px;
-  white-space: nowrap;
-}
-
 
 .timeline-grid {
   overflow-x: auto;
@@ -729,12 +783,10 @@ onMounted(() => {
   max-height: 70vh;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  /* Firefox scrollbar styling */
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 #f1f5f9;
 }
 
-/* Custom scrollbar styling */
 .timeline-grid::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -926,21 +978,32 @@ onMounted(() => {
   margin-top: 2px;
 }
 
-.task-cell {
-  min-width: 100px;
-  padding: 4px;
-  border-right: 1px solid #f3f4f6;
-  background: white;
-  min-height: 60px;
-  position: relative;
+.clickable-title {
+  cursor: pointer;
+  color: #3b82f6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
 }
 
-.task-cell.weekend {
-  background: #fefefe;
+.clickable-title:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
 }
 
-.task-cell.today {
-  background: #f0f9ff;
+.title-link-icon {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.subtask-count {
+  background: #e0e7ff;
+  color: #3730a3;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
 }
 
 .task-timeline-row {
@@ -996,24 +1059,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   justify-content: center;
-}
-
-.task-item {
-  background: #3b82f6;
-  color: white;
-  border-radius: 4px;
-  padding: 4px 6px;
-  margin-bottom: 2px;
-  cursor: pointer;
-  font-size: 11px;
-  line-height: 1.2;
-  transition: all 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.task-item:hover {
-  transform: scale(1.02);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .task-title {
@@ -1152,78 +1197,220 @@ onMounted(() => {
   51%, 100% { opacity: 0.3; }
 }
 
-/* Completion line for early completed tasks */
-.completion-line {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--completion-line-position, 0);
-  width: 2px;
-  background: rgba(255, 255, 255, 0.8);
-  z-index: 2;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
-}
 
-.completion-line::before {
-  content: '✓';
-  position: absolute;
-  top: 2px;
-  left: -6px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #059669;
-  font-size: 10px;
-  font-weight: bold;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
+
+/* Subtask Modal Styles */
+.subtask-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  padding: 20px;
 }
 
-/* Due date marker for overdue tasks */
-.due-date-marker {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--due-date-position, 0);
-  width: 2px;
-  background: rgba(255, 255, 255, 0.9);
-  z-index: 2;
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
-}
-
-.due-date-marker::before {
-  content: 'DUE';
-  position: absolute;
-  top: 2px;
-  left: -12px;
-  background: rgba(255, 255, 255, 0.95);
-  color: #dc2626;
-  font-size: 8px;
-  font-weight: bold;
-  padding: 1px 3px;
-  border-radius: 2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  white-space: nowrap;
-}
-
-
-/* Task item styling improvements */
-.task-item {
-  position: relative;
+.subtask-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 90vw;
+  max-height: 90vh;
+  width: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.task-item::before {
+.subtask-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.subtask-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #111827;
+  font-weight: 600;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.close-button:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.subtask-content {
+  flex: 1;
+  overflow: auto;
+  padding: 10px;
+}
+
+.subtask-timeline-grid {
+  overflow-x: auto;
+  overflow-y: auto;
+  width: 100%;
+  max-height: 60vh;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.subtask-timeline-header {
+  display: flex;
+  background: #f3f4f6;
+  border-bottom: 2px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  min-width: max-content;
+}
+
+.subtask-employee-column {
+  min-width: 200px;
+  width: 200px;
+  padding: 12px 16px;
+  font-weight: 600;
+  color: #374151;
+  border-right: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 6;
+}
+
+.subtask-header-label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 14px;
+}
+
+.subtask-date-range {
+  color: #6b7280;
+  font-size: 11px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.subtask-date-column {
+  min-width: 100px;
+  width: 100px;
+  padding: 8px;
+  text-align: center;
+  border-right: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-shrink: 0;
+}
+
+.subtask-section {
+  border-bottom: 2px solid #e5e7eb;
+  min-width: max-content;
+}
+
+.subtask-row {
+  display: flex;
+  border-bottom: 1px solid #f3f4f6;
+  position: relative;
+  min-height: 35px;
+  min-width: max-content;
+  background: #fafbfc;
+}
+
+.subtask-row:hover {
+  background: #f8fafc;
+}
+
+.subtask-info {
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+  padding: 8px 16px;
+  border-right: 1px solid #e5e7eb;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 4;
+}
+
+.subtask-title {
+  font-weight: 500;
+  color: #111827;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.subtask-meta {
+  color: #6b7280;
+  font-size: 10px;
+  margin-top: 1px;
+}
+
+.subtask-timeline-row {
+  flex: 1;
+  position: relative;
+  min-height: 35px;
+  background: white;
+  overflow: hidden;
+  min-width: max-content;
+  display: flex;
+}
+
+.subtask-timeline-row::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.3);
+  bottom: 0;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0px,
+    transparent 99px,
+    #f3f4f6 100px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.subtask-bar {
+  background: #6366f1;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+  position: absolute;
+  top: 2px;
+  height: 31px;
+  z-index: 1;
+}
+
+.subtask-bar:hover {
+  transform: scaleY(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 2;
 }
 
 /* Responsive design */

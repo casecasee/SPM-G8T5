@@ -275,27 +275,54 @@ def create_task():
 
     # check if required fields are present
     # title, desc, deadline, priority are compulsory
+    # need to check empty strings too
     if 'title' not in data or 'description' not in data or 'deadline' not in data or 'priority' not in data:
         return {"message": "Missing required fields"}, 400
-    
+
+    if not data['title'].strip() or not data['description'].strip():
+        return {"message": "Title and description cannot be empty"}, 400
+
     # check if task already exists with same title
     existing_task = Task.query.filter_by(title=data['title']).first()
     if existing_task:
         return {"message": "Task with this title already exists"}, 400
     
-    # add owner as collaborator
+    # collaborators
     collaborators_ids = data.get('collaborators', [])
-    # TODO: validate that collaborators are in the same dept (lonely tasks)
-    # TODO: validate that collaborators are in the same project if project_id is given
+    # need to check that the collaborators ids are valid staff ids
+    for cid in collaborators_ids:
+        staff = Staff.query.get(cid)
+        if not staff:
+            return {"message": f"Collaborator {cid} not found"}, 404
+        
+    if data.get('project_id'):
+        # if project_id is given, validate that collaborators are part of the project
+        project = Project.query.get(data['project_id'])
+        if not project:
+            return {"message": "Project not found"}, 404
+        project_member_ids = [member.employee_id for member in project.members]
+        for cid in collaborators_ids:
+            if cid not in project_member_ids:
+                return {"message": f"Collaborator {cid} is not a member of the project"}, 400
+    else:
+        # if no project_id, validate that collaborators are in the same dept (lonely tasks)
+        dept_staff_ids = [staff.employee_id for staff in Staff.query.filter_by(department=dept).all()]
+        for cid in collaborators_ids:
+            if cid not in dept_staff_ids:
+                return {"message": f"Collaborator {cid} is not in the same department"}, 400
+    
+    # add owner as collaborator
     if eid not in collaborators_ids:
         collaborators_ids.append(eid)
-    collaborators = Staff.query.filter(Staff.employee_id.in_(collaborators_ids)).all()
 
-        # TODO: check if collaborators are subset of project if project_id is given
+    collaborators = Staff.query.filter(Staff.employee_id.in_(collaborators_ids)).all()
     
     # handle deadline
     # UTC = timezone.utc
-    deadline = convert_datetime(data['deadline'])
+    try:
+        deadline = convert_datetime(data['deadline'])
+    except ValueError as e:
+        return {"message": str(e)}, 400
     if deadline.replace(tzinfo=UTC) <= datetime.now(UTC):
         return {"message": "Deadline must be in the future"}, 400
 
@@ -304,6 +331,18 @@ def create_task():
 
     # handle status
     status = 'ongoing' if role == 'staff' else 'unassigned' 
+
+    # recurrence
+    if 'recurrence' in data:
+        recurrence = data['recurrence']
+        # TODO: validate recurrence (frontend should only be sending numbers) daily - 1, weekly - 7, monthly - 30, custom - any positive int
+
+    if 'priority' in data:
+        # priority must be an int and between 1-10 
+        if not isinstance(data['priority'], int):
+            return {"message": "Priority must be an integer"}, 400
+        if data['priority'] not in range(1, 11):
+            return {"message": "Invalid priority value"}, 400
 
     # create task object
     new_task = Task(
@@ -316,65 +355,93 @@ def create_task():
         priority=data['priority'],
         owner=eid,
         collaborators=collaborators, 
-        status=status
+        status=status, 
+        recurrence=data.get('recurrence')
     )
 
     # set timestamps based on status
     set_timestamps_by_status(new_task, None, status)
 
-    db.session.add(new_task)
-    db.session.commit()
+    # db.session.add(new_task)
+    # db.session.commit()
 
-    id = new_task.task_id
+    # id = new_task.task_id
 
     # subtasks
-    if 'subtasks' in data:
-        subtasks_data = data['subtasks']
-        for subtask in subtasks_data:
-            # check required fields
-            if 'title' not in subtask or 'description' not in subtask or 'deadline' not in subtask or 'priority' not in subtask:
-                return {"message": "Missing required fields in subtask"}, 400
-            
-            # add owner as collaborator
-            sub_collaborators_ids = subtask.get('collaborators', [])
-            if eid not in sub_collaborators_ids:
-                sub_collaborators_ids.append(eid)
-            # make sure subtask collaborators are subset of task collaborators
-            for cid in sub_collaborators_ids:
-                if cid not in collaborators_ids:
-                    return {"message": f"Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
-            sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
-            
-            # handle deadline
-            sub_deadline = convert_datetime(subtask['deadline'])
-            if sub_deadline.replace(tzinfo=UTC) <= datetime.now(UTC):
-                return {"message": "Subtask deadline must be in the future"}, 400
-            
-            # handle attachments
-            sub_attachments_json = json.dumps(subtask.get('attachments', []))
+    try:
+        # with db.session.begin():
+        db.session.add(new_task)
+        db.session.flush()  # to get new_task.task_id
+        id = new_task.task_id
+        if 'subtasks' in data:
+            subtasks_data = data['subtasks']
+            for subtask in subtasks_data:
+                # check required fields
+                if 'title' not in subtask or 'description' not in subtask or 'deadline' not in subtask or 'priority' not in subtask:
+                    raise ValueError("Missing required fields in subtask")
+                
+                if not subtask['title'].strip() or not subtask['description'].strip():
+                    raise ValueError("Subtask title and description cannot be empty")
 
-            # handle status
-            sub_status = 'ongoing' if role == 'staff' else 'unassigned'
+                # handle owner
+                sub_owner = subtask.get('owner', eid)  # default to parent task owner if not given
+                if sub_owner not in collaborators_ids:
+                    raise ValueError(f"Subtask owner {sub_owner} is not a collaborator of the parent task")
+                
+                # add owner as collaborator
+                sub_collaborators_ids = subtask.get('collaborators', [])
+                if eid not in sub_collaborators_ids:
+                    sub_collaborators_ids.append(eid)
+                # make sure subtask collaborators are subset of task collaborators
+                for cid in sub_collaborators_ids:
+                    if cid not in collaborators_ids:
+                        raise ValueError(f"Subtask collaborator {cid} is not a collaborator of the parent task")
+                sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
+                
+                # handle deadline
+                print(f"Subtask deadline: {subtask['deadline']}, Parent deadline: {deadline}")
+                sub_deadline = convert_datetime(subtask['deadline'])
+                if sub_deadline.replace(tzinfo=UTC) <= datetime.now(UTC):
+                    raise ValueError("Subtask deadline must be in the future")
+                # check deadline is before parent task deadline
+                if sub_deadline > deadline:
+                    raise ValueError("Subtask deadline cannot be after parent task deadline")
 
-            # create subtask object
-            new_subtask = Task(
-                title=subtask['title'],
-                description=subtask['description'],
-                attachment=sub_attachments_json,
-                deadline=sub_deadline,
-                project_id=data.get('project_id'),
-                parent_id=id,
-                priority=subtask['priority'],
-                owner=eid,
-                collaborators=sub_collaborators,
-                status=sub_status
-            )
-            # set timestamps based on status
-            set_timestamps_by_status(new_subtask, None, sub_status)
-            db.session.add(new_subtask)
+                # handle attachments
+                sub_attachments_json = json.dumps(subtask.get('attachments', []))
+
+                # handle priority
+                if not isinstance(subtask['priority'], int):
+                    raise ValueError("Subtask priority must be an integer")
+                if subtask['priority'] not in range(1, 11):
+                    raise ValueError("Invalid subtask priority value")
+
+                # handle status
+                sub_owner_role = Staff.query.get(sub_owner).role.lower()
+                sub_status = 'ongoing' if sub_owner_role == 'staff' else 'unassigned'
+
+                # create subtask object
+                new_subtask = Task(
+                    title=subtask['title'],
+                    description=subtask['description'],
+                    attachment=sub_attachments_json,
+                    deadline=sub_deadline,
+                    project_id=data.get('project_id'),
+                    parent_id=id,
+                    priority=subtask['priority'],
+                    owner=sub_owner,
+                    collaborators=sub_collaborators,
+                    status=sub_status
+                )
+                # set timestamps based on status
+                set_timestamps_by_status(new_subtask, None, sub_status)
+                db.session.add(new_subtask)
         db.session.commit()
 
-    return {"message": "Task created", "task_id": id}, 201
+        return {"message": "Task created", "task_id": id}, 201
+    except ValueError as ve:
+        db.session.rollback()
+        return {"message": str(ve)}, 400
 
 
 @app.route("/projects/<int:project_id>/timeline", methods=["GET"])
@@ -502,25 +569,43 @@ def update_task_status(task_id):
     collaborator_ids = [staff.employee_id for staff in curr_task.collaborators]
     if eid not in collaborator_ids:
         return {"message": "Only collaborators can update task status"}, 403
-
+    
     # set timestamps based on status
     old_status = curr_task.status
-    
-    # update status and other fields accordingly
-    # tasks will always pass through ongoing (either by default or after assignment), tasks may or may not pass through under review, tasks will always end at done
-    # if status from unassigned -> ongoing, set start_date
-    if curr_task.status == 'unassigned' and new_status == 'ongoing':
-        curr_task.start_date = datetime.now()
 
-    # unassigned -> under review ?
-
-    # if status from ongoing -> done, set completed_date
-    # regardless of start state, if status is done, set completed_date
-    elif new_status == 'done':
-        curr_task.completed_date = datetime.now(UTC).replace(tzinfo=None)
+    # TODO: can only update task status to done if all subtasks are done
+    if new_status == 'done':
+        subtasks = Task.query.filter_by(parent_id=task_id).all()
+        for subtask in subtasks:
+            if subtask.status != 'done':
+                return {"message": "Cannot mark task as done unless all subtasks are done"}, 400
     
     curr_task.status = new_status
     set_timestamps_by_status(curr_task, old_status, new_status)
+
+    # recurrence update
+    # TODO: if recurrence is set and status is done, create new task with same details and new deadline based on recurrence (wow)
+
+    # if new_status == 'done' and curr_task.recurrence:
+    #     # create new task with same details
+    #     recurrence_days = int(curr_task.recurrence)
+    #     new_deadline = curr_task.deadline + timedelta(days=recurrence_days)
+    #     new_status = 'unassigned' if role != 'staff' else 'ongoing'
+    #     new_task = Task(
+    #         title=curr_task.title,
+    #         description=curr_task.description,
+    #         attachment=curr_task.attachment,
+    #         deadline=new_deadline,
+    #         project_id=curr_task.project_id,
+    #         priority=curr_task.priority,
+    #         owner=curr_task.owner,
+    #         collaborators=curr_task.collaborators,
+    #         status=new_status,
+    #         recurrence=curr_task.recurrence
+    #     )
+    #     #     set_timestamps_by_status(new_task, None, new_status)
+    #     # need to do subtasks too - subtasks are copied over too
+    #     db.session.add(new_task)
 
     db.session.commit()
 
@@ -585,6 +670,10 @@ def update_task(task_id):
         if curr_task.status != data['status']:
             return {"message": "Status cannot be changed in this endpoint"}, 400
         
+    if 'recurrence' in data:
+        curr_task.recurrence = data['recurrence']
+        # TODO: validate recurrence (frontend should only be sending numbers) daily - 1, weekly - 7, monthly - 30, custom - any positive int
+        
     # assign and collaborators thing
         # assign: remove old owner from collaborators, add new owner to collaborators
         # collaborators: ensure owner is in collaborators
@@ -608,16 +697,38 @@ def update_task(task_id):
                     curr_task.status = 'ongoing'
     
     set_timestamps_by_status(curr_task, old_status, curr_task.status)
-    
-    if 'collaborators' in data:
-        # TODO: validate that collaborators are in the same dept (lonely tasks)
-        # TODO: validate that collaborators are in the same project if project_id is given
-        collaborators_ids = data['collaborators']
-        # ensure owner is in collaborators
-        if curr_task.owner not in collaborators_ids:
-            collaborators_ids.append(curr_task.owner)
-        collaborators = Staff.query.filter(Staff.employee_id.in_(collaborators_ids)).all()
-        curr_task.collaborators = collaborators
+
+    # 1. check if project_id is given
+    #  a. if curr_task.project_id is not None, then we are moving from one project to another (reject)
+    #  b. if curr_task.project_id is None, then we are moving from no project to a project (check collaborators)
+    # 2. if no project_id is given, then we are dealing with lonely tasks (check collaborators in dept)
+    print('project', data['project_id'])
+    if 'project_id' in data and data['project_id'] is not None:
+        if curr_task.project_id is None:
+            # moving from no project to a project
+            project = Project.query.get(data['project_id'])
+            if not project:
+                return {"message": "Project not found"}, 404
+            project_member_ids = [member.employee_id for member in project.members]
+            collaborators_ids = data.get('collaborators', [])
+            for cid in collaborators_ids:
+                if cid not in project_member_ids:
+                    return {"message": f"Collaborator {cid} is not a member of the project"}, 400
+        else:
+            # moving from one project to another - reject
+            return {"message": "Cannot change project of an existing task"}, 400
+        
+    else:
+        # lonely task
+        collaborators_ids = data.get('collaborators', [])
+        dept_staff_ids = [staff.employee_id for staff in Staff.query.filter_by(department=dept).all()]
+        for cid in collaborators_ids:
+            if cid not in dept_staff_ids:
+                return {"message": f"Collaborator {cid} is not in the same department"}, 400
+            
+    # add owner as collaborator
+    if curr_task.owner not in collaborators_ids:
+        collaborators_ids.append(curr_task.owner)
 
     db.session.commit()
 
@@ -633,11 +744,14 @@ def update_task(task_id):
     if 'subtasks' in data:
         subtasks_data = data['subtasks']
         for subtask in subtasks_data:
-            if task_id in subtask:
+            if 'task_id' in subtask:
                 subtask_id = subtask['task_id']
                 existing_subtask = Task.query.get(subtask_id)
                 if existing_subtask is None:
                     return {"message": f"Subtask with id {subtask_id} not found"}, 404
+                
+                if existing_subtask.owner != eid:
+                    return {"message": f"Only subtask owner can update subtask with id {subtask_id}"}, 403
                 
                 # update existing subtask
                 if 'title' in subtask:
@@ -648,11 +762,24 @@ def update_task(task_id):
                     sub_deadline = convert_datetime(subtask['deadline'])
                     if sub_deadline.replace(tzinfo=UTC) <= datetime.now(UTC):
                         return {"message": "Subtask deadline must be in the future"}, 400
+                    # check deadline is before parent task deadline
+                    if sub_deadline > curr_task.deadline:
+                        return {"message": "Subtask deadline cannot be after parent task deadline"}, 400
                     existing_subtask.deadline = sub_deadline
                 if 'priority' in subtask:
                     existing_subtask.priority = subtask['priority']
                 if 'attachments' in subtask:
                     existing_subtask.attachment = json.dumps(subtask.get('attachments', []))
+
+                if 'owner' in subtask:
+                    new_owner = subtask['owner']
+                    if new_owner != existing_subtask.owner:
+                        # new subtask owner must be subtset of parent task collaborators
+                        if new_owner not in collaborators_ids:
+                            return {"message": f"Subtask owner {new_owner} is not a collaborator of the parent task"}, 400
+                        existing_subtask.owner = new_owner
+                    
+
                 if 'collaborators' in subtask:
                     sub_collaborators_ids = subtask['collaborators']
                     # ensure owner is in collaborators
@@ -685,6 +812,9 @@ def update_task(task_id):
                 sub_deadline = convert_datetime(subtask['deadline'])
                 if sub_deadline.replace(tzinfo=UTC) <= datetime.now(UTC):
                     return {"message": "Subtask deadline must be in the future"}, 400
+                # check deadline is before parent task deadline
+                if sub_deadline > curr_task.deadline:
+                    return {"message": "Subtask deadline cannot be after parent task deadline"}, 400
                 
                 # handle attachments
                 sub_attachments_json = json.dumps(subtask.get('attachments', []))

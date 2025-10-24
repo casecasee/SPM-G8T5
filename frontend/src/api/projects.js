@@ -3,6 +3,7 @@ const BASE = 'http://localhost:8001'; // hardcoded for local dev
 async function http(path, options) {
   const res = await fetch(`${BASE}${path}`, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     ...options,
   });
   if (!res.ok) throw new Error(await res.text());
