@@ -66,9 +66,13 @@ export default {
     };
   },
   mounted() {
-    this.fetchNotifications();
-    this.fetchUnreadCount();
-    this.connectWebSocket();
+    // Only fetch notifications if user is authenticated
+    const employeeId = sessionStorage.getItem('employee_id');
+    if (employeeId && employeeId !== 'null') {
+      this.fetchNotifications();
+      this.fetchUnreadCount();
+      this.connectWebSocket();
+    }
   },
   beforeUnmount() {
     if (this.socket) {
@@ -80,6 +84,14 @@ async fetchNotifications() {
   this.loading = true;
   try {
     const employeeId = sessionStorage.getItem('employee_id');
+    
+    // Check if employee_id is valid
+    if (!employeeId || employeeId === 'null') {
+      console.log('⚠️ No valid employee_id found, skipping notification fetch');
+      this.loading = false;
+      return;
+    }
+
     const response = await fetch('http://localhost:5003/api/notifications?per_page=10', {
       method: 'GET',
       credentials: 'include',
@@ -106,6 +118,13 @@ async fetchNotifications() {
 async fetchUnreadCount() {
   try {
     const employeeId = sessionStorage.getItem('employee_id');
+    
+    // Check if employee_id is valid
+    if (!employeeId || employeeId === 'null') {
+      console.log('⚠️ No valid employee_id found, skipping unread count fetch');
+      return;
+    }
+
     const response = await fetch('http://localhost:5003/api/notifications/unread', {
       method: 'GET',
       credentials: 'include',
@@ -128,8 +147,8 @@ async fetchUnreadCount() {
     connectWebSocket() {
       const employeeId = sessionStorage.getItem('employee_id');
       
-      if (!employeeId) {
-        console.error('No employee_id found');
+      if (!employeeId || employeeId === 'null') {
+        console.log('⚠️ No valid employee_id found, skipping WebSocket connection');
         return;
       }
 
@@ -224,6 +243,12 @@ async fetchUnreadCount() {
     async markAsRead(notificationId) {
       try {
         const employeeId = sessionStorage.getItem('employee_id');
+        
+        if (!employeeId || employeeId === 'null') {
+          console.log('⚠️ No valid employee_id found, cannot mark notification as read');
+          return;
+        }
+
         const response = await fetch(`http://localhost:5003/api/notifications/${notificationId}/read`, {
           method: 'PATCH',
           credentials: 'include',
@@ -248,6 +273,12 @@ async fetchUnreadCount() {
     async markAllAsRead() {
       try {
         const employeeId = sessionStorage.getItem('employee_id');
+        
+        if (!employeeId || employeeId === 'null') {
+          console.log('⚠️ No valid employee_id found, cannot mark all notifications as read');
+          return;
+        }
+
         const response = await fetch('http://localhost:5003/api/notifications/read-all', {
           method: 'PATCH',
           credentials: 'include',
