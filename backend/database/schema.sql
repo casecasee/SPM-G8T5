@@ -31,7 +31,6 @@ CREATE TABLE projects (
   name VARCHAR(255) NOT NULL,
   owner VARCHAR(255) DEFAULT NULL,
   owner_id INT DEFAULT NULL,
-  status VARCHAR(50) NOT NULL,
   tasks_done INT NOT NULL,
   tasks_total INT NOT NULL,
   due_date DATETIME DEFAULT NULL,

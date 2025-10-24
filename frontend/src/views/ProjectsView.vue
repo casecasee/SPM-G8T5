@@ -26,10 +26,7 @@
                 <option v-for="o in owners" :key="o" :value="o">{{ o }}</option>
             </select>
 
-            <select v-model="status" class="filter">
-                <option value="">Status</option>
-                <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-            </select>
+            <!-- Status filter removed -->
 
             <select v-model="sort" class="filter">
                 <option value="updated_desc">Sort</option>
@@ -46,7 +43,7 @@
                     <tr>
                         <th>Project Name</th>
                         <th>Owner</th>
-                        <th>Status</th>
+                        
                         <th>Tasks</th>
                         <th>Members</th>
                         <th>Due Date</th>
@@ -66,11 +63,7 @@
                     <tr v-for="p in filteredAndSorted" :key="p.id" @click="$router.push({ name: 'project-detail', params: { id: p.id } })" style="cursor:pointer;">
                         <td class="name">{{ p.name }} <span class="pid">#{{ p.id }}</span></td>
                         <td>{{ p.owner }}</td>
-                        <td>
-                            <span class="badge" :class="badgeClass(p.status)">
-                                {{ p.status }}
-                            </span>
-                        </td>
+                        
                         <td>{{ p.tasksDone }} / {{ p.tasksTotal }}</td>
                         <td>{{ (p.memberNames && p.memberNames.length) ? p.memberNames.join(', ') : '-' }}</td>
                         <td>{{ formatDueDate(p.dueDate) }}</td>
@@ -211,10 +204,7 @@ const error = ref('')
 
 const search = ref('')
 const owner = ref('')
-const status = ref('')
 const sort = ref('updated_desc')
-
-const statuses = ['Active', 'On hold', 'Archived']
 
 // Task selection/creation state
 const tasksLoading = ref(false)
@@ -277,14 +267,7 @@ const owners = computed(() => {
     return Array.from(uniq).sort((a, b) => a.localeCompare(b))
 })
 
-function badgeClass(s) {
-    const k = (s || '').toLowerCase()
-    return {
-        'badge--active': k === 'active',
-        'badge--on-hold': k === 'on hold',
-        'badge--archived': k === 'archived'
-    }
-}
+// status badges removed
 
 function fromNow(iso) {
     const d = new Date(iso)
@@ -321,8 +304,7 @@ const filteredAndSorted = computed(() => {
         const q = search.value.trim().toLowerCase()
         const matchesSearch = !q || p.name.toLowerCase().includes(q)
         const matchesOwner = !owner.value || p.owner === owner.value
-        const matchesStatus = !status.value || p.status === status.value
-        return matchesSearch && matchesOwner && matchesStatus
+        return matchesSearch && matchesOwner
     })
 
     switch (sort.value) {
@@ -349,10 +331,10 @@ async function load() {
     } catch (e) {
         error.value = 'Failed to load from service. Showing demo data.'
         projects.value = [
-            { id: 1, name: 'Marketing Campaign', owner: 'John Smith', status: 'Active',   tasksDone: 1, tasksTotal: 5,  updatedAt: new Date(Date.now() - 2 * 3600_000).toISOString() },
-            { id: 2, name: 'Website Redesign',   owner: 'Mary Johnson', status: 'On hold', tasksDone: 2, tasksTotal: 8,  updatedAt: new Date(Date.now() - 24 * 3600_000).toISOString() },
-            { id: 3, name: 'Mobile App Development', owner: 'Robert Brown', status: 'Active', tasksDone: 3, tasksTotal: 12, updatedAt: new Date(Date.now() - 3 * 24 * 3600_000).toISOString() },
-            { id: 4, name: 'Data Analysis', owner: 'Susan Lee', status: 'Archived', tasksDone: 0, tasksTotal: 7, updatedAt: new Date(Date.now() - 5 * 24 * 3600_000).toISOString() },
+            { id: 1, name: 'Marketing Campaign', owner: 'John Smith', tasksDone: 1, tasksTotal: 5,  updatedAt: new Date(Date.now() - 2 * 3600_000).toISOString() },
+            { id: 2, name: 'Website Redesign',   owner: 'Mary Johnson', tasksDone: 2, tasksTotal: 8,  updatedAt: new Date(Date.now() - 24 * 3600_000).toISOString() },
+            { id: 3, name: 'Mobile App Development', owner: 'Robert Brown', tasksDone: 3, tasksTotal: 12, updatedAt: new Date(Date.now() - 3 * 24 * 3600_000).toISOString() },
+            { id: 4, name: 'Data Analysis', owner: 'Susan Lee', tasksDone: 0, tasksTotal: 7, updatedAt: new Date(Date.now() - 5 * 24 * 3600_000).toISOString() },
         ]
     } finally {
         loading.value = false
