@@ -264,7 +264,8 @@
   <Dialog v-model:visible="showModal" modal 
         :header="isEditing && !selectedTask ? 'New Task' : (isEditing ? 'Edit Task' : 'Task Details')" 
         class="clean-modal">
-    <div class="modal-content">
+    <form @submit.prevent="() => {}">
+      <div class="modal-content">
       <!-- Basic Information Section -->
       <div class="form-section">
         <h3 class="section-title">Basic Information</h3>
@@ -465,8 +466,8 @@
               <div v-if="editingCommentId === c.id" class="comment-edit">
                 <Textarea v-model="editingContent" rows="2" class="form-input" />
                 <div class="comment-actions">
-                  <Button label="Save" class="p-button-sm" @click="saveEditComment(c.id)" />
-                  <Button label="Cancel" class="p-button-text p-button-sm" @click="cancelEditComment" />
+                  <Button label="Save" type="button" class="p-button-sm" @click="saveEditComment(c.id)" />
+                  <Button label="Cancel" type="button" class="p-button-text p-button-sm" @click="cancelEditComment" />
                 </div>
               </div>
               <div v-else class="comment-text">
@@ -479,8 +480,8 @@
               </div>
             </div>
             <div class="comment-ops" v-if="(isOwnerOrCollaborator(selectedTask) || (sessionStorage.getItem('role') || '').toLowerCase() !== 'staff') && isEditing">
-              <Button label="Edit" class="p-button-text p-button-sm" @click="startEditComment(c)" />
-              <Button label="Delete" class="p-button-danger p-button-text p-button-sm" @click="deleteComment(c.id)" />
+              <Button label="Edit" type="button" class="p-button-text p-button-sm" @click="startEditComment(c)" />
+              <Button label="Delete" type="button" class="p-button-danger p-button-text p-button-sm" @click="deleteComment(c.id)" />
             </div>
           </div>
         </div>
@@ -496,7 +497,7 @@
               @input="onCommentInput"
               @keydown.down.prevent="moveMentionSelection(1)"
               @keydown.up.prevent="moveMentionSelection(-1)"
-              @keydown.enter.prevent="applyMentionSelection"
+              @keydown.enter.prevent="handleCommentEnter"
               @blur="hideMentionList" />
             <div v-if="showMentionList && filteredMentionable.length > 0" class="mention-list">
               <div 
@@ -527,11 +528,11 @@
           <div class="attached-files" v-if="newCommentAttachments.length">
             <div v-for="(f, i) in newCommentAttachments" :key="i" class="attached-file">
               <span>{{ f.original_name || f.filename }}</span>
-              <Button class="p-button-danger p-button-text p-button-sm" @click="removeNewAttachment(i)">Remove</Button>
+              <Button type="button" class="p-button-danger p-button-text p-button-sm" @click="removeNewAttachment(i)">Remove</Button>
             </div>
           </div>
           <div class="comment-actions">
-            <Button label="Add Comment" @click="addComment" :disabled="!newComment.trim()" class="add-comment-btn" />
+            <Button label="Add Comment" type="button" @click="addComment" :disabled="!newComment.trim()" class="add-comment-btn" />
           </div>
         </div>
       </div>
@@ -661,8 +662,8 @@
           </div>
           
           <div class="subtask-form-actions">
-            <Button label="Add Subtask" @click="addSubtask" class="add-subtask-confirm-btn" />
-            <Button label="Cancel" @click="toggleSubtaskForm" class="p-button-text cancel-subtask-btn" />
+            <Button label="Add Subtask" type="button" @click="addSubtask" class="add-subtask-confirm-btn" />
+            <Button label="Cancel" type="button" @click="toggleSubtaskForm" class="p-button-text cancel-subtask-btn" />
           </div>
         </div>
 
@@ -805,10 +806,11 @@
 
       <div class="save-btn-container">
         <template v-if="selectedTask && !isEditing && canEdit(selectedTask)">
-          <Button label="Edit" class="save-task-btn" @click="startEditing" />
+          <Button label="Edit" type="button" class="save-task-btn" @click="startEditing" />
         </template>
-        <Button label="Save" class="save-task-btn" @click="saveTask" v-if="isEditing || !selectedTask" :disabled="!canEdit(selectedTask)"/>
+        <Button label="Save" type="button" class="save-task-btn" @click="saveTask" v-if="isEditing || !selectedTask" :disabled="!canEdit(selectedTask)"/>
       </div>
 
     </div>
+    </form>
   </Dialog>

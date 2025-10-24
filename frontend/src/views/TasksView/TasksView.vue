@@ -103,6 +103,17 @@
     insertMention(user)
     }
 
+    function handleCommentEnter(event) {
+        // Always prevent form submission
+        event.preventDefault()
+        
+        // If mention list is shown, apply selection
+        if (showMentionList.value && filteredMentionable.value.length > 0) {
+            applyMentionSelection()
+        }
+        // Otherwise, do nothing (don't submit the form)
+    }
+
     function insertMention(user) {
     const text = newComment.value || ''
     const start = mentionStartIdx.value
@@ -686,6 +697,7 @@
     }
 
     async function saveTask() {
+    console.log('🔍 saveTask called! Stack trace:', new Error().stack)
     clearValidationErrors()
     
     if (!validateForm()) {

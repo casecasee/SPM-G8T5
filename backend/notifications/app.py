@@ -37,7 +37,7 @@ socketio = SocketIO(app,
                    engineio_logger=False)
 
 # Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+mysqlconnector://root@localhost:3306/SPM'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///notifications.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299}
 
@@ -116,14 +116,18 @@ def handle_preflight():
 @app.route('/api/notifications', methods=['GET'])
 def list_notifications():
     staff_id = request.headers.get('X-Employee-Id')
-    if not staff_id:
-        return jsonify({'error': 'Missing X-Employee-Id'}), 400
+    if not staff_id or staff_id == 'null':
+        return jsonify({'error': 'Missing or invalid X-Employee-Id'}), 400
+    try:
+        staff_id_int = int(staff_id)
+    except ValueError:
+        return jsonify({'error': 'Invalid X-Employee-Id format'}), 400
     try:
         per_page = int(request.args.get('per_page', 20))
     except ValueError:
         per_page = 20
     notifications = (Notification.query
-                     .filter_by(staff_id=int(staff_id))
+                     .filter_by(staff_id=staff_id_int)
                      .order_by(Notification.created_at.desc())
                      .limit(per_page)
                      .all())
@@ -133,18 +137,26 @@ def list_notifications():
 @app.route('/api/notifications/unread', methods=['GET'])
 def unread_count():
     staff_id = request.headers.get('X-Employee-Id')
-    if not staff_id:
-        return jsonify({'error': 'Missing X-Employee-Id'}), 400
-    count = Notification.query.filter_by(staff_id=int(staff_id), is_read=False).count()
+    if not staff_id or staff_id == 'null':
+        return jsonify({'error': 'Missing or invalid X-Employee-Id'}), 400
+    try:
+        staff_id_int = int(staff_id)
+    except ValueError:
+        return jsonify({'error': 'Invalid X-Employee-Id format'}), 400
+    count = Notification.query.filter_by(staff_id=staff_id_int, is_read=False).count()
     return jsonify({'unread_count': count}), 200
 
 # Public API: mark one as read
 @app.route('/api/notifications/<notification_id>/read', methods=['PATCH'])
 def mark_read(notification_id):
     staff_id = request.headers.get('X-Employee-Id')
-    if not staff_id:
-        return jsonify({'error': 'Missing X-Employee-Id'}), 400
-    n = Notification.query.filter_by(notification_id=notification_id, staff_id=int(staff_id)).first()
+    if not staff_id or staff_id == 'null':
+        return jsonify({'error': 'Missing or invalid X-Employee-Id'}), 400
+    try:
+        staff_id_int = int(staff_id)
+    except ValueError:
+        return jsonify({'error': 'Invalid X-Employee-Id format'}), 400
+    n = Notification.query.filter_by(notification_id=notification_id, staff_id=staff_id_int).first()
     if not n:
         return jsonify({'error': 'Not found'}), 404
     if not n.is_read:
@@ -157,10 +169,14 @@ def mark_read(notification_id):
 @app.route('/api/notifications/read-all', methods=['PATCH'])
 def mark_all_read():
     staff_id = request.headers.get('X-Employee-Id')
-    if not staff_id:
-        return jsonify({'error': 'Missing X-Employee-Id'}), 400
+    if not staff_id or staff_id == 'null':
+        return jsonify({'error': 'Missing or invalid X-Employee-Id'}), 400
+    try:
+        staff_id_int = int(staff_id)
+    except ValueError:
+        return jsonify({'error': 'Invalid X-Employee-Id format'}), 400
     updated = (Notification.query
-               .filter_by(staff_id=int(staff_id), is_read=False)
+               .filter_by(staff_id=staff_id_int, is_read=False)
                .update({Notification.is_read: True, Notification.read_at: datetime.now(timezone.utc)}))
     if updated:
         db.session.commit()
@@ -403,14 +419,19 @@ def handle_options(path):
 @app.route('/api/preferences', methods=['GET'])
 def get_preferences():
     staff_id = request.headers.get('X-Employee-Id')
-    if not staff_id:
-        return jsonify({'error': 'Missing X-Employee-Id'}), 400
+    if not staff_id or staff_id == 'null':
+        return jsonify({'error': 'Missing or invalid X-Employee-Id'}), 400
     
-    prefs = NotificationPreferences.query.get(int(staff_id))
+    try:
+        staff_id_int = int(staff_id)
+    except ValueError:
+        return jsonify({'error': 'Invalid X-Employee-Id format'}), 400
+    
+    prefs = NotificationPreferences.query.get(staff_id_int)
     if not prefs:
         # Create default preferences
         prefs = NotificationPreferences(
-            staff_id=int(staff_id),
+            staff_id=staff_id_int,
             deadline_reminders=True,
             task_status_updates=True,
             due_date_changes=True,
@@ -425,14 +446,19 @@ def get_preferences():
 @app.route('/api/preferences', methods=['PUT'])
 def update_preferences():
     staff_id = request.headers.get('X-Employee-Id')
-    if not staff_id:
-        return jsonify({'error': 'Missing X-Employee-Id'}), 400
+    if not staff_id or staff_id == 'null':
+        return jsonify({'error': 'Missing or invalid X-Employee-Id'}), 400
+    
+    try:
+        staff_id_int = int(staff_id)
+    except ValueError:
+        return jsonify({'error': 'Invalid X-Employee-Id format'}), 400
     
     data = request.get_json(force=True) or {}
-    prefs = NotificationPreferences.query.get(int(staff_id))
+    prefs = NotificationPreferences.query.get(staff_id_int)
     
     if not prefs:
-        prefs = NotificationPreferences(staff_id=int(staff_id))
+        prefs = NotificationPreferences(staff_id=staff_id_int)
         db.session.add(prefs)
     
     if 'deadline_reminders' in data:
