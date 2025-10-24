@@ -460,7 +460,7 @@
           <div class="comment-item" v-for="c in comments" :key="c.id">
             <div class="comment-content">
               <div class="comment-meta">
-                <span class="author">#{{ c.author_id }}</span>
+                <span class="author">{{ getOwnerName(c.author_id) }} (#{{ c.author_id }})</span>
                 <span class="timestamp">{{ new Date(c.created_at || c.updated_at).toLocaleString() }}</span>
               </div>
               <div v-if="editingCommentId === c.id" class="comment-edit">
@@ -487,7 +487,7 @@
         </div>
         <div v-else class="no-comments">No comments yet</div>
 
-        <div class="comment-new" v-if="isEditing">
+        <div class="comment-new">
           <div class="comment-input-wrapper">
             <Textarea 
               v-model="newComment" 

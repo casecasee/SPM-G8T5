@@ -623,8 +623,6 @@ def update_task(task_id):
 
     # input: {title, description, attachment(o), deadline, project_id(o), collaborators[], priority, owner, status}
     data = request.json
-    print(f"DEBUG: update_task called for task_id={task_id}")
-    print(f"DEBUG: request data = {data}")
 
     # session info
     eid = session['employee_id']
@@ -635,27 +633,18 @@ def update_task(task_id):
     # check if task exists
     curr_task = Task.query.get(task_id)
     if curr_task is None:
-        print(f"DEBUG: Task {task_id} not found")
         return {"message": "Task not found"}, 404
-    print(f"DEBUG: Found task - owner={curr_task.owner}, project_id={curr_task.project_id}, status={curr_task.status}")
     
     # Allow task owner OR project manager to update task details
     # If updating project_id, allow project manager to attach task to their project
-    print(f"DEBUG: Current user eid={eid}, task owner={curr_task.owner}")
     if curr_task.owner != eid:
-        print(f"DEBUG: User is not task owner, checking project manager permissions")
         if 'project_id' in data and data['project_id'] is not None:
             # Check if current user is the project manager
             project = Project.query.get(data['project_id'])
-            print(f"DEBUG: Project found: {project}, owner_id: {project.owner_id if project else 'None'}")
             if not project or project.owner_id != eid:
-                print(f"DEBUG: User is not project manager either - REJECTING")
                 return {"message": "Only task owner or project manager can update task details"}, 403
-            print(f"DEBUG: User is project manager - ALLOWING")
         else:
-            print(f"DEBUG: No project_id in request and user is not task owner - REJECTING")
             return {"message": "Only task owner can update task details"}, 403
-    print(f"DEBUG: Permission check passed")
     
     # save old deadline for notification
     old_deadline = curr_task.deadline
@@ -683,13 +672,10 @@ def update_task(task_id):
         curr_task.attachment = json.dumps(data['attachments'])
 
     if 'status' in data and 'project_id' not in data:
-        print(f"DEBUG: Status validation - current={curr_task.status}, provided={data['status']}")
         if curr_task.status != data['status']:
-            print(f"DEBUG: Status mismatch - REJECTING")
             return {"message": "Status cannot be changed in this endpoint"}, 400
-        print(f"DEBUG: Status validation passed")
     elif 'status' in data:
-        print(f"DEBUG: Status provided but project_id also in data - SKIPPING status validation")
+        pass
         
     if 'recurrence' in data:
         curr_task.recurrence = data['recurrence']
@@ -703,8 +689,7 @@ def update_task(task_id):
 
     # assign part
     if 'owner' in data:
-        print('updating owner')
-        print(f"Current owner: {curr_task.owner}, New owner: {data['owner']}")
+        # updating owner; keep quiet in production
         if data['owner'] != curr_task.owner:
             old_owner = curr_task.owner
             curr_task.owner = data['owner']
@@ -723,35 +708,25 @@ def update_task(task_id):
     #  a. if curr_task.project_id is not None, then we are moving from one project to another (reject)
     #  b. if curr_task.project_id is None, then we are moving from no project to a project (check collaborators)
     # 2. if no project_id is given, then we are dealing with lonely tasks (check collaborators in dept)
-    print('project', data['project_id'])
     if 'project_id' in data and data['project_id'] is not None:
-        print(f"DEBUG: Project validation - current project_id={curr_task.project_id}, new project_id={data['project_id']}")
         if curr_task.project_id is None:
-            print(f"DEBUG: Moving from no project to project")
             # moving from no project to a project
             project = Project.query.get(data['project_id'])
             if not project:
-                print(f"DEBUG: Project {data['project_id']} not found - REJECTING")
                 return {"message": "Project not found"}, 404
-            print(f"DEBUG: Project found - {project}")
             project_member_ids = [member.employee_id for member in project.members]
-            print(f"DEBUG: Project members = {project_member_ids}")
             collaborators_ids = data.get('collaborators', [])
-            print(f"DEBUG: Collaborators from request = {collaborators_ids}")
             if collaborators_ids:  # Only validate if collaborators are explicitly provided
-                print(f"DEBUG: Validating provided collaborators")
                 for cid in collaborators_ids:
                     if cid not in project_member_ids:
-                        print(f"DEBUG: Collaborator {cid} not in project members - REJECTING")
                         return {"message": f"Collaborator {cid} is not a member of the project"}, 400
-                print(f"DEBUG: All collaborators are project members")
             else:
                 # If no collaborators provided, preserve existing ones
                 collaborators_ids = [collab.employee_id for collab in curr_task.collaborators]
-                print(f"DEBUG: No collaborators provided, preserving existing ones = {collaborators_ids}")
         else:
-            # moving from one project to another - reject
-            return {"message": "Cannot change project of an existing task"}, 400
+            # task already has a project; allow if unchanged, reject if changing
+            if curr_task.project_id != data['project_id']:
+                return {"message": "Cannot change project of an existing task"}, 400
         
     else:
         # lonely task
@@ -775,7 +750,6 @@ def update_task(task_id):
         curr_task.collaborators = staff_list
 
     db.session.commit()
-    print(f"DEBUG: Task update completed successfully")
 
     # handle subtasks
     # TODO: check this
@@ -932,7 +906,7 @@ def get_all_tasks():
     tasks = Task.query.all()
     tasks_list = [task.to_dict() for task in tasks]
     
-    print(f"DEBUG: Returning {len(tasks_list)} tasks for user {eid} with role {role}")
+    # Return tasks list
     return jsonify({"tasks": tasks_list}), 200
 
 # -----------------------------------------------------------------------------------------------

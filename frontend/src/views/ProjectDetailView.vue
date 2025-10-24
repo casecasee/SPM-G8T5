@@ -336,8 +336,15 @@ function goToTimeline() {
 }
 
 function openTask(t) {
-  // Navigate to Tasks page; the Tasks view already handles details modal
-  router.push({ name: 'tasks' })
+  router.push({
+    name: 'tasks',
+    query: {
+      taskId: t.id,
+      open: 'details',
+      from: 'project',
+      projectId: projectId.value
+    }
+  })
 }
 
 // Helper functions from Tasks page

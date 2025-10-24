@@ -2,8 +2,8 @@
 <style src="./TasksView.style.css"></style>
 
 <script setup>
-    import { ref, computed, onMounted, onUnmounted } from 'vue'
-    import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
     import { getProjects } from '../../api/projects'
     import Dialog from 'primevue/dialog'
     import Button from 'primevue/button'
@@ -15,7 +15,8 @@
     import MultiSelect from 'primevue/multiselect'
     import axios from 'axios'
 
-    const router = useRouter()
+const router = useRouter()
+const route = useRoute()
 
           
     // ----------------- State -----------------
@@ -90,6 +91,13 @@
     mentionStartIdx.value = -1
     mentionHighlighted.value = 0
     }
+
+    // If came from project page, go back when modal closes
+    watch(showModal, (v) => {
+        if (!v && route.query.from === 'project' && route.query.projectId) {
+            router.push({ name: 'project-detail', params: { id: Number(route.query.projectId) } })
+        }
+    })
 
     function moveMentionSelection(delta) {
     if (!showMentionList.value || filteredMentionable.value.length === 0) return
@@ -1243,6 +1251,24 @@
     let refreshTimer = null
 
     onMounted(() => {
+    // Auto-open modal when navigated with a taskId from project details
+    const qId = Number(route.query.taskId || 0)
+    const openMode = String(route.query.open || 'details')
+
+    if (qId) {
+        const tryOpen = () => {
+        const t = tasks.value.find(x => x.id === qId || x.task_id === qId)
+        if (!t) {
+            setTimeout(tryOpen, 150)
+            return
+        }
+        openDetails(t)
+        if (openMode === 'edit') {
+            isEditing.value = true
+        }
+        }
+        tryOpen()
+    }
     fetchEmployees().finally(() => fetchTasks())
     getProjects().then(list => { projects.value = Array.isArray(list) ? list : [] }).catch(() => { projects.value = [] })
     
