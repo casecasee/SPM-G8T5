@@ -57,28 +57,28 @@
     const mentionHighlighted = ref(0)
 
     function onCommentInput(e) {
-    const text = newComment.value || ''
-    const cursor = e?.target?.selectionStart ?? text.length
-    // find the last '@' before cursor that isn't preceded by whitespace
-    let start = -1
-    for (let i = cursor - 1; i >= 0; i--) {
-        const ch = text[i]
-        if (ch === '@') { start = i; break }
-        if (ch === ' ' || ch === '\n' || ch === '\t') break
-    }
-    if (start >= 0) {
-        mentionStartIdx.value = start
-        mentionQuery.value = text.slice(start + 1, cursor)
-        showMentionList.value = true
-        mentionHighlighted.value = 0
-    } else {
-        hideMentionList()
-    }
+        const text = newComment.value || ''
+        const cursor = e?.target?.selectionStart ?? text.length
+        // find the last '@' before cursor that isn't preceded by whitespace
+        let start = -1
+        for (let i = cursor - 1; i >= 0; i--) {
+            const ch = text[i]
+            if (ch === '@') { start = i; break }
+            if (ch === ' ' || ch === '\n' || ch === '\t') break
+        }
+        if (start >= 0) {
+            mentionStartIdx.value = start
+            mentionQuery.value = text.slice(start + 1, cursor)
+            showMentionList.value = true
+            mentionHighlighted.value = 0
+        } else {
+            hideMentionList()
+        }
     }
     
     function printReport() {
         print();
-        } 
+    }
 
     function goToTimeline() {
         router.push({ name: 'tasks-timeline' })
@@ -1356,24 +1356,24 @@
     }
 
     async function deleteComment(commentId) {
-    try {
-        await axios.delete(`http://localhost:5002/comments/${commentId}`, { withCredentials: true })
-        if (selectedTask.value?.id) await loadComments(selectedTask.value.id)
-    } catch (_) {}
+        try {
+            await axios.delete(`http://localhost:5002/comments/${commentId}`, { withCredentials: true })
+            if (selectedTask.value?.id) await loadComments(selectedTask.value.id)
+        } catch (_) {}
     }
 
     function onCommentFileUploaded(e) {
-    try {
-        const res = JSON.parse(e?.xhr?.response || '{}')
-        if (res?.filename) {
-            const original = (e?.files?.[0]?.name) || res.filename
-            newCommentAttachments.value.push({ filename: res.filename, original_name: original })
-        }
-    } catch {}
+        try {
+            const res = JSON.parse(e?.xhr?.response || '{}')
+            if (res?.filename) {
+                const original = (e?.files?.[0]?.name) || res.filename
+                newCommentAttachments.value.push({ filename: res.filename, original_name: original })
+            }
+        } catch {}
     }
 
     function removeNewAttachment(idx) {
-    newCommentAttachments.value.splice(idx, 1)
+        newCommentAttachments.value.splice(idx, 1)
     }
 
     function isOverdue(task) {
@@ -1383,5 +1383,4 @@
         const now = new Date()
         return due < now && task.status.toLowerCase() !== 'done'
     }
-
 </script>
