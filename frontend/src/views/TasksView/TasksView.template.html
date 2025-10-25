@@ -2,9 +2,9 @@
 <div class="tasks-page">
   <div class="tasks-header">
     <h2>Tasks</h2>
-    <div class="header-buttons" v-if="currentTab === 'my'">
+    <div class="header-buttons">
       <Button class="add-top-btn"  label="📅 Timeline View" @click="goToTimeline" />
-      <Button label="+ Add Task" class="add-top-btn" @click="openAdd" />
+      <Button v-if="currentTab === 'my'" label="+ Add Task" class="add-top-btn" @click="openAdd" />
     </div>
   </div>
 
