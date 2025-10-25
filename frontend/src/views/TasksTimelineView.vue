@@ -283,13 +283,10 @@ const timelineWidth = computed(() => {
 // Helper functions
 const toLocal = iso => {
   if (!iso) return null
-  // Handle both ISO format and MySQL DATETIME format
   let date
   if (iso.includes('T')) {
-      // ISO format: "2025-10-30T15:18:00.000Z"
       date = new Date(iso)
   } else {
-      // MySQL DATETIME format: "2025-10-30 15:18:00"
       date = new Date(iso.replace(' ', 'T'))
   }
   return date.toLocaleString(undefined, {
@@ -324,15 +321,13 @@ function isToday(date) {
 // Helper function to sort tasks by priority and due date
 function sortTasksByPriorityAndDueDate(tasks) {
   return tasks.sort((a, b) => {
-    // Sort by priority (highest first), then by due date (earliest first)
     const priorityA = a.priority || 5
     const priorityB = b.priority || 5
     
     if (priorityA !== priorityB) {
-      return priorityB - priorityA // Higher priority first
+      return priorityB - priorityA
     }
     
-    // If same priority, sort by due date (earliest first)
     const dueDateA = new Date(a.due_date)
     const dueDateB = new Date(b.due_date)
     return dueDateA - dueDateB
@@ -340,33 +335,32 @@ function sortTasksByPriorityAndDueDate(tasks) {
 }
 
 function getTasksForEmployee(employeeId) {
-  // Show only parent tasks (tasks without parent_id)
   const allTasks = timelineData.value.filter(task => 
     task.owner === employeeId || task.collaborators.includes(employeeId)
   )
   
-  console.log('All tasks for employee:', allTasks.map(t => ({ 
+  const parentTasks = allTasks.filter(task => !task.parent_id)
+  
+  console.log('Parent tasks for employee:', parentTasks.map(t => ({ 
     id: t.id, 
     name: t.name, 
     parent_id: t.parent_id 
   })))
   
-  const parentTasks = allTasks.filter(task => !task.parent_id)
-  const subtasks = allTasks.filter(task => task.parent_id)
-  
-  console.log('Parent tasks:', parentTasks.map(t => ({ id: t.id, name: t.name })))
-  console.log('Subtasks:', subtasks.map(t => ({ id: t.id, name: t.name, parent_id: t.parent_id })))
-  
   return sortTasksByPriorityAndDueDate(parentTasks)
 }
 
 function getSubtasksForParent(parentId) {
-  const subtasks = timelineData.value.filter(task => 
-    task.parent_id === parentId &&
-    (task.owner === currentEmployeeId || task.collaborators.includes(currentEmployeeId))
+  const parentTask = timelineData.value.find(task => task.id === parentId)
+  if (!parentTask || !parentTask.subtasks) {
+    return []
+  }
+  
+  const accessibleSubtasks = parentTask.subtasks.filter(subtask => 
+    subtask.owner === currentEmployeeId || subtask.collaborators.includes(currentEmployeeId)
   )
   
-  return sortTasksByPriorityAndDueDate(subtasks)
+  return sortTasksByPriorityAndDueDate(accessibleSubtasks)
 }
 
 function openSubtaskView(parentTask) {
@@ -384,22 +378,18 @@ function getTaskBarStyle(task, isSubtaskView = false) {
   const taskEnd = new Date(task.due_date.replace(/:\d{2}[.Z].*$/, ''))
   const now = new Date()
   
-  // Use different date ranges for main timeline vs subtask view
   const datesToUse = isSubtaskView ? subtaskTimelineDates.value : timelineDates.value
   
   if (datesToUse.length === 0) {
     return { display: 'none' }
   }
   
-  // Convert task dates to local dates for comparison (date only, no time)
   const taskStartLocal = new Date(taskStart.getFullYear(), taskStart.getMonth(), taskStart.getDate())
   const taskEndLocal = new Date(taskEnd.getFullYear(), taskEnd.getMonth(), taskEnd.getDate())
   
-  // For overdue tasks, extend the bar to show the original due date
   let displayEndDate = taskEndLocal
   if (task.status.toLowerCase() !== 'done' && taskEndLocal < now) {
     if (isSubtaskView) {
-      // In subtask view, extend to parent's end date or now, whichever is smaller
       const parentEnd = new Date(selectedParentTask.value.due_date.replace(/:\d{2}[.Z].*$/, ''))
       displayEndDate = new Date(Math.min(now.getTime(), parentEnd.getTime()))
     } else {
@@ -408,7 +398,6 @@ function getTaskBarStyle(task, isSubtaskView = false) {
     }
   }
   
-  // Find the exact day index in the timeline dates array
   const taskStartDayIndex = datesToUse.findIndex(dateObj => {
     const timelineDate = new Date(dateObj.date.getFullYear(), dateObj.date.getMonth(), dateObj.date.getDate())
     const taskDate = new Date(taskStartLocal.getFullYear(), taskStartLocal.getMonth(), taskStartLocal.getDate())
@@ -444,7 +433,6 @@ function getTaskBarStyle(task, isSubtaskView = false) {
 function getTaskClass(task) {
   const classes = []
   
-  // Status-based styling
   switch (task.status.toLowerCase()) {
     case 'ongoing': classes.push('status-ongoing'); break
     case 'under review': classes.push('status-review'); break
@@ -530,12 +518,8 @@ async function loadTimeline() {
       withCredentials: true
     })
     
-    const allTasks = (res.data.tasks || []).map(t => {
-      console.log(`Task: ${t.title}`)
-      console.log(`Raw created_at from backend: ${t.created_at}`)
-      console.log(`Raw deadline from backend: ${t.deadline}`)
-      console.log('---')
-      
+    // Helper function to transform task data
+    const transformTask = (t) => {
       return {
         id: t.task_id,
         name: t.title,
@@ -547,28 +531,47 @@ async function loadTimeline() {
         parent_id: t.parent_id,
         owner: t.owner,
         collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)) : [],
-        project_id: t.project_id
+        project_id: t.project_id,
+        subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(transformTask) : []
       }
-    })
-    
-    // Filter tasks based on user role
-    let filteredTasks = []
-    if (currentRole === 'staff') {
-      filteredTasks = allTasks.filter(task => 
-        task.owner === currentEmployeeId || task.collaborators.includes(currentEmployeeId)
-      )
-    } else if (currentRole === 'manager') {
-      const res = await axios.get(`http://localhost:5000/employees/${encodeURIComponent(currentDepartment)}`, {
-        withCredentials: true
-      })
-      const departmentEmployeeIds = res.data.map(emp => emp.employee_id)
-      filteredTasks = allTasks.filter(task => 
-        departmentEmployeeIds.includes(task.owner) || 
-        task.collaborators.some(collab => departmentEmployeeIds.includes(collab))
-      )
-    } else {
-      filteredTasks = allTasks
     }
+    
+    let allTasks = []
+    if (res.data.my_tasks && res.data.team_tasks) {
+      const myTasks = (res.data.my_tasks || []).map(transformTask)
+      const teamTasks = []
+      
+      for (const [employeeName, employeeTasks] of Object.entries(res.data.team_tasks || {})) {
+        teamTasks.push(...(employeeTasks || []).map(transformTask))
+      }
+      
+      allTasks = [...myTasks, ...teamTasks]
+    } else if (res.data.my_tasks && res.data.company_tasks) {
+      const myTasks = (res.data.my_tasks || []).map(transformTask)
+      const companyTasks = []
+      
+      for (const [deptName, deptData] of Object.entries(res.data.company_tasks || {})) {
+        for (const [teamName, teamData] of Object.entries(deptData || {})) {
+          for (const [employeeName, employeeTasks] of Object.entries(teamData || {})) {
+            companyTasks.push(...(employeeTasks || []).map(transformTask))
+          }
+        }
+      }
+      allTasks = [...myTasks, ...companyTasks]
+    }
+    const uniqueTasks = []
+    const seenTaskIds = new Set()
+    
+    for (const task of allTasks) {
+      if (!seenTaskIds.has(task.id)) {
+        seenTaskIds.add(task.id)
+        uniqueTasks.push(task)
+      }
+    }
+    
+    let filteredTasks = uniqueTasks.filter(task => 
+      task.owner === currentEmployeeId || task.collaborators.includes(currentEmployeeId)
+    )
     
     timelineData.value = filteredTasks
     
@@ -578,7 +581,6 @@ async function loadTimeline() {
       task.collaborators.forEach(collab => employeeIds.add(collab))
     })
     
-    // Fetch employee details
     const employeePromises = Array.from(employeeIds).map(async (id) => {
       try {
         const res = await axios.get(`http://localhost:5000/api/internal/employee/${id}`)
@@ -590,7 +592,6 @@ async function loadTimeline() {
     
     timelineEmployees.value = await Promise.all(employeePromises)
     
-    // Set default date range if not set
     if (!startDate.value || !endDate.value) {
       const dates = filteredTasks.map(task => new Date(task.created_at.replace(/:\d{2}[.Z].*$/, '')))
       const dueDates = filteredTasks.map(task => new Date(task.due_date.replace(/:\d{2}[.Z].*$/, '')))
@@ -600,7 +601,6 @@ async function loadTimeline() {
         const minDate = new Date(Math.min(...allDates))
         const maxDate = new Date(Math.max(...allDates))
         
-        // Extend range by 7 days on each side
         minDate.setDate(minDate.getDate() - 5)
         maxDate.setDate(maxDate.getDate() + 5)
         

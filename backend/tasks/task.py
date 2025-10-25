@@ -884,11 +884,11 @@ def get_all_tasks():
     dept = session.get('department', '')
 
     # For now, return all tasks (you can add filtering later based on role)
-    tasks = Task.query.all()
-    tasks_list = [task.to_dict() for task in tasks]
+    # tasks = Task.query.all()
+    # tasks_list = [task.to_dict() for task in tasks]
     
-    print(f"DEBUG: Returning {len(tasks_list)} tasks for user {eid} with role {role}")
-    return jsonify({"tasks": tasks_list}), 200
+    # print(f"DEBUG: Returning {len(tasks_list)} tasks for user {eid} with role {role}")
+    # return jsonify({"tasks": tasks_list}), 200
 
 # -----------------------------------------------------------------------------------------------
 
@@ -899,59 +899,59 @@ def get_all_tasks():
 
 # ----------- New task code: get tasks based on role ---------------------------------------------
 
-    # def top_level_tasks_for(employee_id):
-    #     return (Task.query.filter(
-    #                 Task.collaborators.any(employee_id=employee_id),
-    #                 Task.parent_id.is_(None)        # <-- only parents
-    #     ).all())
+    def top_level_tasks_for(employee_id):
+        return (Task.query.filter(
+                    Task.collaborators.any(employee_id=employee_id),
+                    Task.parent_id.is_(None)        # <-- only parents
+        ).all())
 
     # TODO: move my_tasks_list here to avoid code duplication (minor)
 
-    # if (role == 'staff' or role == 'manager') and dept != 'HR': # hr can see all regardless of role
-    #     print('Getting tasks for staff/manager')
-    #     # get all tasks i am a collaborator and owner of
-    #     # my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
-    #     # my_tasks_list = [t.to_dict() for t in my_tasks]
-    #     my_tasks_list = [t.to_dict() for t in top_level_tasks_for(eid)]
-    #     # get all tasks of team members
-    #     team_members = Staff.query.filter_by(team=team).all()
-    #     team_tasks = {}
-    #     for member in team_members:
-    #         if member.employee_id == eid:
-    #             continue
-    #         # member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
-    #         member_tasks = top_level_tasks_for(member.employee_id)
-    #         team_tasks[member.employee_name] = [t.to_dict() for t in member_tasks]
+    if (role == 'staff' or role == 'manager') and dept != 'HR': # hr can see all regardless of role
+        print('Getting tasks for staff/manager')
+        # get all tasks i am a collaborator and owner of
+        # my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
+        # my_tasks_list = [t.to_dict() for t in my_tasks]
+        my_tasks_list = [t.to_dict() for t in top_level_tasks_for(eid)]
+        # get all tasks of team members
+        team_members = Staff.query.filter_by(team=team).all()
+        team_tasks = {}
+        for member in team_members:
+            if member.employee_id == eid:
+                continue
+            # member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
+            member_tasks = top_level_tasks_for(member.employee_id)
+            team_tasks[member.employee_name] = [t.to_dict() for t in member_tasks]
         
-    #     return jsonify({"my_tasks": my_tasks_list, "team_tasks": team_tasks}), 200
+        return jsonify({"my_tasks": my_tasks_list, "team_tasks": team_tasks}), 200
 
 
-    # # if role is director, get all task in the company
-    # # return as {my_tasks: [], company_tasks: {dept1: {team1: {emp1: [list of tasks], emp2: [...]}, team2: {...}}, dept2: {...}}}
-    # elif role == 'director' or role == 'senior manager' or dept == 'HR':
-    #     print('Getting tasks for director/senior manager/hr')
-    #     # get all tasks i am a collaborator of (includes those im owner of)
-    #     # my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
-    #     # my_tasks_list = [t.to_dict() for t in my_tasks]
-    #     my_tasks_list = [t.to_dict() for t in top_level_tasks_for(eid)]
-    #     # get all tasks in the company organized by dept, team, employee
-    #     # get all departments
-    #     departments = Staff.query.with_entities(Staff.department).distinct().all() # list of tuples with one element
-    #     company_tasks = {}
-    #     for dept_tuple in departments:
-    #         dept_name = dept_tuple[0]
-    #         dept_members = Staff.query.filter_by(department=dept_name).all()
-    #         dept_dict = {}
-    #         for member in dept_members:
-    #             # member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
-    #             member_tasks = top_level_tasks_for(member.employee_id)
-    #             team_name = member.team
-    #             if team_name not in dept_dict:
-    #                 dept_dict[team_name] = {}
-    #             dept_dict[team_name][member.employee_name] = [t.to_dict() for t in member_tasks]
-    #         company_tasks[dept_name] = dept_dict
+    # if role is director, get all task in the company
+    # return as {my_tasks: [], company_tasks: {dept1: {team1: {emp1: [list of tasks], emp2: [...]}, team2: {...}}, dept2: {...}}}
+    elif role == 'director' or role == 'senior manager' or dept == 'HR':
+        print('Getting tasks for director/senior manager/hr')
+        # get all tasks i am a collaborator of (includes those im owner of)
+        # my_tasks = Task.query.filter(Task.collaborators.any(employee_id=eid)).all()
+        # my_tasks_list = [t.to_dict() for t in my_tasks]
+        my_tasks_list = [t.to_dict() for t in top_level_tasks_for(eid)]
+        # get all tasks in the company organized by dept, team, employee
+        # get all departments
+        departments = Staff.query.with_entities(Staff.department).distinct().all() # list of tuples with one element
+        company_tasks = {}
+        for dept_tuple in departments:
+            dept_name = dept_tuple[0]
+            dept_members = Staff.query.filter_by(department=dept_name).all()
+            dept_dict = {}
+            for member in dept_members:
+                # member_tasks = Task.query.filter(Task.collaborators.any(employee_id=member.employee_id)).all()
+                member_tasks = top_level_tasks_for(member.employee_id)
+                team_name = member.team
+                if team_name not in dept_dict:
+                    dept_dict[team_name] = {}
+                dept_dict[team_name][member.employee_name] = [t.to_dict() for t in member_tasks]
+            company_tasks[dept_name] = dept_dict
 
-    #     return jsonify({"my_tasks": my_tasks_list, "company_tasks": company_tasks}), 200
+        return jsonify({"my_tasks": my_tasks_list, "company_tasks": company_tasks}), 200
 
 
 # --------------------------------------------------------------------------------------------------------------
