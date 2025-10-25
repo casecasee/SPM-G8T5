@@ -1117,7 +1117,7 @@ def list_task_comments(task_id):
         for a in atts]}
     return jsonify([serialize(c) for c in comments]), 200
 
-
+#create comment
 @app.route('/task/<int:task_id>/comments', methods=['POST'])
 def create_task_comment(task_id):
     if 'employee_id' not in session:
@@ -1159,6 +1159,74 @@ def create_task_comment(task_id):
             db.session.add(CommentAttachment(comment_id=comment.id, filename=fname))
 
     db.session.commit()
+    
+    # Send notifications after successful comment creation
+    try:
+        print(f"[NOTIFICATION DEBUG] Starting comment creation notifications for task {task_id}")
+        task = Task.query.get(task_id)
+        if task:
+            print(f"[NOTIFICATION DEBUG] Task found: {task.title}")
+            # Get all collaborators + owner for general comment notification
+            notify_user_ids = set()
+            if task.owner:
+                notify_user_ids.add(task.owner)
+                print(f"[NOTIFICATION DEBUG] Added owner {task.owner} to notify list")
+            try:
+                collaborators = task.collaborators.all()
+                print(f"[NOTIFICATION DEBUG] Found {len(collaborators)} collaborators")
+                for collab in collaborators:
+                    notify_user_ids.add(collab.employee_id)
+                    print(f"[NOTIFICATION DEBUG] Added collaborator {collab.employee_id} to notify list")
+            except Exception as e:
+                print(f"[NOTIFICATION DEBUG] Error getting collaborators: {e}")
+            
+            # Remove the comment author from notifications
+            notify_user_ids.discard(session['employee_id'])
+            print(f"[NOTIFICATION DEBUG] Final notify list (excluding author {session['employee_id']}): {list(notify_user_ids)}")
+            
+            # Send general comment notification to collaborators/owner
+            author_name = get_employee_name(session['employee_id'])
+            print(f"[NOTIFICATION DEBUG] Author name: {author_name}")
+            for user_id in notify_user_ids:
+                notification_payload = {
+                    'staff_id': user_id,
+                    'action': 'added',
+                    'title': f'Comments updated: {task.title}',
+                    'message': f'New comment added by {author_name}: {content[:100]}{"..." if len(content) > 100 else ""}',
+                    'related_task_id': task_id,
+                    'related_comment_id': comment.id,
+                    'actor_name': author_name
+                }
+                print(f"[NOTIFICATION DEBUG] Sending notification to user {user_id}: {notification_payload}")
+                response = requests.post(f'{NOTIFICATION_SERVICE_URL}/api/events/comment-added', 
+                    json=notification_payload, timeout=3)
+                print(f"[NOTIFICATION DEBUG] Notification response for user {user_id}: {response.status_code} - {response.text}")
+            
+            # Send mention notifications to mentioned users
+            all_mentioned_ids = numeric_ids | resolved_name_ids
+            print(f"[NOTIFICATION DEBUG] Mentioned users: {list(all_mentioned_ids)}")
+            for mentioned_id in all_mentioned_ids:
+                if mentioned_id != session['employee_id']:  # Don't notify the author
+                    mention_payload = {
+                        'staff_id': mentioned_id,
+                        'title': f'You were mentioned in: {task.title}',
+                        'message': f'{author_name} mentioned you in a comment: {content[:100]}{"..." if len(content) > 100 else ""}',
+                        'related_task_id': task_id,
+                        'related_comment_id': comment.id,
+                        'actor_name': author_name
+                    }
+                    print(f"[NOTIFICATION DEBUG] Sending mention notification to user {mentioned_id}: {mention_payload}")
+                    response = requests.post(f'{NOTIFICATION_SERVICE_URL}/api/events/mention', 
+                        json=mention_payload, timeout=3)
+                    print(f"[NOTIFICATION DEBUG] Mention notification response for user {mentioned_id}: {response.status_code} - {response.text}")
+        else:
+            print(f"[NOTIFICATION DEBUG] Task {task_id} not found!")
+    except Exception as e:
+        print(f"[NOTIFICATION DEBUG] Failed to send comment notifications: {e}")
+        import traceback
+        traceback.print_exc()
+        # Don't fail the comment creation if notifications fail
+    
     # include attachments in response
     resp_atts = [
         {"id": a.id, "filename": a.filename, "url": f"/attachments/{a.filename}"}
@@ -1166,7 +1234,7 @@ def create_task_comment(task_id):
     ]
     return jsonify({**comment.to_dict(), "attachments": resp_atts}), 201
 
-
+#update comment
 @app.route('/comments/<int:comment_id>', methods=['PUT'])
 def update_comment(comment_id):
     if 'employee_id' not in session:
@@ -1207,9 +1275,57 @@ def update_comment(comment_id):
         db.session.add(CommentMention(comment_id=comment.id, mentioned_id=mid))
 
     db.session.commit()
+    
+    # Send notifications after successful comment update
+    try:
+        task = Task.query.get(comment.task_id)
+        if task:
+            # Get all collaborators + owner for general comment notification
+            notify_user_ids = set()
+            if task.owner:
+                notify_user_ids.add(task.owner)
+            try:
+                notify_user_ids |= {s.employee_id for s in task.collaborators.all()}
+            except Exception:
+                pass
+            
+            # Remove the comment author from notifications
+            notify_user_ids.discard(session['employee_id'])
+            
+            # Send general comment notification to collaborators/owner
+            author_name = get_employee_name(session['employee_id'])
+            for user_id in notify_user_ids:
+                requests.post(f'{NOTIFICATION_SERVICE_URL}/api/events/comment-updated', 
+                    json={
+                        'staff_id': user_id,
+                        'action': 'updated',
+                        'title': f'Comments updated: {task.title}',
+                        'message': f'Comment updated by {author_name}: {content[:100]}{"..." if len(content) > 100 else ""}',
+                        'related_task_id': comment.task_id,
+                        'related_comment_id': comment.id,
+                        'actor_name': author_name
+                    }, timeout=3)
+            
+            # Send mention notifications to mentioned users
+            all_mentioned_ids = numeric_ids | resolved_name_ids
+            for mentioned_id in all_mentioned_ids:
+                if mentioned_id != session['employee_id']:  # Don't notify the author
+                    requests.post(f'{NOTIFICATION_SERVICE_URL}/api/events/mention', 
+                        json={
+                            'staff_id': mentioned_id,
+                            'title': f'You were mentioned in: {task.title}',
+                            'message': f'{author_name} mentioned you in a comment: {content[:100]}{"..." if len(content) > 100 else ""}',
+                            'related_task_id': comment.task_id,
+                            'related_comment_id': comment.id,
+                            'actor_name': author_name
+                        }, timeout=3)
+    except Exception as e:
+        print(f"[Notification] Failed to send comment update notifications: {e}")
+        # Don't fail the comment update if notifications fail
+    
     return jsonify(comment.to_dict()), 200
 
-
+#delete comment
 @app.route('/comments/<int:comment_id>', methods=['DELETE'])
 def delete_comment(comment_id):
     if 'employee_id' not in session:
@@ -1243,6 +1359,55 @@ def list_mentionable(task_id):
 
 # ------------------ Internal API for Notification Service ------------------
 
+@app.route('/tasks/<int:task_id>', methods=['GET'])
+def get_single_task(task_id):
+    """
+    Get a single task by ID
+    Used by Notification Service to get task details
+    """
+    task = Task.query.get(task_id)
+    if not task:
+        return jsonify({'error': 'Task not found'}), 404
+    
+    return jsonify({
+        'task_id': task.task_id,
+        'title': task.title,
+        'description': task.description,
+        'status': task.status,
+        'priority': task.priority,
+        'deadline': task.deadline.isoformat() if task.deadline else None,
+        'owner': task.owner,
+        'collaborators': [collab.employee_id for collab in task.collaborators],
+        'project_id': task.project_id,
+        'parent_id': task.parent_id
+    }), 200
+
+@app.route('/api/internal/tasks/all', methods=['GET'])
+def get_all_tasks_for_notifications():
+    """
+    Get all tasks in a simple format for notification service
+    Used by Notification Service for deadline reminders
+    """
+    tasks = Task.query.all()
+    tasks_list = []
+    
+    for task in tasks:
+        tasks_list.append({
+            'task_id': task.task_id,
+            'title': task.title,
+            'description': task.description,
+            'status': task.status,
+            'priority': task.priority,
+            'deadline': task.deadline.isoformat() if task.deadline else None,
+            'owner': task.owner,
+            'collaborators': [collab.employee_id for collab in task.collaborators],
+            'project_id': task.project_id,
+            'parent_id': task.parent_id
+        })
+    
+    return jsonify({'tasks': tasks_list}), 200
+
+#converting the datetime format
 @app.route('/api/internal/tasks/upcoming-deadlines', methods=['GET'])
 def get_upcoming_deadlines():
     """

@@ -80,8 +80,6 @@ def _create_notification(staff_id: int, notif_type: str, title: str, message: st
     socketio.emit('new_notification', payload, room=_room_for_employee(str(staff_id)))
     return payload
 
-
-
 def _get_task(task_id: int):
     try:
         resp = requests.get(f"{TASK_SERVICE_URL}/tasks/{task_id}")
@@ -205,21 +203,24 @@ def event_mention():
     )
     return jsonify({'status': 'ok'}), 200
 
-# Event: comment added/updated/deleted
+# Event: comment added/updated
 @app.route('/api/events/comment-added', methods=['POST'])
 @app.route('/api/events/comment-updated', methods=['POST'])
-@app.route('/api/events/comment-deleted', methods=['POST'])
 def event_comment_changed():
     payload = request.get_json(force=True) or {}
     staff_id = payload.get('staff_id')
-    action = payload.get('action', 'added')  # added, updated, deleted
+    action = payload.get('action', 'added')  # added, updated
     title = payload.get('title')
     message = payload.get('message')
     related_task_id = payload.get('related_task_id')
     related_comment_id = payload.get('related_comment_id')
+    actor_name = payload.get('actor_name')  # Employee name from task service
     
     if not staff_id or not title or not message:
         return jsonify({'error': 'staff_id, title, message required'}), 400
+    
+    # Use the message as-is since it already contains the employee name
+    # The task service formats it as "New comment added by {actor_name}" or "Comment updated by {actor_name}"
     
     # Use 'comments_updated' for all comment changes
     notif_type = 'comments_updated'
@@ -328,12 +329,12 @@ def _within_day(target: datetime, days_from_now: int) -> bool:
 def _send_deadline_reminders():
     # Fetch tasks via tasks service (unfiltered, then filter here if needed)
     try:
-        resp = requests.get(f"{TASK_SERVICE_URL}/tasks")
+        resp = requests.get(f"{TASK_SERVICE_URL}/api/internal/tasks/all")
         if not resp.ok:
             return
         tasks_data = resp.json()
-        # Handle both direct list and wrapped response
-        tasks = tasks_data.get('tasks', tasks_data) if isinstance(tasks_data, dict) else tasks_data
+        # Get tasks from the response
+        tasks = tasks_data.get('tasks', [])
     except Exception:
         return
     now = datetime.now(timezone.utc)
