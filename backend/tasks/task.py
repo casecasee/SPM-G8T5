@@ -14,7 +14,7 @@ from models.comment import Comment
 from models.comment_mention import CommentMention
 from models.comment_attachment import CommentAttachment
 from models.project import Project
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import zoneinfo
 import re
 import os
@@ -338,6 +338,9 @@ def create_task():
     if 'recurrence' in data:
         recurrence = data['recurrence']
         # TODO: validate recurrence (frontend should only be sending numbers) daily - 1, weekly - 7, monthly - 30, custom - any positive int
+        if not isinstance(recurrence, int) or recurrence <= 0:
+            return {"message": "Recurrence must be a positive integer"}, 400
+        
 
     if 'priority' in data:
         # priority must be an int and between 1-10 
@@ -444,7 +447,6 @@ def create_task():
     except ValueError as ve:
         db.session.rollback()
         return {"message": str(ve)}, 400
-
 
 @app.route("/projects/<int:project_id>/timeline", methods=["GET"])
 def get_project_timeline(project_id):
@@ -575,7 +577,6 @@ def update_task_status(task_id):
     # set timestamps based on status
     old_status = curr_task.status
 
-    # TODO: can only update task status to done if all subtasks are done
     if new_status == 'done':
         subtasks = Task.query.filter_by(parent_id=task_id).all()
         for subtask in subtasks:
@@ -588,26 +589,51 @@ def update_task_status(task_id):
     # recurrence update
     # TODO: if recurrence is set and status is done, create new task with same details and new deadline based on recurrence (wow)
 
-    # if new_status == 'done' and curr_task.recurrence:
-    #     # create new task with same details
-    #     recurrence_days = int(curr_task.recurrence)
-    #     new_deadline = curr_task.deadline + timedelta(days=recurrence_days)
-    #     new_status = 'unassigned' if role != 'staff' else 'ongoing'
-    #     new_task = Task(
-    #         title=curr_task.title,
-    #         description=curr_task.description,
-    #         attachment=curr_task.attachment,
-    #         deadline=new_deadline,
-    #         project_id=curr_task.project_id,
-    #         priority=curr_task.priority,
-    #         owner=curr_task.owner,
-    #         collaborators=curr_task.collaborators,
-    #         status=new_status,
-    #         recurrence=curr_task.recurrence
-    #     )
-    #     #     set_timestamps_by_status(new_task, None, new_status)
-    #     # need to do subtasks too - subtasks are copied over too
-    #     db.session.add(new_task)
+    if new_status == 'done' and curr_task.recurrence: # this can only happen if all subtasks are done so dont need to check here
+        # create new task with same details
+        recurrence_days = int(curr_task.recurrence)
+        # new deadline is from completion date
+        new_deadline = curr_task.completed_date + timedelta(days=recurrence_days)
+        new_status = 'unassigned' if role != 'staff' else 'ongoing'
+        new_task = Task(
+            title=curr_task.title,
+            description=curr_task.description,
+            attachment=curr_task.attachment,
+            deadline=new_deadline,
+            project_id=curr_task.project_id,
+            priority=curr_task.priority,
+            owner=curr_task.owner,
+            collaborators=curr_task.collaborators,
+            status=new_status,
+            recurrence=curr_task.recurrence
+        )
+        set_timestamps_by_status(new_task, None, new_status)
+        # comit here first to get new_task id
+        db.session.add(new_task)
+        # db.session.flush()  # to get new_task.task_id (maybe not needed)
+        # db.session.commit()
+        id = new_task.task_id
+        #         # need to do subtasks too - subtasks are copied over too
+        subtasks = Task.query.filter_by(parent_id=task_id).all()
+        for subtask in subtasks:
+            # new subtask deadline is offset by same amount as parent task
+            new_subtask_deadline = new_deadline - (curr_task.deadline - subtask.deadline)
+            # owner should be same as original subtask owner
+            new_subtask = Task(
+                title=subtask.title,
+                description=subtask.description,
+                attachment=subtask.attachment,
+                deadline=new_subtask_deadline,
+                project_id=subtask.project_id,
+                parent_id=id,  # link to new parent task
+                priority=subtask.priority,
+                owner=subtask.owner,
+                collaborators=subtask.collaborators,
+                status=new_status
+            )
+            set_timestamps_by_status(new_subtask, None, new_status)
+            db.session.add(new_subtask)
+        # db.session.add(new_task)
 
     db.session.commit()
 
