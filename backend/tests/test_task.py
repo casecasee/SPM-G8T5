@@ -109,6 +109,10 @@ class TaskApiTestCase(unittest.TestCase):
         response = self.client.post("/tasks", json=payload)
         self.assertEqual(response.status_code, 400, msg=f"Expected 400 for empty title with spaces, got {response.status_code}")
 
+    # test title duplicate, previous task with same title is not completed
+
+    # test title duplicate, previous task with same title is completed
+
     # test description empty
     def test_create_task_description_empty(self):
         self.login_as(self.owner_id, "staff")
@@ -517,7 +521,6 @@ class TaskApiTestCase(unittest.TestCase):
     # test subtask recurrence ? (subtasks cannot be recurrent)
 
 
-
 # ----------------------------------------------------------------------------------------------------------
 
 
@@ -794,6 +797,37 @@ class TaskApiTestCase(unittest.TestCase):
 
 
 # ------------------------ UPDATE TASKS METADATA TESTS --------------------------------------------------------
+
+    # main task can only be updated by task owner, subtasks can only be updated by their own owners (task owner cannot update subtasks unless they are also the subtask owner)
+
+    # test update metadata task not found
+
+    # test update metadata by non-owner
+
+    # test update metadata invalid title
+
+    # test update metadata invalid description
+
+    # test update metadata invalid deadline
+
+    # test update metadata invalid priority
+
+
+    # edit project metadata (move from lonely to project. not doing project to lonely and project to project for now)
+    # test update metadata project id (project does not exist)
+
+    # test update metadata owner (assignment) - need to be same dept if lonely task, need to be project collaborator if project task, can only assign downwards, status needs to be updated from unassigned to ongoing if owner changed and task was unassigned, else status remains same
+
+    # test update metadata collaborators (must include owner, must be same dept if lonely task, must be project collaborators if project task)
+
+    # test update metadata attachments ?
+
+    # test update metadata comments ?
+
+    # test update metadata recurrence ?
+
+    # test update subtask metadata
+
 
 
 

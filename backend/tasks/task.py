@@ -282,11 +282,13 @@ def create_task():
     if not data['title'].strip() or not data['description'].strip():
         return {"message": "Title and description cannot be empty"}, 400
 
-    # check if task already exists with same title
-    existing_task = Task.query.filter_by(title=data['title']).first()
-    if existing_task:
-        return {"message": "Task with this title already exists"}, 400
-    
+    # allow same title tasks if the task with the same title is completed (to allow recurring tasks with same title)
+    existing_tasks = Task.query.filter_by(title=data['title']).all()
+    if existing_tasks:
+        for task in existing_tasks:
+            if task.status in ['ongoing', 'unassigned']:
+                return {"message": "Task with this title already exists"}, 400
+
     # collaborators
     collaborators_ids = data.get('collaborators', [])
     # need to check that the collaborators ids are valid staff ids
@@ -634,10 +636,71 @@ def update_task(task_id):
     curr_task = Task.query.get(task_id)
     if curr_task is None:
         return {"message": "Task not found"}, 404
-    
-    # only owner can update task details
-    if curr_task.owner != eid:
-        return {"message": "Only task owner can update task details"}, 403
+       
+    # ---------- NEW: diff-detect main task edits vs. subtask-only edits ----------
+    def _current_collab_ids(task):
+        try:
+            return [s.employee_id for s in task.collaborators]
+        except Exception:
+            return []
+
+    # Build a minimal diff on top-level fields that belong to the parent task
+    main_changes = {}
+
+    # Title
+    if 'title' in data and data['title'] != curr_task.title:
+        main_changes['title'] = (curr_task.title, data['title'])
+
+    # Description
+    if 'description' in data and data['description'] != curr_task.description:
+        main_changes['description'] = ('<omitted>', '<omitted>')  # avoid huge diff
+
+    # Deadline (convert before comparing)
+    if 'deadline' in data:
+        try:
+            incoming_deadline = convert_datetime(data['deadline'])
+            if curr_task.deadline != incoming_deadline:
+                main_changes['deadline'] = (curr_task.deadline, incoming_deadline)
+        except ValueError as e:
+            return {"message": str(e)}, 400
+
+    # Priority
+    if 'priority' in data and data['priority'] != curr_task.priority:
+        main_changes['priority'] = (curr_task.priority, data['priority'])
+
+    # Project
+    if 'project_id' in data and data['project_id'] != curr_task.project_id:
+        main_changes['project_id'] = (curr_task.project_id, data['project_id'])
+
+    # Attachments (normalize to JSON string for stable comparison)
+    if 'attachments' in data:
+        try:
+            incoming_attachments = json.dumps(data['attachments'])
+        except Exception:
+            return {"message": "Invalid attachments"}, 400
+        if (curr_task.attachment or '[]') != (incoming_attachments or '[]'):
+            main_changes['attachments'] = ('<omitted>', '<omitted>')
+
+    # Recurrence
+    if 'recurrence' in data and data['recurrence'] != curr_task.recurrence:
+        main_changes['recurrence'] = (curr_task.recurrence, data['recurrence'])
+
+    # Owner reassignment (this is also a parent-level change)
+    if 'owner' in data and data['owner'] != curr_task.owner:
+        main_changes['owner'] = (curr_task.owner, data['owner'])
+
+    # Status is not editable here (you already enforce that below), but if frontend sends a different one, treat as a parent change
+    if 'status' in data and data['status'] != curr_task.status:
+        return {"message": "Status cannot be changed in this endpoint"}, 400
+
+    # If there are parent-level changes and the caller is NOT the parent owner, reject.
+    if main_changes and curr_task.owner != eid:
+        return {
+            "message": "Only the parent task owner can edit parent task fields",
+            "blocked_fields": list(main_changes.keys())
+        }, 403
+    # ---------- END NEW ----------
+
     
     # save old deadline for notification
     old_deadline = curr_task.deadline
@@ -744,7 +807,7 @@ def update_task(task_id):
     if 'subtasks' in data:
         subtasks_data = data['subtasks']
         for subtask in subtasks_data:
-            if 'task_id' in subtask:
+            if 'task_id' in subtask: # update existing subtask
                 subtask_id = subtask['task_id']
                 existing_subtask = Task.query.get(subtask_id)
                 if existing_subtask is None:
@@ -754,9 +817,16 @@ def update_task(task_id):
                     return {"message": f"Only subtask owner can update subtask with id {subtask_id}"}, 403
                 
                 # update existing subtask
+                # TODO: validate fields - shld make this into a function later
                 if 'title' in subtask:
+                    # check empty string or spaces
+                    if not subtask['title'] or subtask['title'].isspace():
+                        return {"message": "Subtask title cannot be empty"}, 400
                     existing_subtask.title = subtask['title']
                 if 'description' in subtask:
+                    # check empty string or spaces
+                    if not subtask['description'] or subtask['description'].isspace():
+                        return {"message": "Subtask description cannot be empty"}, 400
                     existing_subtask.description = subtask['description']
                 if 'deadline' in subtask:
                     sub_deadline = convert_datetime(subtask['deadline'])
@@ -767,19 +837,30 @@ def update_task(task_id):
                         return {"message": "Subtask deadline cannot be after parent task deadline"}, 400
                     existing_subtask.deadline = sub_deadline
                 if 'priority' in subtask:
+                    # check priority is int between 1-10
+                    if not isinstance(subtask['priority'], int):
+                        return {"message": "Subtask priority must be an integer"}, 400
+                    if subtask['priority'] not in range(1, 11):
+                        return {"message": "Invalid subtask priority value"}, 400
                     existing_subtask.priority = subtask['priority']
                 if 'attachments' in subtask:
                     existing_subtask.attachment = json.dumps(subtask.get('attachments', []))
 
                 if 'owner' in subtask:
                     new_owner = subtask['owner']
-                    if new_owner != existing_subtask.owner:
+                    new_owner_role = Staff.query.get(new_owner).role.lower()
+                    existing_subtask_owner_role = Staff.query.get(existing_subtask.owner).role.lower()
+                    if new_owner != existing_subtask.owner: # assigning subtask (also only downwards)
                         # new subtask owner must be subtset of parent task collaborators
+                        if existing_subtask_owner_role == 'staff':
+                            return {"message": "Staff cannot assign tasks"}, 400
+                        if existing_subtask_owner_role == 'manager' and new_owner_role in ['senior manager', 'hr', 'director', 'manager']:
+                            return {"message": "Manager cannot assign tasks upwards"}, 400
+                        # TODO: finish business rules for assignment hierarchy
                         if new_owner not in collaborators_ids:
                             return {"message": f"Subtask owner {new_owner} is not a collaborator of the parent task"}, 400
                         existing_subtask.owner = new_owner
                     
-
                 if 'collaborators' in subtask:
                     sub_collaborators_ids = subtask['collaborators']
                     # ensure owner is in collaborators
@@ -793,10 +874,23 @@ def update_task(task_id):
                     existing_subtask.collaborators = sub_collaborators
                 
                 
-            else:
+            else: # create new subtask
+
+                # TODO: only task owner can create subtasks
+
                 # check required fields
                 if 'title' not in subtask or 'description' not in subtask or 'deadline' not in subtask or 'priority' not in subtask:
                     return {"message": "Missing required fields in subtask"}, 400
+                
+                # check empty strings
+                if not subtask['title'].strip() or not subtask['description'].strip():
+                    return {"message": "Subtask title and description cannot be empty"}, 400
+                
+                # priority check
+                if not isinstance(subtask['priority'], int):
+                    return {"message": "Subtask priority must be an integer"}, 400
+                if subtask['priority'] not in range(1, 11):
+                    return {"message": "Invalid subtask priority value"}, 400
                 
                 # add owner as collaborator
                 sub_collaborators_ids = subtask.get('collaborators', [])
@@ -829,7 +923,7 @@ def update_task(task_id):
                     description=subtask['description'],
                     attachment=sub_attachments_json,
                     deadline=sub_deadline,
-                    project_id=data.get('project_id'),
+                    project_id=data.get('project_id'), # same as parent task
                     parent_id=id,
                     priority=subtask['priority'],
                     owner=eid,
@@ -905,7 +999,7 @@ def get_all_tasks():
     #                 Task.parent_id.is_(None)        # <-- only parents
     #     ).all())
 
-    # TODO: move my_tasks_list here to avoid code duplication (minor)
+    # # TODO: move my_tasks_list here to avoid code duplication (minor)
 
     # if (role == 'staff' or role == 'manager') and dept != 'HR': # hr can see all regardless of role
     #     print('Getting tasks for staff/manager')
