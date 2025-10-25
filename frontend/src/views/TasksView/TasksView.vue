@@ -2,8 +2,8 @@
 <style src="./TasksView.style.css"></style>
 
 <script setup>
-    import { ref, computed, onMounted, onUnmounted } from 'vue'
-    import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
     import { getProjects } from '../../api/projects'
     import Dialog from 'primevue/dialog'
     import Button from 'primevue/button'
@@ -15,11 +15,14 @@
     import MultiSelect from 'primevue/multiselect'
     import axios from 'axios'
 
-    const router = useRouter()
+const router = useRouter()
+const route = useRoute()
 
           
     // ----------------- State -----------------
-    const tasks = ref([])
+    const tasks = ref([]) // my tasks
+    const teamTasksData = ref({}) // team tasks organized by employee name
+    const companyTasksData = ref({}) 
     const projects = ref([])
     const currentTab = ref('my')
     const teamSearch = ref('')
@@ -28,6 +31,7 @@
     const showModal = ref(false)
     const isEditing = ref(false)
     const availableEmployees = ref([])
+    const assignmentEmployees = ref([]) 
     const fileUploadRef = ref(null)
 
     // Comments state
@@ -57,28 +61,28 @@
     const mentionHighlighted = ref(0)
 
     function onCommentInput(e) {
-    const text = newComment.value || ''
-    const cursor = e?.target?.selectionStart ?? text.length
-    // find the last '@' before cursor that isn't preceded by whitespace
-    let start = -1
-    for (let i = cursor - 1; i >= 0; i--) {
-        const ch = text[i]
-        if (ch === '@') { start = i; break }
-        if (ch === ' ' || ch === '\n' || ch === '\t') break
-    }
-    if (start >= 0) {
-        mentionStartIdx.value = start
-        mentionQuery.value = text.slice(start + 1, cursor)
-        showMentionList.value = true
-        mentionHighlighted.value = 0
-    } else {
-        hideMentionList()
-    }
+        const text = newComment.value || ''
+        const cursor = e?.target?.selectionStart ?? text.length
+        // find the last '@' before cursor that isn't preceded by whitespace
+        let start = -1
+        for (let i = cursor - 1; i >= 0; i--) {
+            const ch = text[i]
+            if (ch === '@') { start = i; break }
+            if (ch === ' ' || ch === '\n' || ch === '\t') break
+        }
+        if (start >= 0) {
+            mentionStartIdx.value = start
+            mentionQuery.value = text.slice(start + 1, cursor)
+            showMentionList.value = true
+            mentionHighlighted.value = 0
+        } else {
+            hideMentionList()
+        }
     }
     
     function printReport() {
         print();
-        } 
+    }
 
     function goToTimeline() {
         router.push({ name: 'tasks-timeline' })
@@ -91,6 +95,13 @@
     mentionHighlighted.value = 0
     }
 
+    // If came from project page, go back when modal closes
+    watch(showModal, (v) => {
+        if (!v && route.query.from === 'project' && route.query.projectId) {
+            router.push({ name: 'project-detail', params: { id: Number(route.query.projectId) } })
+        }
+    })
+
     function moveMentionSelection(delta) {
     if (!showMentionList.value || filteredMentionable.value.length === 0) return
     const n = filteredMentionable.value.length
@@ -101,6 +112,17 @@
     if (!showMentionList.value || filteredMentionable.value.length === 0) return
     const user = filteredMentionable.value[mentionHighlighted.value]
     insertMention(user)
+    }
+
+    function handleCommentEnter(event) {
+        // Always prevent form submission
+        event.preventDefault()
+        
+        // If mention list is shown, apply selection
+        if (showMentionList.value && filteredMentionable.value.length > 0) {
+            applyMentionSelection()
+        }
+        // Otherwise, do nothing (don't submit the form)
     }
 
     function insertMention(user) {
@@ -397,12 +419,12 @@
     })
     const isSeniorManagerOrHR = computed(() => {
     const role = (currentRole || '').toLowerCase()
-    return role === 'senior manager' || role === 'hr' || role === 'director'
+    const dept = (currentDep || '')
+    return role === 'senior manager' || dept === 'HR' || role === 'director'
     })
 
     const myTasks = computed(() => {
-    const collabIncludes = (task) => Array.isArray(task.collaborators) && task.collaborators.includes(currentEmployeeId)
-    return (tasks.value || []).filter(task => task.owner === currentEmployeeId || collabIncludes(task))
+    return tasks.value || []
     })
 
     const displayTasks = computed(() => {
@@ -412,13 +434,34 @@
         if (!teamSelectedEmployeeId.value) return []
         const targetId = Number(teamSelectedEmployeeId.value)
         if (targetId === currentEmployeeId) return []
-        filteredTasks = (tasks.value || []).filter(t => t.owner === targetId || (Array.isArray(t.collaborators) && t.collaborators.includes(targetId)))
+        
+        const selectedEmployee = availableEmployees.value.find(emp => emp.employee_id === targetId)
+        if (!selectedEmployee) return []
+        
+        filteredTasks = teamTasksData.value[selectedEmployee.employee_name] || []
     } else if (currentTab.value === 'departments') {
         if (!departmentSelectedEmployeeId.value) return []
         const targetId = Number(departmentSelectedEmployeeId.value)
-        if (targetId === currentEmployeeId) return []
-        filteredTasks = (tasks.value || []).filter(t => t.owner === targetId || (Array.isArray(t.collaborators) && t.collaborators.includes(targetId)))
+        if (targetId === currentEmployeeId) return myTasks.value
+        
+        // Find the employee name for the selected employee ID
+        const selectedEmployee = departmentEmployees.value.find(emp => emp.employee_id === targetId)
+        if (!selectedEmployee) return []
+        
+        // Get tasks for the selected employee from companyTasksData
+        const deptName = selectedEmployee.department
+        const teamName = selectedEmployee.team
+        const employeeName = selectedEmployee.employee_name
+        
+        if (companyTasksData.value[deptName] && 
+            companyTasksData.value[deptName][teamName] && 
+            companyTasksData.value[deptName][teamName][employeeName]) {
+            filteredTasks = companyTasksData.value[deptName][teamName][employeeName]
+        } else {
+            filteredTasks = []
+        }
     } else {
+        // 'my' tab - show my tasks
         filteredTasks = myTasks.value
     }
     
@@ -569,6 +612,29 @@
     }
     }
 
+    // Separate function for getting employees for task assignment
+    async function fetchEmployeesForAssignment() {
+    try {
+        const role = (currentRole || '').toLowerCase()
+        const dept = (currentDep || '').toLowerCase()
+        
+        if (role === 'senior manager' || role === 'director') {
+        // Senior managers and directors can only see employees in their department
+        const depRaw = sessionStorage.getItem("department") || ""
+        console.log('Fetching employees for department:', depRaw)
+        const res = await axios.get(`http://localhost:5000/employees/${encodeURIComponent(depRaw)}`, { withCredentials: true })
+        console.log('Department employees response:', res.data)
+        return Array.isArray(res.data) ? res.data : []
+        } else {
+        // For managers and staff, use the existing availableEmployees (team members)
+        return availableEmployees.value || []
+        }
+    } catch (err) {
+        console.error("Error fetching employees for assignment:", err)
+        return []
+    }
+    }
+
     async function fetchEmployees() {
     try {
         const role = (currentRole || '').toLowerCase()
@@ -595,88 +661,120 @@
 
         })
         console.log("API Response:", res.data)
-        const allTasks = (res.data.tasks || []).map(t => {
-        let attachments = []
-        if (t.attachment) {
-            try {
-            const parsed = JSON.parse(t.attachment)
-            attachments = Array.isArray(parsed) ? parsed.map(filename => ({
-                name: filename.split(/[/\\]/).pop() || "File",
-                url: `http://localhost:5002/attachments/${filename}`
-            })) : []
-            } catch (e) {
-            attachments = [{
-                name: t.attachment.split(/[/\\]/).pop() || "File",
-                url: `http://localhost:5002/attachments/${t.attachment}`
-            }]
+        
+        // Helper function to transform task data
+        const transformTask = (t) => {
+            let attachments = []
+            if (t.attachment) {
+                try {
+                const parsed = JSON.parse(t.attachment)
+                attachments = Array.isArray(parsed) ? parsed.map(filename => ({
+                    name: filename.split(/[/\\]/).pop() || "File",
+                    url: `http://localhost:5002/attachments/${filename}`
+                })) : []
+                } catch (e) {
+                attachments = [{
+                    name: t.attachment.split(/[/\\]/).pop() || "File",
+                    url: `http://localhost:5002/attachments/${t.attachment}`
+                }]
+                }
+            }
+
+            const toLocal = iso => {
+            if (!iso) return null
+            // Handle both ISO format and MySQL DATETIME format
+            let date
+            if (iso.includes('T')) {
+                // ISO format: "2025-10-30T15:18:00.000Z"
+                date = new Date(iso)
+            } else {
+                // MySQL DATETIME format: "2025-10-30 15:18:00"
+                date = new Date(iso.replace(' ', 'T'))
+            }
+            return date.toLocaleString(undefined, {
+            dateStyle: "medium",
+            timeStyle: "short",
+            })
+        }
+            
+            return {
+                id: t.task_id,
+                name: t.title,
+                description: t.description,
+                due_date: toLocal(t.deadline),  // Keep ISO format from backend
+                created_at: toLocal(t.created_at),  // Keep ISO format
+                status: t.status,
+                priority: t.priority || 5,
+                owner: t.owner,
+                project_id: t.project_id,
+                parent_id: t.parent_id,
+                collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)) : [],
+                attachments: attachments,
+                subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(sub => {
+                    let subAttachments = []
+                    if (sub.attachment) {
+                        try {
+                            const parsed = JSON.parse(sub.attachment)
+                            subAttachments = Array.isArray(parsed) ? parsed.map(filename => ({
+                                name: filename.split(/[/\\]/).pop() || "File",
+                                url: `http://localhost:5002/attachments/${filename}`
+                            })) : []
+                        } catch (e) {
+                            subAttachments = [{
+                                name: sub.attachment.split(/[/\\]/).pop() || "File",
+                                url: `http://localhost:5002/attachments/${sub.attachment}`
+                            }]
+                        }
+                    }
+                    return {
+                        id: sub.task_id,
+                        name: sub.title,
+                        description: sub.description,
+                        due_date: toLocal(sub.deadline),
+                        status: sub.status,
+                        priority: sub.priority || 5,
+                        owner: sub.owner,
+                        project_id: sub.project_id,
+                        parent_id: sub.parent_id,
+                        collaborators: Array.isArray(sub.collaborators) ? sub.collaborators.map(id => Number(id)) : [],
+                        attachments: subAttachments
+                    }
+                }) : []
             }
         }
 
-        const toLocal = iso => {
-        if (!iso) return null
-        // Handle both ISO format and MySQL DATETIME format
-        let date
-        if (iso.includes('T')) {
-            // ISO format: "2025-10-30T15:18:00.000Z"
-            date = new Date(iso)
-        } else {
-            // MySQL DATETIME format: "2025-10-30 15:18:00"
-            date = new Date(iso.replace(' ', 'T'))
-        }
-        return date.toLocaleString(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
-        })
-    }
-        
-        return {
-            id: t.task_id,
-            name: t.title,
-            description: t.description,
-            due_date: toLocal(t.deadline),  // Keep ISO format from backend
-            created_at: toLocal(t.created_at),  // Keep ISO format
-            status: t.status,
-            priority: t.priority || 5,
-            owner: t.owner,
-            project_id: t.project_id,
-            parent_id: t.parent_id,
-            collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)) : [],
-            attachments: attachments,
-            // Map subtasks from backend (already nested)
-            subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(sub => {
-                let subAttachments = []
-                if (sub.attachment) {
-                    try {
-                        const parsed = JSON.parse(sub.attachment)
-                        subAttachments = Array.isArray(parsed) ? parsed.map(filename => ({
-                            name: filename.split(/[/\\]/).pop() || "File",
-                            url: `http://localhost:5002/attachments/${filename}`
-                        })) : []
-                    } catch (e) {
-                        subAttachments = [{
-                            name: sub.attachment.split(/[/\\]/).pop() || "File",
-                            url: `http://localhost:5002/attachments/${sub.attachment}`
-                        }]
+        if (res.data.my_tasks && res.data.team_tasks) {
+            // staff/ manager
+            const myTasks = (res.data.my_tasks || []).map(transformTask)
+            const teamTasks = {}
+            
+            for (const [employeeName, employeeTasks] of Object.entries(res.data.team_tasks || {})) {
+                teamTasks[employeeName] = (employeeTasks || []).map(transformTask)
+            }
+            
+            tasks.value = myTasks
+            teamTasksData.value = teamTasks
+            companyTasksData.value = {}
+        } else if (res.data.my_tasks && res.data.company_tasks) {
+            // Director/Senior Manager/HR structure: {my_tasks: [...], company_tasks: {...}}
+            const myTasks = (res.data.my_tasks || []).map(transformTask)
+            const companyTasks = {}
+            
+            for (const [deptName, deptData] of Object.entries(res.data.company_tasks || {})) {
+                companyTasks[deptName] = {}
+                for (const [teamName, teamData] of Object.entries(deptData || {})) {
+                    companyTasks[deptName][teamName] = {}
+                    for (const [employeeName, employeeTasks] of Object.entries(teamData || {})) {
+                        companyTasks[deptName][teamName][employeeName] = (employeeTasks || []).map(transformTask)
                     }
                 }
-                return {
-                    id: sub.task_id,
-                    name: sub.title,
-                    description: sub.description,
-                    due_date: sub.deadline,
-                    status: sub.status,
-                    priority: sub.priority || 5,
-                    owner: sub.owner,
-                    project_id: sub.project_id,
-                    parent_id: sub.parent_id,
-                    collaborators: Array.isArray(sub.collaborators) ? sub.collaborators.map(id => Number(id)) : [],
-                    attachments: subAttachments
-                }
-            }) : []
-        }
-        })
-
-        tasks.value = allTasks.filter(task => !task.parent_id)
+            }
+            
+            tasks.value = myTasks
+            teamTasksData.value = {}
+            companyTasksData.value = companyTasks
+        } 
+        
         if (!availableEmployees.value || availableEmployees.value.length === 0) {
         try { await fetchEmployees() } catch (_) {}
         }
@@ -686,6 +784,7 @@
     }
 
     async function saveTask() {
+    console.log('🔍 saveTask called! Stack trace:', new Error().stack)
     clearValidationErrors()
     
     if (!validateForm()) {
@@ -811,11 +910,18 @@
         project_id: taskForm.value.project_id,
         collaborators: (() => {
             const selected = Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : []
-            if (currentRole === 'staff') {
-            const allowedIds = (availableEmployees.value || []).map(e => e.employee_id)
-            return selected.filter(id => allowedIds.includes(id))
+            const role = (currentRole || '').toLowerCase()
+            let allowedIds = []
+
+            if (role === 'staff' || role === 'manager') {
+                allowedIds = (availableEmployees.value || []).map(e => e.employee_id)
+            } 
+            else {
+                // Senior managers, directors, and HR: use assignment employees (properly filtered)
+                allowedIds = (assignmentEmployees.value || []).map(e => e.employee_id)
             }
-            return selected
+
+            return selected.filter(id => allowedIds.includes(id))
         })(),
         role: currentRole,
         subtasks: subtasksPayload,
@@ -992,7 +1098,7 @@
     const employeeDisplayList = computed(() => {
     const role = (currentRole || '').toLowerCase()
     const showMeta = role === 'senior manager' || role === 'hr' || role === 'director'
-    return (availableEmployees.value || []).map(emp => ({
+    return (assignmentEmployees.value || []).map(emp => ({
         ...emp,
         display_label: showMeta
         ? `${emp.employee_name} [${[emp.role, emp.team, emp.department].filter(Boolean).join(' • ')}]`
@@ -1004,7 +1110,7 @@
     const ownerAssignmentList = computed(() => {
     const role = (currentRole || '').toLowerCase()
     const showMeta = role === 'senior manager' || role === 'hr' || role === 'director'
-    return (availableEmployees.value || [])
+    return (assignmentEmployees.value || [])
         .filter(emp => emp.employee_id !== currentEmployeeId) // Exclude current user
         .map(emp => ({
             ...emp,
@@ -1014,7 +1120,6 @@
         }))
     })
 
-    // employee list for subtask assignment (only parent task collaborators + owner)
     const subtaskOwnerList = computed(() => {
     const role = (currentRole || '').toLowerCase()
     const showMeta = role === 'senior manager' || role === 'hr' || role === 'director'
@@ -1025,7 +1130,7 @@
         ...(Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : [])
     ])
     
-    return (availableEmployees.value || [])
+    return (assignmentEmployees.value || [])
         .filter(emp => allowedIds.has(emp.employee_id))
         .map(emp => ({
             ...emp,
@@ -1053,6 +1158,8 @@
     editingSubtaskId.value = null 
     editingSubtaskBackup.value = null
     await fetchEmployees()
+    assignmentEmployees.value = await fetchEmployeesForAssignment()
+    console.log('Assignment employees loaded:', assignmentEmployees.value)
     showModal.value = true
     }
 
@@ -1124,8 +1231,9 @@
     async function startEditing() {
     isEditing.value = true
     await fetchEmployees()
+    assignmentEmployees.value = await fetchEmployeesForAssignment()
     
-    // Fetch department employees for owner assignment (managers/directors only)
+    // Fetch department employees for owner assignment (managers/directors/senior managers only)
     if (canAssignOwners()) {
         const depRaw = sessionStorage.getItem("department") || ""
         await fetchDepartmentEmployees(depRaw)
@@ -1231,6 +1339,24 @@
     let refreshTimer = null
 
     onMounted(() => {
+    // Auto-open modal when navigated with a taskId from project details
+    const qId = Number(route.query.taskId || 0)
+    const openMode = String(route.query.open || 'details')
+
+    if (qId) {
+        const tryOpen = () => {
+        const t = tasks.value.find(x => x.id === qId || x.task_id === qId)
+        if (!t) {
+            setTimeout(tryOpen, 150)
+            return
+        }
+        openDetails(t)
+        if (openMode === 'edit') {
+            isEditing.value = true
+        }
+        }
+        tryOpen()
+    }
     fetchEmployees().finally(() => fetchTasks())
     getProjects().then(list => { projects.value = Array.isArray(list) ? list : [] }).catch(() => { projects.value = [] })
     
@@ -1344,24 +1470,24 @@
     }
 
     async function deleteComment(commentId) {
-    try {
-        await axios.delete(`http://localhost:5002/comments/${commentId}`, { withCredentials: true })
-        if (selectedTask.value?.id) await loadComments(selectedTask.value.id)
-    } catch (_) {}
+        try {
+            await axios.delete(`http://localhost:5002/comments/${commentId}`, { withCredentials: true })
+            if (selectedTask.value?.id) await loadComments(selectedTask.value.id)
+        } catch (_) {}
     }
 
     function onCommentFileUploaded(e) {
-    try {
-        const res = JSON.parse(e?.xhr?.response || '{}')
-        if (res?.filename) {
-            const original = (e?.files?.[0]?.name) || res.filename
-            newCommentAttachments.value.push({ filename: res.filename, original_name: original })
-        }
-    } catch {}
+        try {
+            const res = JSON.parse(e?.xhr?.response || '{}')
+            if (res?.filename) {
+                const original = (e?.files?.[0]?.name) || res.filename
+                newCommentAttachments.value.push({ filename: res.filename, original_name: original })
+            }
+        } catch {}
     }
 
     function removeNewAttachment(idx) {
-    newCommentAttachments.value.splice(idx, 1)
+        newCommentAttachments.value.splice(idx, 1)
     }
 
     function isOverdue(task) {
@@ -1371,5 +1497,4 @@
         const now = new Date()
         return due < now && task.status.toLowerCase() !== 'done'
     }
-
 </script>

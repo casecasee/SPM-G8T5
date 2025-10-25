@@ -170,14 +170,7 @@ function statusClass(status) {
   }
 }
 
-function projectBadgeClass(s) {
-  const k = (s || '').toLowerCase()
-  return {
-    'badge--active': k === 'active',
-    'badge--on-hold': k === 'on hold',
-    'badge--archived': k === 'archived'
-  }
-}
+// project status visuals removed
 
 async function saveTask() {
   try {
@@ -336,8 +329,15 @@ function goToTimeline() {
 }
 
 function openTask(t) {
-  // Navigate to Tasks page; the Tasks view already handles details modal
-  router.push({ name: 'tasks' })
+  router.push({
+    name: 'tasks',
+    query: {
+      taskId: t.id,
+      open: 'details',
+      from: 'project',
+      projectId: projectId.value
+    }
+  })
 }
 
 // Helper functions from Tasks page
@@ -428,10 +428,7 @@ onMounted(async () => {
         <div class="label">Owner</div>
         <div class="value">{{ project.owner || 'Unassigned' }}</div>
       </div>
-      <div>
-        <div class="label">Status</div>
-        <div class="value"><span class="badge" :class="projectBadgeClass(project.status)">{{ project.status }}</span></div>
-      </div>
+      
       <div>
         <div class="label">Tasks</div>
         <div class="value">{{ project.tasksDone }} / {{ project.tasksTotal }}</div>
@@ -607,9 +604,7 @@ onMounted(async () => {
 .value { font-weight:600; }
 .pid { color:#9ca3af; font-weight:500; margin-left:6px; }
 .badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; background:#e5e7eb; color:#374151; }
-.badge--active { background:#d1fae5; color:#065f46; }
-.badge--on-hold { background:#fef3c7; color:#92400e; }
-.badge--archived { background:#e5e7eb; color:#374151; }
+/* status badge styles removed */
 .section-title { margin:16px 0 8px; }
 .header-buttons { display:flex; gap:8px; align-items:center; }
 .tabs { display:flex; gap:8px; margin:8px 0 12px; }

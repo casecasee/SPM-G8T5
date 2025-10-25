@@ -14,7 +14,7 @@ class Project(db.Model):
     name = db.Column(db.String(255), nullable=False)
     owner = db.Column(db.String(255))
     owner_id = db.Column(db.Integer, db.ForeignKey('staff.employee_id', ondelete='SET NULL'), nullable=True, index=True)
-    status = db.Column(db.String(50), nullable=False, default='Active')
+    # status removed
     tasks_done = db.Column(db.Integer, nullable=False, default=0)
     tasks_total = db.Column(db.Integer, nullable=False, default=0)
     # New: optional project-level due date
@@ -33,7 +33,7 @@ class Project(db.Model):
             "name": self.name,
             "owner": self.owner,
             "ownerId": self.owner_id,
-            "status": self.status,
+            # "status": self.status,
             "tasksDone": self.tasks_done,
             "tasksTotal": self.tasks_total,
             "dueDate": (self.due_date.isoformat(timespec="milliseconds") + "Z") if self.due_date else None,

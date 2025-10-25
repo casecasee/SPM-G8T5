@@ -128,20 +128,20 @@
         </div>
       </div>
 
-      <!-- Active Projects -->
+      <!-- Projects -->
       <div class="dashboard-section">
         <div class="section-header">
-          <h2>Active Projects</h2>
+          <h2>Projects</h2>
           <RouterLink to="/projects" class="view-all-link">View All</RouterLink>
         </div>
         <div class="projects-list">
           <div v-if="loading" class="loading">Loading projects...</div>
-          <div v-else-if="activeProjects.length === 0" class="empty-state">
+          <div v-else-if="recentProjects.length === 0" class="empty-state">
             <p>No active projects found.</p>
             <RouterLink to="/projects" class="btn-primary">Create Project</RouterLink>
           </div>
           <div v-else>
-            <div v-for="project in activeProjects" :key="project.id" class="project-item" @click="openProjectDetails(project)">
+            <div v-for="project in recentProjects" :key="project.id" class="project-item" @click="openProjectDetails(project)">
               <div class="project-info">
                 <h4>{{ project.name }}</h4>
                 <p class="project-owner">Owner: {{ project.owner }}</p>
@@ -155,9 +155,7 @@
                   </div>
                 </div>
               </div>
-              <div class="project-status" :class="getProjectStatusClass(project.status)">
-                {{ project.status }}
-              </div>
+              
             </div>
           </div>
         </div>
@@ -258,9 +256,9 @@ const myRecentTasks = computed(() => {
     .slice(0, 5)
 })
 
-const activeProjects = computed(() => {
-  return projects.value
-    .filter(p => p.status === 'Active')
+const recentProjects = computed(() => {
+  return (projects.value || [])
+    .slice()
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
     .slice(0, 3)
 })
@@ -309,41 +307,37 @@ const getCurrentDate = () => {
 }
 
 const fetchData = async () => {
-  try {
-    loading.value = true
-    const [tasksRes, projectsRes] = await Promise.all([
-      axios.get("http://localhost:5002/tasks"),
-      axios.get("http://localhost:8001/projects")
-    ])
-    
-    tasks.value = tasksRes.data.tasks.map(t => ({
+  loading.value = true
+
+  const [tasksRes, projectsRes] = await Promise.allSettled([
+    axios.get("http://localhost:5002/tasks", { withCredentials: true }),
+    axios.get("http://localhost:8001/projects", { withCredentials: true })
+  ])
+
+  if (tasksRes.status === 'fulfilled') {
+    const data = tasksRes.value.data
+    tasks.value = (data.tasks || []).map(t => ({
       id: t.task_id,
       name: t.title,
       description: t.description,
       due_date: t.deadline,
       status: t.status,
-      owner: t.owner,
+      owner: Number(t.owner),
       project_id: t.project_id
     }))
-    
-    projects.value = projectsRes.data
-  } catch (error) {
-    console.error("Error fetching data:", error)
-    // Set demo data for development
-    tasks.value = [
-      { id: 1, name: "Complete project proposal", description: "Draft and finalize the Q1 project proposal", due_date: "2024-01-15", status: "ongoing", owner: currentEmployeeId.value, project_id: 1 },
-      { id: 2, name: "Review team performance", description: "Analyze team metrics and provide feedback", due_date: "2024-01-20", status: "done", owner: currentEmployeeId.value, project_id: 1 },
-      { id: 3, name: "Update documentation", description: "Update API documentation for new features", due_date: "2024-01-25", status: "ongoing", owner: currentEmployeeId.value, project_id: 2 }
-    ]
-    
-    projects.value = [
-      { id: 1, name: "Q1 Marketing Campaign", owner: currentEmployeeName.value, status: "Active", tasksDone: 3, tasksTotal: 8, updatedAt: new Date().toISOString() },
-      { id: 2, name: "Website Redesign", owner: "John Smith", status: "Active", tasksDone: 5, tasksTotal: 12, updatedAt: new Date().toISOString() },
-      { id: 3, name: "Mobile App Development", owner: "Jane Doe", status: "On hold", tasksDone: 2, tasksTotal: 15, updatedAt: new Date().toISOString() }
-    ]
-  } finally {
-    loading.value = false
+  } else {
+    console.error('Tasks load failed:', tasksRes.reason)
+    tasks.value = []
   }
+
+  if (projectsRes.status === 'fulfilled') {
+    projects.value = projectsRes.value.data || []
+  } else {
+    console.error('Projects load failed:', projectsRes.reason)
+    projects.value = []
+  }
+
+  loading.value = false
 }
 
 const formatDate = (date) => {
@@ -372,14 +366,7 @@ const getStatusClass = (status) => {
   return statusMap[status] || 'status-default'
 }
 
-const getProjectStatusClass = (status) => {
-  const statusMap = {
-    'Active': 'status-active',
-    'On hold': 'status-on-hold',
-    'Archived': 'status-archived'
-  }
-  return statusMap[status] || 'status-default'
-}
+// project status styling removed
 
 const getProjectProgress = (project) => {
   if (project.tasksTotal === 0) return 0

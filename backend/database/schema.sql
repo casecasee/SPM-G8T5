@@ -31,7 +31,6 @@ CREATE TABLE projects (
   name VARCHAR(255) NOT NULL,
   owner VARCHAR(255) DEFAULT NULL,
   owner_id INT DEFAULT NULL,
-  status VARCHAR(50) NOT NULL,
   tasks_done INT NOT NULL,
   tasks_total INT NOT NULL,
   due_date DATETIME DEFAULT NULL,
@@ -110,3 +109,51 @@ CREATE TABLE comment_attachments (
   uploaded_at DATETIME NOT NULL,
   INDEX ix_comment_attachments_comment_id (comment_id)
 ) ENGINE=InnoDB;
+
+-- Add notification tables to SPM database
+-- Run this script to add the missing notification_preferences and related tables
+
+-- Create notification_preferences table
+CREATE TABLE IF NOT EXISTS `notification_preferences` (
+  `staff_id` int NOT NULL,
+  `deadline_reminders` tinyint(1) NOT NULL DEFAULT 1,
+  `task_status_updates` tinyint(1) NOT NULL DEFAULT 1,
+  `due_date_changes` tinyint(1) NOT NULL DEFAULT 1,
+  `deadline_reminder_days` varchar(50) NOT NULL DEFAULT '7,3,1',
+  PRIMARY KEY (`staff_id`),
+  CONSTRAINT `notification_preferences_ibfk_1` FOREIGN KEY (`staff_id`) REFERENCES `staff` (`employee_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Create notifications table
+CREATE TABLE IF NOT EXISTS `notifications` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `staff_id` int NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `message` text NOT NULL,
+  `type` varchar(50) NOT NULL,
+  `is_read` tinyint(1) NOT NULL DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `task_id` int DEFAULT NULL,
+  `project_id` int DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `staff_id` (`staff_id`),
+  KEY `task_id` (`task_id`),
+  KEY `project_id` (`project_id`),
+  CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`staff_id`) REFERENCES `staff` (`employee_id`) ON DELETE CASCADE,
+  CONSTRAINT `notifications_ibfk_2` FOREIGN KEY (`task_id`) REFERENCES `task` (`task_id`) ON DELETE CASCADE,
+  CONSTRAINT `notifications_ibfk_3` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Create deadline_notification_log table
+CREATE TABLE IF NOT EXISTS `deadline_notification_log` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `task_id` int NOT NULL,
+  `staff_id` int NOT NULL,
+  `days_before_deadline` int NOT NULL,
+  `notification_sent_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `task_id` (`task_id`),
+  KEY `staff_id` (`staff_id`),
+  CONSTRAINT `deadline_notification_log_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `task` (`task_id`) ON DELETE CASCADE,
+  CONSTRAINT `deadline_notification_log_ibfk_2` FOREIGN KEY (`staff_id`) REFERENCES `staff` (`employee_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
