@@ -26,7 +26,8 @@
 
     <!-- Metrics Cards -->
     <div class="metrics-grid">
-      <div class="metric-card">
+      <RouterLink to="/projects" class="metric-card">
+      <!-- <div class="metric-card"> -->
         <div class="metric-icon projects">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2"/>
@@ -35,14 +36,19 @@
         <div class="metric-content">
           <h3>{{ projectStats.total }}</h3>
           <p>Total Projects</p>
-          <div class="metric-details">
+          <!-- <div class="metric-details">
             <span class="active">{{ projectStats.active }} active</span>
             <span class="on-hold">{{ projectStats.onHold }} on hold</span>
+          </div> -->
+          <!-- <p>Due This Week</p> -->
+          <div class="metric-details">
+            <span class="urgent" v-if="overdue > 0">{{ overdue }} overdue</span>
           </div>
         </div>
-      </div>
+      <!-- </div> -->
+      </RouterLink>
 
-      <div class="metric-card">
+      <RouterLink to="/tasks" class="metric-card">
         <div class="metric-icon tasks">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M9 11l3 3 8-8" stroke="currentColor" stroke-width="2"/>
@@ -57,7 +63,7 @@
             <span class="ongoing">{{ taskStats.ongoing }} ongoing</span>
           </div>
         </div>
-      </div>
+      </RouterLink>
 
       <div class="metric-card">
         <div class="metric-icon progress">
@@ -75,7 +81,7 @@
         </div>
       </div>
 
-      <div class="metric-card">
+      <RouterLink to="/tasks" class="metric-card">
         <div class="metric-icon deadline">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/>
@@ -91,7 +97,7 @@
             <span class="urgent" v-if="overdueTasks > 0">{{ overdueTasks }} overdue</span>
           </div>
         </div>
-      </div>
+      </RouterLink>
     </div>
 
     <!-- Main Content Grid -->
@@ -211,6 +217,10 @@ const currentEmployeeName = computed(() => sessionStorage.getItem("employee_name
 
 const projectStats = computed(() => {
   const total = projects.value.length
+  const overdue = tasks.value.filter(t => {
+    if (!t.due_date || t.status === 'done') return false
+    return new Date(t.due_date) < new Date()
+  }).length
   const active = projects.value.filter(p => p.status === 'Active').length
   const onHold = projects.value.filter(p => p.status === 'On hold').length
   return { total, active, onHold }
@@ -460,6 +470,9 @@ onMounted(() => {
   gap: 1rem;
   transition: all var(--transition-fast);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  /* When this card is rendered as a RouterLink (<a>), prevent default underline */
+  text-decoration: none;
+  color: inherit;
 }
 
 .metric-card:hover {
