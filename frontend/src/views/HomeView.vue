@@ -217,7 +217,8 @@ const projectStats = computed(() => {
 })
 
 const taskStats = computed(() => {
-  const myTasks = tasks.value.filter(t => t.owner === currentEmployeeId.value)
+  const myTasks = tasks.value
+  console.log('My Tasks:', myTasks)
   const total = myTasks.length
   const completed = myTasks.filter(t => t.status === 'done').length
   const ongoing = myTasks.filter(t => t.status === 'ongoing').length
@@ -316,7 +317,7 @@ const fetchData = async () => {
 
   if (tasksRes.status === 'fulfilled') {
     const data = tasksRes.value.data
-    tasks.value = (data.tasks || []).map(t => ({
+    tasks.value = (data.my_tasks || []).map(t => ({
       id: t.task_id,
       name: t.title,
       description: t.description,
