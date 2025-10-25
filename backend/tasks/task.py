@@ -861,9 +861,9 @@ def update_task(task_id):
                 existing_subtask = Task.query.get(subtask_id)
                 if existing_subtask is None:
                     return {"message": f"Subtask with id {subtask_id} not found"}, 404
-                
-                if existing_subtask.owner != eid:
-                    return {"message": f"Only subtask owner can update subtask with id {subtask_id}"}, 403
+                print("curr_task.owner", curr_task.owner, "existing_subtask.owner", existing_subtask.owner, "eid", eid)
+                if existing_subtask.owner != eid and curr_task.owner != eid: # subtask owner and task owner can update subtasks
+                    return {"message": f"Only subtask owner or task owner can update subtask with id {subtask_id}"}, 403
                 
                 # update existing subtask
                 # TODO: validate fields - shld make this into a function later
