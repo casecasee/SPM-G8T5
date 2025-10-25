@@ -191,7 +191,7 @@
             <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
             <div v-if="task.recurrence" class="recurrence-badge">
               <i class="pi pi-refresh"></i>
-              {{ getRecurrenceLabel(task.recurrence) }}
+              {{ getRecurrenceLabelFromDays(task.recurrence) }}
             </div>
           </template>
         </Card>
@@ -231,7 +231,7 @@
             <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
             <div v-if="task.recurrence" class="recurrence-badge">
               <i class="pi pi-refresh"></i>
-              {{ getRecurrenceLabel(task.recurrence) }}
+              {{ getRecurrenceLabelFromDays(task.recurrence) }}
             </div>
           </template>
         </Card>
@@ -271,7 +271,7 @@
             <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
             <div v-if="task.recurrence" class="recurrence-badge">
               <i class="pi pi-refresh"></i>
-              {{ getRecurrenceLabel(task.recurrence) }}
+              {{ getRecurrenceLabelFromDays(task.recurrence) }}
             </div>
           </template>
         </Card>
@@ -387,22 +387,33 @@
           <div class="form-group">
             <label class="form-label">Recurrence</label>
             <template v-if="isEditing || !selectedTask">
-              <Dropdown 
-                v-model="taskForm.recurrence" 
-                :options="recurrenceOptions" 
-                optionLabel="label" 
-                optionValue="value" 
-                :class="['form-input', { 'error': getFieldError('recurrence') }]"
-                placeholder="Select recurrence..." 
-                data-field="recurrence"
-              />
-              <div v-if="getFieldError('recurrence')" class="field-error">{{ getFieldError('recurrence') }}</div>
+              <div class="recurrence-fields">
+                <Dropdown 
+                  v-model="taskForm.recurrence_unit" 
+                  :options="recurrenceUnitOptions" 
+                  optionLabel="label" 
+                  optionValue="value" 
+                  class="form-input recurrence-unit"
+                  placeholder="Select recurrence type..." 
+                  data-field="recurrence_unit"
+                />
+                <InputText 
+                  v-if="taskForm.recurrence_unit"
+                  v-model.number="taskForm.recurrence_frequency" 
+                  type="number"
+                  min="1"
+                  class="form-input recurrence-frequency"
+                  placeholder="Frequency"
+                  data-field="recurrence_frequency"
+                />
+              </div>
+              <div v-if="getFieldError('recurrence_frequency')" class="field-error">{{ getFieldError('recurrence_frequency') }}</div>
             </template>
             <template v-else>
               <div class="form-display">
-                <span v-if="taskForm.recurrence" class="recurrence-badge">
+                <span v-if="taskForm.recurrence_unit" class="recurrence-badge">
                   <i class="pi pi-refresh"></i>
-                  {{ getRecurrenceLabel(taskForm.recurrence) }}
+                  {{ getRecurrenceLabel(taskForm.recurrence_unit, taskForm.recurrence_frequency) }}
                 </span>
                 <span v-else>No recurrence</span>
               </div>

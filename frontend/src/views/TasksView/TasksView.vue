@@ -168,12 +168,12 @@ const route = useRoute()
     { label: '9', value: 9 },{ label: '10 - Highest', value: 10 }
     ]
 
-    const recurrenceOptions = [
+    const recurrenceUnitOptions = [
         { label: 'No recurrence', value: null },
-        { label: 'Daily', value: 1 },
-        { label: 'Weekly', value: 7 },
-        { label: 'Monthly', value: 30 },
-        { label: 'Yearly', value: 365 }
+        { label: 'Daily', value: 'day' },
+        { label: 'Weekly', value: 'week' },
+        { label: 'Monthly', value: 'month' },
+        { label: 'Yearly', value: 'year' }
     ]
 
     const filterOptions = computed(() => {
@@ -228,7 +228,8 @@ const route = useRoute()
         collaborators: [], 
         project_id: null,
         attachments: [],
-        recurrence: null
+        recurrence_unit: null,
+        recurrence_frequency: 1
     }
     }
 
@@ -959,7 +960,7 @@ const route = useRoute()
         employee_id: currentEmployeeId,
         owner: taskForm.value.owner,
         project_id: taskForm.value.project_id,
-        recurrence: taskForm.value.recurrence || null,
+        recurrence: convertRecurrenceToDays(taskForm.value.recurrence_unit, taskForm.value.recurrence_frequency),
         collaborators: (() => {
             const selected = Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : []
             const role = (currentRole || '').toLowerCase()
@@ -1067,10 +1068,9 @@ const route = useRoute()
             }
         }
         
-        if (taskForm.value.recurrence !== null && taskForm.value.recurrence !== undefined) {
-            const validValues = [1, 7, 30, 365] // Daily, Weekly, Monthly, Yearly
-            if (!validValues.includes(taskForm.value.recurrence)) {
-                errors.recurrence = 'Please select a valid recurrence option'
+        if (taskForm.value.recurrence_unit !== null && taskForm.value.recurrence_unit !== undefined) {
+            if (!taskForm.value.recurrence_frequency || taskForm.value.recurrence_frequency < 1) {
+                errors.recurrence_frequency = 'Frequency must be at least 1'
             }
         }
         
@@ -1207,10 +1207,52 @@ const route = useRoute()
     return names.join(', ')
     }
 
-    function getRecurrenceLabel(days) {
+    // Helper function to convert recurrence unit + frequency to days
+    function convertRecurrenceToDays(unit, frequency) {
+        if (!unit || !frequency) return null
+        
+        switch (unit) {
+            case 'day':
+                return frequency
+            case 'week':
+                return frequency * 7
+            case 'month':
+                return frequency * 30 // Approximate
+            case 'year':
+                return frequency * 365 // Approximate
+            default:
+                return null
+        }
+    }
+    
+    // Helper function to convert days back to unit + frequency format
+    function convertDaysToRecurrence(days) {
+        if (!days) return { unit: null, frequency: 1 }
+        
+        // Try to find the best match
+        if (days % 365 === 0) {
+            return { unit: 'year', frequency: days / 365 }
+        } else if (days % 30 === 0) {
+            return { unit: 'month', frequency: days / 30 }
+        } else if (days % 7 === 0) {
+            return { unit: 'week', frequency: days / 7 }
+        } else {
+            return { unit: 'day', frequency: days }
+        }
+    }
+
+    function getRecurrenceLabel(unit, frequency) {
+        if (!unit || !frequency) return 'No recurrence'
+        
+        const unitLabel = frequency === 1 ? unit : unit + 's'
+        return `Every ${frequency} ${unitLabel}`
+    }
+
+    // Helper function to display recurrence from days (for task cards)
+    function getRecurrenceLabelFromDays(days) {
         if (!days) return 'No recurrence'
-        const option = recurrenceOptions.find(opt => opt.value === days)
-        return option ? option.label : `Every ${days} days`
+        const { unit, frequency } = convertDaysToRecurrence(days)
+        return getRecurrenceLabel(unit, frequency)
     }
 
     async function openAdd() {
@@ -1277,7 +1319,8 @@ const route = useRoute()
         project_id: task.project_id || null,
         collaborators: (task.collaborators || []).filter(id => id !== task.owner),
         attachments: task.attachments || [],
-        recurrence: task.recurrence || null
+        recurrence_unit: convertDaysToRecurrence(task.recurrence).unit,
+        recurrence_frequency: convertDaysToRecurrence(task.recurrence).frequency
     }
     // Initialize subtasks and format dates for datetime-local inputs
     subtasks.value = (task.subtasks || []).map(subtask => {
