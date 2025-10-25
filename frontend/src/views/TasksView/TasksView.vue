@@ -34,6 +34,9 @@ const route = useRoute()
     const assignmentEmployees = ref([]) 
     const fileUploadRef = ref(null)
 
+    // Filter state
+    const taskFilter = ref('all') // 'all', 'ongoing', 'overdue', 'completed'
+
     // Comments state
     const comments = ref([])
     const newComment = ref('')
@@ -165,6 +168,32 @@ const route = useRoute()
     { label: '9', value: 9 },{ label: '10 - Highest', value: 10 }
     ]
 
+    const recurrenceOptions = [
+        { label: 'No recurrence', value: null },
+        { label: 'Daily', value: 1 },
+        { label: 'Weekly', value: 7 },
+        { label: 'Monthly', value: 30 },
+        { label: 'Yearly', value: 365 }
+    ]
+
+    const filterOptions = computed(() => {
+        const baseOptions = [
+            { label: 'All Tasks', value: 'all' },
+            { label: 'Ongoing', value: 'ongoing' },
+            { label: 'Under Review', value: 'under_review' },
+            { label: 'Overdue', value: 'overdue' },
+            { label: 'Done', value: 'completed' },
+            { label: 'Recurring', value: 'recurring' }
+        ]
+        
+        const role = (currentRole || '').toLowerCase()
+        if (role === 'manager' || role === 'senior manager' || role === 'director') {
+            baseOptions.splice(2, 0, { label: 'Unassigned', value: 'unassigned' })
+        }
+        
+        return baseOptions
+    })
+
     const taskForm = ref(resetForm())
 
     // Subtasks state
@@ -198,7 +227,8 @@ const route = useRoute()
         owner: currentEmployeeId, 
         collaborators: [], 
         project_id: null,
-        attachments: []
+        attachments: [],
+        recurrence: null
     }
     }
 
@@ -465,6 +495,26 @@ const route = useRoute()
         filteredTasks = myTasks.value
     }
     
+    // Apply status filter
+    if (taskFilter.value !== 'all') {
+        filteredTasks = filteredTasks.filter(task => {
+            if (taskFilter.value === 'ongoing') {
+                return task.status === 'ongoing'
+            } else if (taskFilter.value === 'unassigned') {
+                return task.status === 'unassigned'
+            } else if (taskFilter.value === 'under_review') {
+                return task.status === 'under review'
+            } else if (taskFilter.value === 'overdue') {
+                return isOverdue(task)
+            } else if (taskFilter.value === 'completed') {
+                return task.status === 'done'
+            } else if (taskFilter.value === 'recurring') {
+                return task.recurrence && task.recurrence > 0
+            }
+            return true
+        })
+    }
+    
     return filteredTasks.sort((a, b) => {
         const priorityA = a.priority || 5
         const priorityB = b.priority || 5
@@ -708,6 +758,7 @@ const route = useRoute()
                 owner: t.owner,
                 project_id: t.project_id,
                 parent_id: t.parent_id,
+                recurrence: t.recurrence,
                 collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(id => Number(id)) : [],
                 attachments: attachments,
                 subtasks: Array.isArray(t.subtasks) ? t.subtasks.map(sub => {
@@ -908,6 +959,7 @@ const route = useRoute()
         employee_id: currentEmployeeId,
         owner: taskForm.value.owner,
         project_id: taskForm.value.project_id,
+        recurrence: taskForm.value.recurrence || null,
         collaborators: (() => {
             const selected = Array.isArray(taskForm.value.collaborators) ? taskForm.value.collaborators : []
             const role = (currentRole || '').toLowerCase()
@@ -1012,6 +1064,13 @@ const route = useRoute()
             const now = new Date()
             if (dueDate < now) {
                 errors.due_date = 'Deadline must be in the future'
+            }
+        }
+        
+        if (taskForm.value.recurrence !== null && taskForm.value.recurrence !== undefined) {
+            const validValues = [1, 7, 30, 365] // Daily, Weekly, Monthly, Yearly
+            if (!validValues.includes(taskForm.value.recurrence)) {
+                errors.recurrence = 'Please select a valid recurrence option'
             }
         }
         
@@ -1148,6 +1207,12 @@ const route = useRoute()
     return names.join(', ')
     }
 
+    function getRecurrenceLabel(days) {
+        if (!days) return 'No recurrence'
+        const option = recurrenceOptions.find(opt => opt.value === days)
+        return option ? option.label : `Every ${days} days`
+    }
+
     async function openAdd() {
     isEditing.value = true
     selectedTask.value = null
@@ -1211,7 +1276,8 @@ const route = useRoute()
         owner: task.owner,
         project_id: task.project_id || null,
         collaborators: (task.collaborators || []).filter(id => id !== task.owner),
-        attachments: task.attachments || []
+        attachments: task.attachments || [],
+        recurrence: task.recurrence || null
     }
     // Initialize subtasks and format dates for datetime-local inputs
     subtasks.value = (task.subtasks || []).map(subtask => {
