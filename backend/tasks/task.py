@@ -473,17 +473,11 @@ def get_project_timeline(project_id):
                 "team_members": []
             }, 200
         
-        # Get team members based on role
-        team_members = []
-        if current_role in ['senior manager', 'hr']:
-            # HR/Senior Manager: Get all employees
-            team_members = Staff.query.all()
-        elif current_role == 'manager':
-            # Manager: Get department employees
-            team_members = Staff.query.filter_by(department=current_department).all()
-        else:
-            # Staff: Get department employees (for team context)
-            team_members = Staff.query.filter_by(department=current_department).all()
+        # Restrict timeline members strictly to the project's members
+        project = Project.query.get(project_id)
+        if not project:
+            return {"error": "Project not found"}, 404
+        team_members = project.members.all()
         
         # Convert tasks to timeline format
         timeline_tasks = []
@@ -820,6 +814,11 @@ def update_task(task_id):
             # task already has a project; allow if unchanged, reject if changing
             if curr_task.project_id != data['project_id']:
                 return {"message": "Cannot change project of an existing task"}, 400
+            # Ensure collaborators_ids is defined. If collaborators were provided,
+            # use them; otherwise, preserve existing collaborators on the task.
+            collaborators_ids = data.get('collaborators')
+            if collaborators_ids is None:
+                collaborators_ids = [collab.employee_id for collab in curr_task.collaborators]
         
     else:
         # lonely task
