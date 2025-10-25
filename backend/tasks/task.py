@@ -635,9 +635,16 @@ def update_task(task_id):
     if curr_task is None:
         return {"message": "Task not found"}, 404
     
-    # only owner can update task details
+    # Allow task owner OR project manager to update task details
+    # If updating project_id, allow project manager to attach task to their project
     if curr_task.owner != eid:
-        return {"message": "Only task owner can update task details"}, 403
+        if 'project_id' in data and data['project_id'] is not None:
+            # Check if current user is the project manager
+            project = Project.query.get(data['project_id'])
+            if not project or project.owner_id != eid:
+                return {"message": "Only task owner or project manager can update task details"}, 403
+        else:
+            return {"message": "Only task owner can update task details"}, 403
     
     # save old deadline for notification
     old_deadline = curr_task.deadline
@@ -659,16 +666,16 @@ def update_task(task_id):
     if 'priority' in data:
         curr_task.priority = data['priority']
 
-    if 'project_id' in data:
-        curr_task.project_id = data['project_id']
-        # TODO: check if collaborators are subset of project if project_id is given
+    # TODO: check if collaborators are subset of project if project_id is given
 
     if 'attachments' in data:
         curr_task.attachment = json.dumps(data['attachments'])
 
-    if 'status' in data:
+    if 'status' in data and 'project_id' not in data:
         if curr_task.status != data['status']:
             return {"message": "Status cannot be changed in this endpoint"}, 400
+    elif 'status' in data:
+        pass
         
     if 'recurrence' in data:
         curr_task.recurrence = data['recurrence']
@@ -682,8 +689,7 @@ def update_task(task_id):
 
     # assign part
     if 'owner' in data:
-        print('updating owner')
-        print(f"Current owner: {curr_task.owner}, New owner: {data['owner']}")
+        # updating owner; keep quiet in production
         if data['owner'] != curr_task.owner:
             old_owner = curr_task.owner
             curr_task.owner = data['owner']
@@ -702,7 +708,6 @@ def update_task(task_id):
     #  a. if curr_task.project_id is not None, then we are moving from one project to another (reject)
     #  b. if curr_task.project_id is None, then we are moving from no project to a project (check collaborators)
     # 2. if no project_id is given, then we are dealing with lonely tasks (check collaborators in dept)
-    print('project', data['project_id'])
     if 'project_id' in data and data['project_id'] is not None:
         if curr_task.project_id is None:
             # moving from no project to a project
@@ -711,12 +716,17 @@ def update_task(task_id):
                 return {"message": "Project not found"}, 404
             project_member_ids = [member.employee_id for member in project.members]
             collaborators_ids = data.get('collaborators', [])
-            for cid in collaborators_ids:
-                if cid not in project_member_ids:
-                    return {"message": f"Collaborator {cid} is not a member of the project"}, 400
+            if collaborators_ids:  # Only validate if collaborators are explicitly provided
+                for cid in collaborators_ids:
+                    if cid not in project_member_ids:
+                        return {"message": f"Collaborator {cid} is not a member of the project"}, 400
+            else:
+                # If no collaborators provided, preserve existing ones
+                collaborators_ids = [collab.employee_id for collab in curr_task.collaborators]
         else:
-            # moving from one project to another - reject
-            return {"message": "Cannot change project of an existing task"}, 400
+            # task already has a project; allow if unchanged, reject if changing
+            if curr_task.project_id != data['project_id']:
+                return {"message": "Cannot change project of an existing task"}, 400
         
     else:
         # lonely task
@@ -729,6 +739,15 @@ def update_task(task_id):
     # add owner as collaborator
     if curr_task.owner not in collaborators_ids:
         collaborators_ids.append(curr_task.owner)
+
+    # Update project_id after validation
+    if 'project_id' in data:
+        curr_task.project_id = data['project_id']
+
+    # Update collaborators in database
+    if 'collaborators' in data or 'project_id' in data:
+        staff_list = Staff.query.filter(Staff.employee_id.in_(collaborators_ids)).all()
+        curr_task.collaborators = staff_list
 
     db.session.commit()
 
