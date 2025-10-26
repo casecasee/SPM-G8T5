@@ -98,9 +98,11 @@ const route = useRoute()
     mentionHighlighted.value = 0
     }
 
-    // If came from project page, go back when modal closes
+    // If came from project page/timeline, go back when modal closes
     watch(showModal, (v) => {
-        if (!v && route.query.from === 'project' && route.query.projectId) {
+        if (!v && route.query.from === 'project-timeline' && route.query.projectId) {
+            router.push({ name: 'project-timeline', params: { id: Number(route.query.projectId) } })
+        } else if (!v && route.query.from === 'project' && route.query.projectId) {
             router.push({ name: 'project-detail', params: { id: Number(route.query.projectId) } })
         }
     })

@@ -312,9 +312,20 @@ async function load() {
     error.value = 'Failed to load project.'
   }
   try {
-    allTasks.value = await listTasks()
+    const res = await axios.get(`http://localhost:5002/projects/${projectId.value}/timeline`, { withCredentials: true })
+    allTasks.value = (res.data?.tasks || []).map(t => ({
+      task_id: t.id,
+      title: t.title,
+      description: t.description,
+      deadline: t.due_date,
+      status: t.status,
+      priority: t.priority,
+      owner: t.owner,
+      project_id: t.project_id,
+      collaborators: Array.isArray(t.collaborators) ? t.collaborators : []
+    }))
   } catch (e) {
-    // best-effort
+    allTasks.value = []
   } finally {
     loading.value = false
   }

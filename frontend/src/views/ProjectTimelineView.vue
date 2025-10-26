@@ -251,31 +251,36 @@ const timelineDates = computed(() => {
   let startDate, endDate
   
   if (dateRange.value === 'project' && projectDateRange.value) {
-    // Use project duration
-    startDate = new Date(projectDateRange.value.start_date)
-    endDate = new Date(projectDateRange.value.end_date)
+    // Use project duration as-is but normalize to UTC midnight bounds
+    const s = new Date(projectDateRange.value.start_date)
+    const e = new Date(projectDateRange.value.end_date)
+    startDate = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()))
+    endDate = new Date(Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate()))
   } else {
-    // Use relative date ranges
-    startDate = new Date()
-    endDate = new Date()
+    // Use relative date ranges from today's UTC midnight
+    const now = new Date()
+    startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    endDate = new Date(startDate)
     
     switch (dateRange.value) {
       case 'week':
-        endDate.setDate(startDate.getDate() + 7)
+        endDate.setUTCDate(startDate.getUTCDate() + 7)
         break
       case 'month':
-        endDate.setMonth(startDate.getMonth() + 1)
+        endDate.setUTCMonth(startDate.getUTCMonth() + 1)
         break
       case 'quarter':
-        endDate.setMonth(startDate.getMonth() + 3)
+        endDate.setUTCMonth(startDate.getUTCMonth() + 3)
         break
     }
   }
   
-  const current = new Date(startDate)
-  while (current <= endDate) {
+  const current = new Date(startDate); current.setUTCHours(0, 0, 0, 0)
+  const end = new Date(endDate);       end.setUTCHours(0, 0, 0, 0)
+  
+  while (current <= end) {
     dates.push(new Date(current))
-    current.setDate(current.getDate() + 1)
+    current.setUTCDate(current.getUTCDate() + 1)
   }
   
   return dates
@@ -308,7 +313,8 @@ function toggleView() {
 function formatDateHeader(date) {
   return date.toLocaleDateString('en-US', { 
     month: 'short', 
-    day: 'numeric' 
+    day: 'numeric',
+    timeZone: 'UTC'
   })
 }
 
@@ -318,16 +324,19 @@ function formatDate(date) {
 }
 
 function isWeekend(date) {
-  const day = date.getDay()
+  const day = date.getUTCDay()
   return day === 0 || day === 6 // Sunday or Saturday
 }
 
+// Helpers to compare by UTC day
+const dayKeyUTC = (d) => new Date(d).toISOString().slice(0, 10)
+const cellDayKeyUTC = (dateObj) => dateObj.toISOString().slice(0, 10)
+
 function getTasksForMemberAndDate(memberId, date) {
+  const dayKey = cellDayKeyUTC(date)
   return timelineTasks.value.filter(task => {
     if (task.owner !== memberId) return false
-    
-    const taskDate = new Date(task.due_date)
-    return taskDate.toDateString() === date.toDateString()
+    return dayKeyUTC(task.due_date) === dayKey
   })
 }
 
@@ -373,8 +382,15 @@ function getCollaboratorNames(collaborators) {
 }
 
 function openTaskDetails(task) {
-  selectedTask.value = task
-  showTaskModal.value = true
+  router.push({
+    name: 'tasks',
+    query: {
+      taskId: task.id,
+      open: 'details',
+      from: 'project-timeline',
+      projectId: selectedProjectId.value
+    }
+  })
 }
 
 async function loadTimelineData() {
@@ -584,6 +600,8 @@ watch(() => route.params.id, (newId) => {
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  /* Shared width for each day cell to keep header/body aligned */
+  --day-width: 100px;
 }
 
 .timeline-canvas {
@@ -601,7 +619,10 @@ watch(() => route.params.id, (newId) => {
 }
 
 .team-members-column {
+  /* lock left header column width to match body */
+  width: 200px;
   min-width: 200px;
+  flex: 0 0 200px;
   padding: 16px;
   border-right: 1px solid #e5e7eb;
   background: #f3f4f6;
@@ -619,8 +640,11 @@ watch(() => route.params.id, (newId) => {
 }
 
 .date-column {
-  min-width: 80px;
-  padding: 12px 8px;
+  /* lock header column width to shared day width */
+  flex: 0 0 var(--day-width);
+  width: var(--day-width);
+  min-width: var(--day-width);
+  padding: 12px 0;
   text-align: center;
   border-right: 1px solid #e5e7eb;
   background: #f9fafb;
@@ -651,7 +675,10 @@ watch(() => route.params.id, (newId) => {
 }
 
 .member-info {
+  /* lock left column width to match header */
+  width: 200px;
   min-width: 200px;
+  flex: 0 0 200px;
   padding: 16px;
   border-right: 1px solid #e5e7eb;
   display: flex;
@@ -692,8 +719,11 @@ watch(() => route.params.id, (newId) => {
 }
 
 .date-cell {
-  min-width: 80px;
-  padding: 8px 4px;
+  /* lock body cell width to shared day width */
+  flex: 0 0 var(--day-width);
+  width: var(--day-width);
+  min-width: var(--day-width);
+  padding: 8px 0;
   border-right: 1px solid #e5e7eb;
   background: white;
   position: relative;
@@ -708,12 +738,16 @@ watch(() => route.params.id, (newId) => {
   color: white;
   padding: 6px 8px;
   border-radius: 4px;
-  margin-bottom: 4px;
+  margin: 0 0 4px 0; /* eliminate horizontal margins to align with cell edges */
+  margin-right: 0 !important;
+  margin-left: 0 !important;
   cursor: pointer;
   font-size: 11px;
   line-height: 1.2;
   transition: all 0.2s ease;
   min-width: 60px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .task-card:hover {
@@ -847,8 +881,8 @@ watch(() => route.params.id, (newId) => {
 }
 
 .timeline-container.compact-view .date-column.compact {
-  min-width: 50px;
-  padding: 8px 4px;
+  /* compact view uses narrower day width */
+  padding: 8px 0;
 }
 
 .timeline-container.compact-view .date-label.compact {
@@ -857,8 +891,12 @@ watch(() => route.params.id, (newId) => {
 }
 
 .timeline-container.compact-view .date-cell.compact {
-  min-width: 50px;
-  padding: 4px 2px;
+  padding: 4px 0;
+}
+
+/* compact view: set shared day width to 50px */
+.timeline-container.compact-view {
+  --day-width: 50px;
 }
 
 .timeline-container.compact-view .task-card.compact {
