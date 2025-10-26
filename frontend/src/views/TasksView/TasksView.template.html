@@ -162,7 +162,7 @@
     <div v-if="tasksByPriority.high.length > 0" class="priority-section">
       <div class="priority-header high-priority">
         <i class="pi pi-exclamation-triangle"></i>
-        <span>High Priority</span>
+        <span>High Priority (Range 8 - 10)</span>
         <span class="task-count">{{ tasksByPriority.high.length }}</span>
       </div>
       <div class="tasks-grid">
@@ -202,7 +202,7 @@
     <div v-if="tasksByPriority.medium.length > 0" class="priority-section">
       <div class="priority-header medium-priority">
         <i class="pi pi-clock"></i>
-        <span>Medium Priority</span>
+        <span>Medium Priority (Range 5 - 7)</span>
         <span class="task-count">{{ tasksByPriority.medium.length }}</span>
       </div>
       <div class="tasks-grid">
@@ -242,7 +242,7 @@
     <div v-if="tasksByPriority.low.length > 0" class="priority-section">
       <div class="priority-header low-priority">
         <i class="pi pi-check-circle"></i>
-        <span>Low Priority</span>
+        <span>Low Priority (Range 1 - 4)</span>
         <span class="task-count">{{ tasksByPriority.low.length }}</span>
       </div>
       <div class="tasks-grid">
