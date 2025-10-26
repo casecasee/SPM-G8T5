@@ -169,7 +169,7 @@ const route = useRoute()
     ]
 
     const recurrenceUnitOptions = [
-        { label: 'No recurrence', value: null },
+        { label: 'No recurrence', value: 'none' },
         { label: 'Daily', value: 'day' },
         { label: 'Weekly', value: 'week' },
         { label: 'Monthly', value: 'month' },
@@ -228,7 +228,7 @@ const route = useRoute()
         collaborators: [], 
         project_id: null,
         attachments: [],
-        recurrence_unit: null,
+        recurrence_unit: 'none',
         recurrence_frequency: 1
     }
     }
@@ -1209,7 +1209,7 @@ const route = useRoute()
 
     // Helper function to convert recurrence unit + frequency to days
     function convertRecurrenceToDays(unit, frequency) {
-        if (!unit || !frequency) return null
+        if (!unit || unit === 'none' || !frequency) return null
         
         switch (unit) {
             case 'day':
@@ -1227,7 +1227,7 @@ const route = useRoute()
     
     // Helper function to convert days back to unit + frequency format
     function convertDaysToRecurrence(days) {
-        if (!days) return { unit: null, frequency: 1 }
+        if (!days) return { unit: 'none', frequency: 1 }
         
         // Try to find the best match
         if (days % 365 === 0) {
@@ -1242,7 +1242,7 @@ const route = useRoute()
     }
 
     function getRecurrenceLabel(unit, frequency) {
-        if (!unit || !frequency) return 'No recurrence'
+        if (!unit || unit === 'none' || !frequency) return 'No recurrence'
         
         const unitLabel = frequency === 1 ? unit : unit + 's'
         return `Every ${frequency} ${unitLabel}`
@@ -1319,8 +1319,8 @@ const route = useRoute()
         project_id: task.project_id || null,
         collaborators: (task.collaborators || []).filter(id => id !== task.owner),
         attachments: task.attachments || [],
-        recurrence_unit: convertDaysToRecurrence(task.recurrence).unit,
-        recurrence_frequency: convertDaysToRecurrence(task.recurrence).frequency
+        recurrence_unit: convertDaysToRecurrence(task.recurrence).unit || 'none',
+        recurrence_frequency: convertDaysToRecurrence(task.recurrence).frequency || 1
     }
     // Initialize subtasks and format dates for datetime-local inputs
     subtasks.value = (task.subtasks || []).map(subtask => {

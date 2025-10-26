@@ -398,7 +398,7 @@
                   data-field="recurrence_unit"
                 />
                 <InputText 
-                  v-if="taskForm.recurrence_unit"
+                  v-if="taskForm.recurrence_unit && taskForm.recurrence_unit !== 'none'"
                   v-model.number="taskForm.recurrence_frequency" 
                   type="number"
                   min="1"
@@ -411,7 +411,7 @@
             </template>
             <template v-else>
               <div class="form-display">
-                <span v-if="taskForm.recurrence_unit" class="recurrence-badge">
+                <span v-if="taskForm.recurrence_unit && taskForm.recurrence_unit !== 'none'" class="recurrence-badge">
                   <i class="pi pi-refresh"></i>
                   {{ getRecurrenceLabel(taskForm.recurrence_unit, taskForm.recurrence_frequency) }}
                 </span>

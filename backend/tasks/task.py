@@ -335,7 +335,7 @@ def create_task():
     status = 'ongoing' if role == 'staff' else 'unassigned' 
 
     # recurrence
-    if 'recurrence' in data:
+    if data.get('recurrence') != None:
         recurrence = data['recurrence']
         # TODO: validate recurrence (frontend should only be sending numbers) daily - 1, weekly - 7, monthly - 30, custom - any positive int
         if not isinstance(recurrence, int) or recurrence <= 0:
