@@ -27,9 +27,9 @@ INSERT INTO staff (employee_id, employee_name, email, department, role, password
 
 -- Insert projects data (FIXED: will have proper updated_at timestamps)
 INSERT INTO projects (id, name, owner, owner_id, tasks_done, tasks_total, due_date) VALUES
-(1, 'Website Redesign', 'test', 1, 0, 0, NULL),
-(2, 'Marketing Launch', 'test2', 2, 0, 0, NULL),
-(3, 'Data Migration', 'James Connor', 47, 0, 0, NULL);
+(1, 'Website Redesign', 'test', 1, 0, 0, '2025-12-15 00:00:00'),
+(2, 'Marketing Launch', 'test2', 2, 0, 0, '2025-12-20 00:00:00'),
+(3, 'Data Migration', 'James Connor', 47, 0, 0, '2025-12-31 00:00:00');
 
 -- Insert tasks data (EXACT match to your current data)
 INSERT INTO task (task_id, title, description, attachment, priority, recurrence, start_date, deadline, completed_date, created_at, status, owner, project_id, parent_id) VALUES
