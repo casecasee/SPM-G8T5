@@ -148,6 +148,11 @@ const filteredMentionable = computed(() => {
   return (mentionable.value || []).filter(u => (u.employee_name || '').toLowerCase().includes(q))
 })
 
+// Disable past dates in the add-task date picker (match Tasks page behavior)
+const minDate = computed(() => {
+  return new Date().toISOString().slice(0, 16)
+})
+
 const unassignedTasks = computed(() => (allTasks.value || []).filter(t => !t.project_id && Number(t.owner) === currentEmployeeId))
 const filteredUnassigned = computed(() => {
   const q = (searchExisting.value || '').trim().toLowerCase()
@@ -243,7 +248,8 @@ async function saveTask() {
     comments.value = []
   } catch (error) {
     console.error("Error creating task:", error)
-    addError.value = 'Failed to create task. Please try again.'
+    const msg = error?.response?.data?.message || 'Failed to create task. Please try again.'
+    addError.value = msg
   }
 }
 
@@ -508,7 +514,7 @@ onMounted(async () => {
       <div class="field-row grid-3">
         <div>
           <label>Due Date:</label>
-          <input type="datetime-local" v-model="taskForm.due_date" class="input-field" />
+          <input type="datetime-local" v-model="taskForm.due_date" :min="minDate" class="input-field" />
         </div>
         <div>
           <label>Status:</label>

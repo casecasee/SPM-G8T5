@@ -305,7 +305,9 @@ def create_task():
         project_member_ids = [member.employee_id for member in project.members]
         for cid in collaborators_ids:
             if cid not in project_member_ids:
-                return {"message": f"Collaborator {cid} is not a member of the project"}, 400
+                staff_obj = Staff.query.get(cid)
+                display = staff_obj.employee_name if staff_obj else f"Employee #{cid}"
+                return {"message": f"'{display}' has to be added as a project member first!"}, 400
     else:
         # if no project_id, validate that collaborators are in the same dept (lonely tasks)
         dept_staff_ids = [staff.employee_id for staff in Staff.query.filter_by(department=dept).all()]
@@ -806,7 +808,9 @@ def update_task(task_id):
             if collaborators_ids:  # Only validate if collaborators are explicitly provided
                 for cid in collaborators_ids:
                     if cid not in project_member_ids:
-                        return {"message": f"Collaborator {cid} is not a member of the project"}, 400
+                        staff_obj = Staff.query.get(cid)
+                        display = staff_obj.employee_name if staff_obj else f"Employee #{cid}"
+                        return {"message": f"'{display}' has to be added as a project member first!"}, 400
             else:
                 # If no collaborators provided, preserve existing ones
                 collaborators_ids = [collab.employee_id for collab in curr_task.collaborators]
