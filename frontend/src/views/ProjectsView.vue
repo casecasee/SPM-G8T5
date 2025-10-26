@@ -80,6 +80,12 @@
             <div class="modal">
                 <h2>Create Project</h2>
                 <form @submit.prevent="submitCreate">
+                    <div v-if="showValidationErrors" class="error" style="padding:8px; border:1px solid #fecaca; background:#fef2f2; border-radius:6px;">
+                        <strong>Please fix the following:</strong>
+                        <ul style="margin:6px 0 0 16px;">
+                            <li v-for="(msg, field) in formErrors" :key="field">{{ msg }}</li>
+                        </ul>
+                    </div>
                     <label>
                         Name
                         <input v-model="form.name" required />
@@ -105,8 +111,9 @@
 
                     <label>
                         Project Due Date
-                        <input type="datetime-local" v-model="form.dueDate" />
+                        <input type="datetime-local" v-model="form.dueDate" :min="projectMinDate" />
                     </label>
+                    <div v-if="getFieldError('dueDate')" class="error">{{ getFieldError('dueDate') }}</div>
 
                     <label>
                         Members
@@ -200,6 +207,7 @@ const error = ref('')
 const search = ref('')
 const owner = ref('')
 const sort = ref('updated_desc')
+const projectMinDate = computed(() => new Date().toISOString().slice(0, 16))
 
 // Task selection/creation state
 const tasksLoading = ref(false)
@@ -344,6 +352,8 @@ async function load() {
 
 const showCreate = ref(false)
 const formError = ref('')
+const formErrors = ref({})
+const showValidationErrors = ref(false)
 const form = reactive({
     name: '',
     owner: '',
@@ -361,6 +371,8 @@ async function openCreate() {
   form.tasksTotal = 0
   form.memberIds = []
   formError.value = ''
+  formErrors.value = {}
+  showValidationErrors.value = false
 
   // Load unassigned tasks for attachment list
   selectedExisting.value = []
@@ -378,10 +390,20 @@ function cancelCreate() {
 }
 
 async function submitCreate() {
-    if (!form.name.trim()) {
-        formError.value = 'Name is required.'
-        return
+    // client-side validation
+    const errors = {}
+    // rely on native required for name
+    if (!form.dueDate || !form.dueDate.length) {
+        errors.dueDate = 'Project due date is required'
+    } else {
+        const d = new Date(form.dueDate)
+        if (isNaN(d.getTime()) || d <= new Date()) {
+            errors.dueDate = 'Project due date must be in the future'
+        }
     }
+    formErrors.value = errors
+    showValidationErrors.value = Object.keys(errors).length > 0
+    if (showValidationErrors.value) return
     try {
         const payload = {
             name: form.name.trim(),
@@ -413,6 +435,10 @@ async function submitCreate() {
     } catch (e) {
         formError.value = 'Create failed. Please try again.'
     }
+}
+
+function getFieldError(field) {
+  return formErrors.value[field]
 }
 
 async function onArchive() {

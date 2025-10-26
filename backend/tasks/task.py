@@ -315,9 +315,27 @@ def create_task():
             if cid not in dept_staff_ids:
                 return {"message": f"Collaborator {cid} is not in the same department"}, 400
     
-    # add owner as collaborator
-    if eid not in collaborators_ids:
-        collaborators_ids.append(eid)
+    # Resolve final owner: allow privileged roles to assign owner; otherwise default to current user
+    can_assign = (role or '').lower() in ['manager', 'hr', 'senior manager', 'senior director']
+    intended_owner_id = None
+    if can_assign and 'owner' in data and isinstance(data['owner'], int):
+        if Staff.query.get(data['owner']):
+            intended_owner_id = data['owner']
+
+    # If project specified and intended owner provided, ensure owner is a project member
+    if data.get('project_id') and intended_owner_id:
+        project = Project.query.get(data['project_id'])
+        if not project:
+            return {"message": "Project not found"}, 404
+        project_member_ids = [member.employee_id for member in project.members]
+        if intended_owner_id not in project_member_ids:
+            return {"message": "Selected owner must be a project member"}, 400
+
+    final_owner_id = intended_owner_id or eid
+
+    # ensure collaborators include the final owner
+    if final_owner_id not in collaborators_ids:
+        collaborators_ids.append(final_owner_id)
 
     collaborators = Staff.query.filter(Staff.employee_id.in_(collaborators_ids)).all()
     
@@ -360,7 +378,7 @@ def create_task():
         project_id=data.get('project_id'),
         # parent_id=data.get('parent_id'), only for subtasks, handled separately
         priority=data['priority'],
-        owner=eid,
+        owner=final_owner_id,
         collaborators=collaborators, 
         status=status, 
         recurrence=data.get('recurrence')

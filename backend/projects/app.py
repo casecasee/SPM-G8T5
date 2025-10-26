@@ -77,6 +77,17 @@ def list_projects():
         print(f"DEBUG: Error querying tasks: {e}")
         project_id_to_counts = {}
 
+    # Persist computed counters back into the database
+    for p in rows:
+        counts = project_id_to_counts.get(p.id)
+        if counts:
+            p.tasks_total = counts['total']
+            p.tasks_done = counts['done']
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
     # Build response, overriding counters when we have live stats
     result = []
     for p in rows:
@@ -104,7 +115,6 @@ def create_project():
         name=data.get("name", "Untitled Project"),
         owner=data.get("owner", "Unassigned"),
         owner_id=data.get("ownerId"),
-        status=data.get("status", "Active"),
         # Counters are computed from tasks service; start at 0
         tasks_done=0,
         tasks_total=0,
@@ -113,7 +123,10 @@ def create_project():
     # New: optional project-level due date
     p.due_date = parse_iso(data.get("dueDate"))
     db.session.add(p)
-    members = data.get("members") or []
+    # Ensure owner is always a member; merge with provided members
+    members = set(data.get("members") or [])
+    if p.owner_id:
+        members.add(p.owner_id)
     if members:
         p.members = Staff.query.filter(Staff.employee_id.in_(members)).all()
     db.session.commit()

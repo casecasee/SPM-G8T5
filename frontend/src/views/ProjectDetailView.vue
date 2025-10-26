@@ -70,6 +70,9 @@ const selectedExisting = ref([])
 const addBusy = ref(false)
 const addError = ref('')
 const searchExisting = ref('')
+// Validation state for Add Task modal
+const formErrors = ref({})
+const showValidationErrors = ref(false)
 
 // Replace taskForm with Tasks page structure
 function resetForm() {
@@ -204,6 +207,44 @@ function statusClass(status) {
 
 // project status visuals removed
 
+function clearValidationErrors() {
+  formErrors.value = {}
+  showValidationErrors.value = false
+}
+
+function getFieldError(field) {
+  return formErrors.value[field]
+}
+
+function validateForm() {
+  const errors = {}
+
+  if (!taskForm.value.name || !taskForm.value.name.trim()) {
+    errors.name = 'Task name is required'
+  }
+
+  if (!taskForm.value.description || !taskForm.value.description.trim()) {
+    errors.description = 'Description is required'
+  }
+
+  if (!taskForm.value.due_date || String(taskForm.value.due_date).trim() === '') {
+    errors.due_date = 'Due date is required'
+  } else {
+    const d = new Date(taskForm.value.due_date)
+    if (isNaN(d.getTime()) || d <= new Date()) {
+      errors.due_date = 'Deadline must be in the future'
+    }
+  }
+
+  if (taskForm.value.priority == null) {
+    errors.priority = 'Priority is required'
+  }
+
+  formErrors.value = errors
+  showValidationErrors.value = Object.keys(errors).length > 0
+  return !showValidationErrors.value
+}
+
 function toLocalInput(iso) {
   if (!iso) return null
   const d = new Date(iso)
@@ -241,6 +282,8 @@ async function saveEditProject() {
 }
 
 async function saveTask() {
+  clearValidationErrors()
+  if (!validateForm()) return
   try {
     let uploadedAttachments = []
 
@@ -558,28 +601,40 @@ onMounted(async () => {
     </div>
 
     <div v-if="addTab==='create'" class="modal-content">
+      <div v-if="showValidationErrors" class="error" style="padding:8px; border:1px solid #fecaca; background:#fef2f2; border-radius:6px; margin-bottom:12px;">
+        <strong>Please fix the following:</strong>
+        <ul style="margin:6px 0 0 16px;">
+          <li v-for="(msg, field) in formErrors" :key="field">{{ msg }}</li>
+        </ul>
+      </div>
       <div class="field-row">
         <label>Name:</label>
         <InputText v-model="taskForm.name" class="input-field" />
+        <div v-if="getFieldError('name')" class="error">{{ getFieldError('name') }}</div>
       </div>
 
       <div class="field-row">
         <label>Description:</label>
         <Textarea v-model="taskForm.description" rows="4" class="input-field" maxlength="100" />
+        <div v-if="getFieldError('description')" class="error">{{ getFieldError('description') }}</div>
       </div>
 
       <div class="field-row grid-3">
         <div>
           <label>Due Date:</label>
           <input type="datetime-local" v-model="taskForm.due_date" :min="minDate" class="input-field" />
+          <div v-if="getFieldError('due_date')" class="error">{{ getFieldError('due_date') }}</div>
         </div>
         <div>
           <label>Status:</label>
-          <Dropdown v-model="taskForm.status" :options="filteredStatusOptions" optionLabel="label" optionValue="value" class="input-field w-full" />
+          <div class="meta">
+            <span :class="statusClass(taskForm.status)">{{ taskForm.status }}</span>
+          </div>
         </div>
         <div>
           <label>Priority:</label>
           <Dropdown v-model="taskForm.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="input-field w-full" />
+          <div v-if="getFieldError('priority')" class="error">{{ getFieldError('priority') }}</div>
         </div>
       </div>
 

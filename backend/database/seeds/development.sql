@@ -49,7 +49,7 @@ INSERT INTO task (task_id, title, description, attachment, priority, recurrence,
 -- Insert project members (from your current data)
 INSERT INTO project_members (project_id, staff_id) VALUES
 (1, 1), (1, 2),  -- Website Redesign team
-(2, 34),         -- Marketing Launch team  
+(2, 34), (2, 2), -- Marketing Launch team  
 (3, 47);         -- Data Migration team
 
 -- Insert task collaborators (from your current data)

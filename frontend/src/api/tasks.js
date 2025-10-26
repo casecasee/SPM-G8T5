@@ -18,7 +18,22 @@ export const listTasks = async () => {
   const mine = Array.isArray(data.my_tasks) ? data.my_tasks : [];
   const teamGroups = data.team_tasks ? Object.values(data.team_tasks) : [];
   const team = Array.isArray(teamGroups) ? teamGroups.flat() : [];
-  return [...mine, ...team];
+  const merged = [...mine, ...team];
+  // De-duplicate by task id across my/team lists
+  const seen = new Set();
+  const unique = [];
+  for (const t of merged) {
+    const id = t?.task_id ?? t?.id;
+    if (id == null) {
+      unique.push(t);
+      continue;
+    }
+    if (!seen.has(id)) {
+      seen.add(id);
+      unique.push(t);
+    }
+  }
+  return unique;
 };
 
 export const createTask = (payload) =>
