@@ -9,7 +9,7 @@ import Textarea from 'primevue/textarea'
 import Dropdown from 'primevue/dropdown'
 import FileUpload from 'primevue/fileupload'
 import MultiSelect from 'primevue/multiselect'
-import { getProjects } from '../api/projects'
+import { getProjects, updateProject } from '../api/projects'
 import { listTasks, createTask, updateTaskProject } from '../api/tasks'
 import axios from 'axios'
 
@@ -27,6 +27,10 @@ const currentEmployeeName = sessionStorage.getItem('employee_name') || ''
 const currentRole = sessionStorage.getItem('role') || ''
 const activeTab = ref('all') // 'all' | 'mine'
 const showAddModal = ref(false)
+const showEditProject = ref(false)
+const editDueDate = ref(null)
+const editMembers = ref([])
+const editError = ref('')
 
 // Add these new data properties
 const availableEmployees = ref([])
@@ -166,6 +170,29 @@ function formatDate(date) {
   return new Date(date).toLocaleDateString()
 }
 
+function formatDueDate(dueDate) {
+  if (!dueDate) return '-'
+  const date = new Date(dueDate)
+  if (isNaN(date.getTime())) return '-'
+  const dateLabel = date.toLocaleDateString()
+  const now = new Date()
+  const d0 = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const n0 = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const diffDays = Math.round((d0 - n0) / (1000 * 60 * 60 * 24))
+
+  let rel
+  if (diffDays < 0) {
+    rel = `${Math.abs(diffDays)} days overdue`
+  } else if (diffDays === 0) {
+    rel = 'today'
+  } else if (diffDays === 1) {
+    rel = 'tomorrow'
+  } else {
+    rel = `in ${diffDays} days`
+  }
+  return `${dateLabel} (${rel})`
+}
+
 function statusClass(status) {
   switch ((status || '').toLowerCase()) {
     case 'ongoing': return 'status-pill status-ongoing'
@@ -176,6 +203,42 @@ function statusClass(status) {
 }
 
 // project status visuals removed
+
+function toLocalInput(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${day}T${hh}:${mm}`
+}
+
+function openEditProject() {
+  editError.value = ''
+  editDueDate.value = toLocalInput(project.value?.dueDate || null)
+  editMembers.value = Array.isArray(project.value?.memberIds) ? [...project.value.memberIds] : []
+  showEditProject.value = true
+}
+
+async function saveEditProject() {
+  editError.value = ''
+  const currentIds = new Set(project.value?.memberIds || [])
+  const nextIds = new Set(editMembers.value || [])
+  const add = [...[...nextIds].filter(id => !currentIds.has(id))]
+  const remove = [...[...currentIds].filter(id => !nextIds.has(id))]
+  const dueDateISO = editDueDate.value ? new Date(editDueDate.value).toISOString() : null
+  try {
+    const res = await updateProject(projectId.value, { dueDate: dueDateISO, add, remove })
+    project.value = { ...project.value, ...res }
+    showEditProject.value = false
+  } catch (e) {
+    const msg = e?.response?.data?.error || 'Failed to update project'
+    editError.value = msg
+  }
+}
 
 async function saveTask() {
   try {
@@ -318,18 +381,7 @@ async function load() {
     error.value = 'Failed to load project.'
   }
   try {
-    const res = await axios.get(`http://localhost:5002/projects/${projectId.value}/timeline`, { withCredentials: true })
-    allTasks.value = (res.data?.tasks || []).map(t => ({
-      task_id: t.id,
-      title: t.title,
-      description: t.description,
-      deadline: t.due_date,
-      status: t.status,
-      priority: t.priority,
-      owner: t.owner,
-      project_id: t.project_id,
-      collaborators: Array.isArray(t.collaborators) ? t.collaborators : []
-    }))
+    allTasks.value = await listTasks()
   } catch (e) {
     allTasks.value = []
   } finally {
@@ -429,6 +481,7 @@ onMounted(async () => {
     </div>
     <div class="right">
       <Button label="Back" class="btn" @click="goBack" />
+      <Button v-if="canManage" label="Edit Project" class="btn" @click="openEditProject" />
     </div>
   </div>
 
@@ -453,6 +506,10 @@ onMounted(async () => {
       <div>
         <div class="label">Members</div>
         <div class="value">{{ (project.memberNames && project.memberNames.length) ? project.memberNames.join(', ') : '-' }}</div>
+      </div>
+      <div>
+        <div class="label">Due Date</div>
+        <div class="value">{{ formatDueDate(project.dueDate) }}</div>
       </div>
       <div>
         <div class="label">Last Updated</div>
@@ -605,6 +662,35 @@ onMounted(async () => {
     <div style="display:flex;justify-content:flex-end;margin-top:12px;gap:8px;">
       <button class="btn btn-secondary" @click="showAddModal=false" :disabled="addBusy">Cancel</button>
       <button class="btn btn-primary" @click="addTab==='create' ? saveTask() : addTasksToProject()" :disabled="addBusy">{{ addBusy ? 'Processing…' : (addTab==='create' ? 'Create Task' : 'Add') }}</button>
+    </div>
+  </Dialog>
+
+  <!-- Edit Project Modal -->
+  <Dialog v-if="canManage" v-model:visible="showEditProject" modal header="Edit Project" class="page-style-modal">
+    <div class="modal-content">
+      <div class="field-row">
+        <label>Project Due Date</label>
+        <input type="datetime-local" v-model="editDueDate" class="input-field" />
+      </div>
+      <div class="field-row">
+        <label>Members</label>
+        <MultiSelect
+          v-model="editMembers"
+          :options="employeeDisplayList"
+          optionLabel="display_label"
+          optionValue="employee_id"
+          class="input-field w-full"
+          placeholder="Select members..."
+          filter
+          filterBy="display_label,employee_name,role,team,department"
+        />
+        <small class="muted">Removing a member fails if they are involved in any task in this project.</small>
+      </div>
+      <p v-if="editError" class="error" style="margin-top:8px;">{{ editError }}</p>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px;gap:8px;">
+        <button class="btn btn-secondary" @click="showEditProject=false">Cancel</button>
+        <button class="btn btn-primary" @click="saveEditProject">Save</button>
+      </div>
     </div>
   </Dialog>
 </div>

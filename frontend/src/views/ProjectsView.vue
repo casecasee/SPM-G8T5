@@ -90,12 +90,7 @@
                         <input v-model="form.owner" disabled />
                     </label>
 
-                    <label>
-                        Status
-                        <select v-model="form.status">
-                            <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-                        </select>
-                    </label>
+                    
 
                     <div class="row">
                         <label>
@@ -284,19 +279,25 @@ function fromNow(iso) {
 function formatDueDate(dueDate) {
   if (!dueDate) return '-'
   const date = new Date(dueDate)
+  if (isNaN(date.getTime())) return '-'
+  const dateLabel = date.toLocaleDateString()
   const now = new Date()
-  const diffTime = date - now
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-  
+  // Normalize to date-only comparison
+  const d0 = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const n0 = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const diffDays = Math.round((d0 - n0) / (1000 * 60 * 60 * 24))
+
+  let rel
   if (diffDays < 0) {
-    return `${Math.abs(diffDays)} days overdue`
+    rel = `${Math.abs(diffDays)} days overdue`
   } else if (diffDays === 0) {
-    return 'Due today'
+    rel = 'today'
   } else if (diffDays === 1) {
-    return 'Due tomorrow'
+    rel = 'tomorrow'
   } else {
-    return `Due in ${diffDays} days`
+    rel = `in ${diffDays} days`
   }
+  return `${dateLabel} (${rel})`
 }
 
 const filteredAndSorted = computed(() => {
@@ -346,7 +347,6 @@ const formError = ref('')
 const form = reactive({
     name: '',
     owner: '',
-    status: 'Active',
     tasksDone: 0,
     tasksTotal: 0,
     members: '',        // legacy text field (unused after dropdown)
@@ -357,7 +357,6 @@ const form = reactive({
 async function openCreate() {
   form.name = ''
   form.owner = sessionStorage.getItem('employee_name') || 'Unassigned'
-  form.status = 'Active'
   form.tasksDone = 0
   form.tasksTotal = 0
   form.memberIds = []
@@ -388,7 +387,6 @@ async function submitCreate() {
             name: form.name.trim(),
             owner: form.owner || 'Unassigned',
             ownerId: Number(sessionStorage.getItem('employee_id')) || null,
-            status: form.status,
             // Backend initializes counters to 0; they update based on tasks
             tasksDone: 0,
             tasksTotal: 0,

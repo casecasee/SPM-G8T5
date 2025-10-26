@@ -13,3 +13,6 @@ async function http(path, options) {
 export const getProjects = () => http('/projects', { method: 'GET' });
 export const createProject = (payload) =>
   http('/projects', { method: 'POST', body: JSON.stringify(payload) });
+
+export const updateProject = (id, payload) =>
+  http(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(payload) });

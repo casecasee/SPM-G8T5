@@ -12,7 +12,13 @@ async function http(path, options) {
 
 export const listTasks = async () => {
   const data = await http('/tasks', { method: 'GET' });
-  return data.tasks || [];
+  // Backend can return either { tasks: [...] } or { my_tasks: [...], team_tasks: {...} }
+  if (Array.isArray(data.tasks)) return data.tasks;
+
+  const mine = Array.isArray(data.my_tasks) ? data.my_tasks : [];
+  const teamGroups = data.team_tasks ? Object.values(data.team_tasks) : [];
+  const team = Array.isArray(teamGroups) ? teamGroups.flat() : [];
+  return [...mine, ...team];
 };
 
 export const createTask = (payload) =>

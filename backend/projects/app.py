@@ -9,7 +9,7 @@ from datetime import datetime
 from models import db, Project, Staff
 from models.project import project_members
 from models.task import Task
-from sqlalchemy import func
+from sqlalchemy import func, or_
 import os
 
 app = Flask(__name__)
@@ -118,6 +118,73 @@ def create_project():
         p.members = Staff.query.filter(Staff.employee_id.in_(members)).all()
     db.session.commit()
     return jsonify(p.to_dict()), 201
+
+# Update project (owner-only): due date and members (add/remove)
+@app.put('/projects/<int:pid>')
+def update_project(pid):
+    current_user_id = session.get('employee_id')
+    if not current_user_id:
+        return {"error": "Unauthorized"}, 401
+
+    p = Project.query.get(pid)
+    if not p:
+        return {"error": "Project not found"}, 404
+
+    # Only the project owner can edit
+    if p.owner_id != current_user_id:
+        return {"error": "Forbidden"}, 403
+
+    data = request.json or {}
+
+    def parse_iso(z):
+        if not z:
+            return None
+        try:
+            return datetime.fromisoformat(z.replace('Z', '+00:00'))
+        except Exception:
+            return None
+
+    # Update due date if provided
+    if 'dueDate' in data:
+        p.due_date = parse_iso(data.get('dueDate'))
+
+    # Member updates: add/remove
+    add_ids = set(data.get('add') or [])
+    remove_ids = set(data.get('remove') or [])
+
+    # Prevent removing the owner
+    if p.owner_id in remove_ids:
+        remove_ids.discard(p.owner_id)
+
+    # Current members
+    current_members = p.members.all()
+    current_ids = {m.employee_id for m in current_members}
+
+    # Resolve adds
+    add_ids = {sid for sid in add_ids if sid not in current_ids}
+    add_objs = Staff.query.filter(Staff.employee_id.in_(add_ids)).all()
+
+    # Validate removals: cannot remove if involved in any project tasks
+    for sid in (remove_ids & current_ids):
+        involved = Task.query.filter(
+            Task.project_id == pid
+        ).filter(
+            or_(
+                Task.owner == sid,
+                Task.collaborators.any(employee_id=sid)
+            )
+        ).count()
+        if involved > 0:
+            return {"error": "unable to remove member, member is involved in a project task!"}, 400
+
+    # Apply member changes
+    final_ids = (current_ids | add_ids) - remove_ids
+    final_objs = Staff.query.filter(Staff.employee_id.in_(final_ids)).all()
+    p.members = final_objs
+    p.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify(p.to_dict()), 200
 
 # Archive endpoint removed per product decision
 
