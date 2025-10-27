@@ -63,6 +63,7 @@ const route = useRoute()
 
     const mentionHighlighted = ref(0)
 
+    //running on comment input
     function onCommentInput(e) {
         const text = newComment.value || ''
         const cursor = e?.target?.selectionStart ?? text.length
@@ -1494,7 +1495,8 @@ const route = useRoute()
         comments.value = []
     }
     }
-
+    
+    //fetches mentionable users from /task/<id>/mentionable
     async function loadMentionable(taskId) {
     mentionable.value = []
     try {

@@ -73,9 +73,6 @@ def _create_notification(staff_id: int, notif_type: str, title: str, message: st
     )
     db.session.add(notification)
     db.session.commit()
-
-
-
     payload = notification.to_dict()
     socketio.emit('new_notification', payload, room=_room_for_employee(str(staff_id)))
     return payload
