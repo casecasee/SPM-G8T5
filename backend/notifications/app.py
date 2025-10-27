@@ -6,6 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 import uuid
 import smtplib
+import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -37,7 +38,8 @@ socketio = SocketIO(app,
                    engineio_logger=False)
 
 # Database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///notifications.db'
+# Use MySQL to match the rest of the application
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI", "mysql+mysqlconnector://root@localhost:3306/SPM")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299}
 
@@ -73,9 +75,6 @@ def _create_notification(staff_id: int, notif_type: str, title: str, message: st
     )
     db.session.add(notification)
     db.session.commit()
-
-
-
     payload = notification.to_dict()
     socketio.emit('new_notification', payload, room=_room_for_employee(str(staff_id)))
     return payload

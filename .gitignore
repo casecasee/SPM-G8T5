@@ -35,3 +35,8 @@ backend/.venv
 
 # /backend/__pycache__
 /backend/*/__pycache__
+
+# Instance folders (contain runtime databases, configs, etc.)
+backend/instance/
+backend/*/instance/
+*.db

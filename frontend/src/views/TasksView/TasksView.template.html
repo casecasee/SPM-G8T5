@@ -1,21 +1,14 @@
-
 <div class="tasks-page">
   <div class="tasks-header">
     <h2>Tasks</h2>
     <div class="header-buttons">
       <Button v-if="currentTab === 'my'" label="+ Add Task" class="add-top-btn" @click="openAdd" />
-      <Button class="add-top-btn"  label="📅 Timeline View" @click="goToTimeline" />
-      
+      <Button class="add-top-btn" label="📅 Timeline View" @click="goToTimeline" />
+
       <!-- Filter Dropdown -->
       <div v-if="currentTab !== 'report'" class="header-filters">
-        <Dropdown 
-          v-model="taskFilter" 
-          :options="filterOptions" 
-          optionLabel="label" 
-          optionValue="value" 
-          placeholder="Filter tasks..." 
-          class="filter-dropdown"
-        />
+        <Dropdown v-model="taskFilter" :options="filterOptions" optionLabel="label" optionValue="value"
+          placeholder="Filter tasks..." class="filter-dropdown" />
       </div>
     </div>
   </div>
@@ -23,115 +16,324 @@
   <!-- Tabs visible to all users -->
   <div class="tabs">
     <button :class="['tab', currentTab==='my' ? 'active' : '']" @click="currentTab='my'">My Tasks</button>
-    <button :class="['tab', currentTab==='team' ? 'active' : '']" @click="currentTab='team'" v-if="canViewTeamTasks">Team's Tasks</button>
-    <button :class="['tab', currentTab==='departments' ? 'active' : '']" @click="currentTab='departments'" v-if="isSeniorManagerOrHR">All Departments</button>
-    
-    <button :class="['tab', currentTab==='report' ? 'active' : '']" @click="currentTab='report'" v-if="isManagerRole">Task Report</button>
+    <button :class="['tab', currentTab==='team' ? 'active' : '']" @click="currentTab='team'"
+      v-if="canViewTeamTasks">Team's Tasks</button>
+    <button :class="['tab', currentTab==='departments' ? 'active' : '']" @click="currentTab='departments'"
+      v-if="isSeniorManagerOrHR">All Departments</button>
 
+    <button :class="['tab', currentTab==='report' ? 'active' : '']" @click="currentTab='report'"
+      v-if="isManagerRole">Task Report</button>
+ 
   </div>
 
   <!-- Team search bar -->
-    <div v-if="currentTab==='team'" class="team-search-section">
-      <!-- Search bar -->
-      <InputText v-model="teamSearch" placeholder="Search employee by name" class="input-field" />
+  <!-- Team search bar -->
+<div v-if="currentTab==='team'" class="team-search-section">
+  <!-- Search bar -->
+  <InputText v-model="teamSearch" placeholder="Search employee by name" class="input-field" />
 
-      <!-- Employee grid -->
-      <div class="employee-grid">
-        <div
-          v-for="emp in filteredEmployeesForTeam.length ? filteredEmployeesForTeam : availableEmployees.filter(e => e.employee_id !== currentEmployeeId)"
-          :key="emp.employee_id"
-          class="employee-card"
-          :class="teamSelectedEmployeeId === emp.employee_id ? 'selected' : ''"
-          @click="teamSelectedEmployeeId = emp.employee_id"
-        >
-          <div class="employee-avatar">
-            <i class="pi pi-user" style="font-size:1.2rem;"></i>
-          </div>
-          <div class="employee-name">{{ emp.employee_name }}</div>
-          <div class="employee-role">{{ emp.role }}</div>
-        </div>
+  <!-- Employee grid -->
+  <div class="employee-grid">
+    <div
+      v-for="emp in filteredEmployeesForTeam.length ? filteredEmployeesForTeam : availableEmployees.filter(e => e.employee_id !== currentEmployeeId)"
+      :key="emp.employee_id"
+      class="employee-card"
+      :class="teamSelectedEmployeeId === emp.employee_id ? 'selected' : ''"
+      @click="teamSelectedEmployeeId = emp.employee_id"
+    >
+      <div class="employee-avatar">
+        <i class="pi pi-user" style="font-size:1.2rem;"></i>
       </div>
-    </div>
-  </div>
-
-  <div v-if="isManagerRole && currentTab==='report'" class="report-tab">
-    <button :class="['download-btn']" @click="printReport">Download Report</button>
-    <div class="report-card">
-    <h2 class="report-title">📊 Task Report</h2>
-    
-  <!-- Overdue -->
-  <div class="task-section">
-    <div class="section-header overdue">Overdue</div>
-    <div class="task-details">
-      <p><strong>Task ID:</strong> 1</p>
-      <p><strong>Task Name:</strong> task1</p>
-      <p><strong>Task Description:</strong> do this</p>
-      <p><strong>Task Deadline:</strong> 2025-10-06 00:00:00</p>
-      <p><strong>Task Collaborators:</strong> user1, user2</p>
-    </div>
-  </div>
-
-  <!-- Ongoing -->
-  <div class="task-section">
-    <div class="section-header ongoing">Ongoing</div>
-    <div class="task-details">
-      <p><strong>Task ID:</strong> 2</p>
-      <p><strong>Task Name:</strong> task2</p>
-      <p><strong>Task Description:</strong> do that</p>
-      <p><strong>Task Deadline:</strong> 2025-10-20 00:00:00</p>
-      <p><strong>Task Collaborators:</strong> user3, user4</p>
-    </div>
-  </div>
-
-  <!-- Under Review -->
-  <div class="task-section">
-    <div class="section-header review">Under Review</div>
-    <div class="task-details">
-      <p><strong>Task ID:</strong> 3</p>
-      <p><strong>Task Name:</strong> task3</p>
-      <p><strong>Task Description:</strong> do sth</p>
-      <p><strong>Completed On:</strong> 2025-10-05 00:00:00</p>
-      <p><strong>Task Deadline:</strong> 2025-10-07 00:00:00</p>
-      <p><strong>Task Collaborators:</strong> user1, user2</p>
-    </div>
-  </div>
-
-  <!-- Completed -->
-  <div class="task-section">
-    <div class="section-header completed">Completed</div>
-    <div class="task-details">
-      <p><strong>Task ID:</strong> 4</p>
-      <p><strong>Task Name:</strong> task4</p>
-      <p><strong>Task Description:</strong> done w this</p>
-      <p><strong>Completed On:</strong> 2025-10-05 00:00:00</p>
-      <p><strong>Task Deadline:</strong> 2025-10-07 00:00:00</p>
-      <p><strong>Task Collaborators:</strong> user1, user2</p>
+      <div class="employee-name">{{ emp.employee_name }}</div>
+      <div class="employee-role">{{ emp.role }}</div>
     </div>
   </div>
 </div>
 
+  <!-- Employee grid -->
+
+
+<div v-if="currentTab==='report'" class="report-tab">
+  <div class="report-controls">
+    <div class="left-controls">
+      <label for="start-date">Start:</label>
+      <input type="date" v-model="startDate" id="start-date" @change="filterTasksByDate" />
+      <label for="end-date">End:</label>
+      <input type="date" v-model="endDate" id="end-date" @change="filterTasksByDate" />
+      <button class="filter-btn" @click="filterTasksByDate">Filter by Date</button>
+    </div>
+    <div class="right-controls">
+      <button class="download-btn" @click="printReport">Download Report</button>
+    </div>
   </div>
-  <!-- Department selection for Senior Managers and HR -->
-  <div v-if="isSeniorManagerOrHR && currentTab==='departments'" class="department-section">
-    <!-- Department selection -->
-    <div class="department-selection">
-      <h3>Select Department</h3>
-      <div class="department-grid">
-        <div
-          v-for="dept in departments"
-          :key="dept"
-          class="department-card"
-          :class="selectedDepartment === dept ? 'selected' : ''"
-          @click="selectDepartment(dept)"
-        >
-          <div class="department-icon">
-            <i class="pi pi-building" style="font-size:1.5rem;"></i>
+
+  <div class="report-card">
+    <h2 class="report-title">📊 Task Report</h2>
+    <div class="report-summary">
+      <h3>Task Summary ({{formattedDateRange}})</h3>
+      <ul>
+        <li><strong>Overall Progress:</strong> {{ report_overallProgress }}</li>
+        <li><strong>Total Tasks:</strong> {{ report_displayTasks.length }}</li>
+        <li><strong>Overdue Tasks:</strong> {{ report_overdueTasks.length }}</li>
+        <li><strong>High Priority:</strong> {{ report_tasksByPriority.high.length }}</li>
+        <li><strong>Medium Priority:</strong> {{ report_tasksByPriority.medium.length }}</li>
+        <li><strong>Low Priority:</strong> {{ report_tasksByPriority.low.length }}</li>
+        <li>
+          <strong>Completed Tasks:</strong>
+          {{
+          report_displayTasks.filter(
+          t => t.status?.toLowerCase() === 'done' || t.status?.toLowerCase() === 'completed'
+          ).length
+          }}
+        </li>
+      </ul>
+
+
+    </div>
+
+    <!-- High Priority -->
+    <div class="task-section">
+      <div class="section-header report-high-priority-header">
+        <span>High Priority</span>
+        <span class="task-count">{{ report_tasksByPriority.high.length }}</span>
+      </div>
+
+      <div class="task-details">
+        <div v-if="hasTasksInSection('high')" class="priority-section">
+          <div class="tasks-grid">
+            <Card v-for="task in report_tasksByPriority.high" :key="task.id" class="task-card"
+              :class="{'task-overdue': isOverdue(task)}" @click="openDetails(task) ">
+              <template #title>
+                <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
+                <div class="task-title-row">
+                  <span>{{ task.name }}</span>
+                </div>
+                <p class="desc" style="font-weight: normal;">{{ task.description }}</p>
+              </template>
+
+              <template #content>
+                <div class="task-body">
+                  <div class="task-info">
+                    <div class="info-item">
+                      <i class="pi pi-calendar-plus"></i>
+                      <strong>Start:</strong> {{ formatDate(task.created_at) }}
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-calendar-times"></i>
+                      <strong>Due:</strong> {{ formatDate(task.due_date) }}
+                      <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span>
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-bolt"></i>
+                      <strong>Priority Score:</strong>
+                      <span class="priority-tag">
+                        {{ task.priority || 'N/A' }}
+                      </span>
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-check-circle"></i>
+                      <strong>Status:</strong>
+                      <span class="status-pill" :class="getStatusClass(task.status)">
+                        {{ task.status }}
+                      </span>
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-user"></i>
+                      <strong>Owner:</strong> {{ getOwnerName(task.owner) || currentEmployeeName }}
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-users"></i>
+                      <strong>Collaborators:</strong> {{ getCollaboratorNames(task.collaborators) || 'None' }}
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+            </Card>
           </div>
-          <div class="department-name">{{ dept }}</div>
         </div>
+        <p v-else class="no-tasks-message">No high priority tasks in this timeframe</p>
       </div>
     </div>
 
+
+
+    <!--Medium Priority-->
+    <div class="task-section">
+      <div class="section-header report-medium-priority-header">
+        <span>Medium Priority</span>
+        <span class="task-count">{{ report_tasksByPriority.medium.length }}</span>
+      </div>
+      <div class="task-details">
+        <!-- <div class="section-header ongoing">Ongoing</div> -->
+        <div v-if="hasTasksInSection('medium')" class="priority-section">
+
+          <div class="tasks-grid">
+            <Card v-for="task in report_tasksByPriority.medium" :key="task.id" class="task-card"
+              :class="{'task-overdue': isOverdue(task)}" @click="openDetails(task)">
+
+              <template #title>
+                <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
+                <div class="task-title-row">
+                  <span>{{ task.name }}</span>
+
+                </div>
+                <p class="desc" style="font-weight: normal;">{{ task.description }}</p>
+              </template>
+
+              <template #content>
+                <div class="task-body">
+                  <div class="task-info">
+                    <div class="info-item">
+                      <i class="pi pi-calendar-plus"></i>
+                      <strong>Start:</strong> {{ formatDate(task.created_at) }}
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-calendar-times"></i>
+                      <strong>Due:</strong> {{ formatDate(task.due_date) }}
+                      <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span>
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-bolt"></i>
+                      <strong>Priority Score:</strong>
+                      <span class="priority-tag">
+                        {{ task.priority || 'N/A' }}
+                      </span>
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-check-circle"></i>
+                      <strong>Status:</strong>
+                      <span class="status-pill" :class="getStatusClass(task.status)">
+                        {{ task.status }}
+                      </span>
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-user"></i>
+                      <strong>Owner:</strong> {{ getOwnerName(task.owner) || currentEmployeeName }}
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-users"></i>
+                      <strong>Collaborators:</strong> {{ getCollaboratorNames(task.collaborators) || 'None' }}
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </Card>
+          </div>
+        </div>
+        <p v-else class="no-tasks-message">No medium priority tasks in this timeframe</p>
+      </div>
+    </div>
+
+
+
+    <!-- Low Priority -->
+    <div class="task-section">
+      <div class="section-header report-low-priority-header">
+        <span>Low Priority</span>
+        <span class="task-count">{{ report_tasksByPriority.low.length }}</span>
+      </div>
+      <div class="task-details">
+
+        <div v-if="hasTasksInSection('low')" class="priority-section">
+          <div class="tasks-grid">
+            <Card v-for="task in report_tasksByPriority.low" :key="task.id" class="task-card"
+              :class="{ 'task-overdue': isOverdue(task) }" @click="openDetails(task)">
+              <template #title>
+                <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
+                <div class="task-title-row">
+                  <span>{{ task.name }}</span>
+                </div>
+                <p class="desc" style="font-weight: normal;">{{ task.description }}</p>
+              </template>
+
+              <template #content>
+                <div class="task-body">
+                  <div class="task-info">
+                    <div class="info-item">
+                      <i class="pi pi-calendar-plus"></i>
+                      <strong>Start:</strong> {{ formatDate(task.created_at) }}
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-calendar-times"></i>
+                      <strong>Due:</strong> {{ formatDate(task.due_date) }}
+                      <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span>
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-bolt"></i>
+                      <strong>Priority Score:</strong>
+                      <span class="priority-tag">
+                        {{ task.priority || 'N/A' }}
+                      </span>
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-check-circle"></i>
+                      <strong>Status:</strong>
+                      <span class="status-pill" :class="getStatusClass(task.status)">
+                        {{ task.status }}
+                      </span>
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-user"></i>
+                      <strong>Owner:</strong> {{ getOwnerName(task.owner) || currentEmployeeName }}
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-users"></i>
+                      <strong>Collaborators:</strong> {{ getCollaboratorNames(task.collaborators) || 'None' }}
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </Card>
+          </div>
+        </div>
+        <p v-else class="no-tasks-message">No low priority tasks in this timeframe</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+
+
+
+<!-- Department selection for Senior Managers and HR -->
+<div v-if="isSeniorManagerOrHR && currentTab==='departments'" class="department-section">
+  <!-- Department selection -->
+  <div class="department-selection">
+    <h3>Select Department</h3>
+    <div class="department-grid">
+      <div v-for="dept in departments" :key="dept" class="department-card"
+        :class="selectedDepartment === dept ? 'selected' : ''" @click="selectDepartment(dept)">
+        <div class="department-icon">
+          <i class="pi pi-building" style="font-size:1.5rem;"></i>
+        </div>
+        <div class="department-name">{{ dept }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Employee selection within department -->
+  <div v-if="selectedDepartment" class="employee-selection">
+    <h3>{{ selectedDepartment }} Employees</h3>
+    <!-- Search bar -->
+    <InputText v-model="departmentSearch" placeholder="Search employee by name" class="input-field" />
     <!-- Employee selection within department -->
     <div v-if="selectedDepartment" class="employee-selection">
       <h3>{{ selectedDepartment }} Employees</h3>
@@ -142,11 +344,9 @@
       <div class="employee-grid">
         <div
           v-for="emp in filteredEmployeesForDepartment.length ? filteredEmployeesForDepartment : departmentEmployees.filter(e => e.employee_id !== currentEmployeeId)"
-          :key="emp.employee_id"
-          class="employee-card"
+          :key="emp.employee_id" class="employee-card"
           :class="departmentSelectedEmployeeId === emp.employee_id ? 'selected' : ''"
-          @click="selectDepartmentEmployee(emp.employee_id)"
-        >
+          @click="selectDepartmentEmployee(emp.employee_id)">
           <div class="employee-avatar">
             <i class="pi pi-user" style="font-size:1.2rem;"></i>
           </div>
@@ -156,146 +356,150 @@
       </div>
     </div>
   </div>
-  
-  <div v-if="currentTab !== 'report'" class="tasks-container">
-    <!-- High Priority Tasks -->
-    <div v-if="tasksByPriority.high.length > 0" class="priority-section">
-      <div class="priority-header high-priority">
-        <i class="pi pi-exclamation-triangle"></i>
-        <span>High Priority (Range 8 - 10)</span>
-        <span class="task-count">{{ tasksByPriority.high.length }}</span>
+  <!-- Employee grid -->
+  <div class="employee-grid">
+    <div
+      v-for="emp in filteredEmployeesForDepartment.length ? filteredEmployeesForDepartment : departmentEmployees.filter(e => e.employee_id !== currentEmployeeId)"
+      :key="emp.employee_id" class="employee-card"
+      :class="departmentSelectedEmployeeId === emp.employee_id ? 'selected' : ''"
+      @click="selectDepartmentEmployee(emp.employee_id)">
+      <div class="employee-avatar">
+        <i class="pi pi-user" style="font-size:1.2rem;"></i>
       </div>
-      <div class="tasks-grid">
-        <Card v-for="task in tasksByPriority.high" :key="task.id" class="task-card" :class="{'task-overdue': isOverdue(task)}" @click="openDetails(task) ">
-          <template #title>
-            <div class="task-title-row">
-              <span>{{ task.name }}</span>
-            </div>
-          </template>
-          <template #content>
-            <p class="desc">{{ task.description }}</p>
-            <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>            
-            <p class="meta">📅 {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
-              <Dropdown
-                v-if="isOwnerOrCollaborator(task)"
-                v-model="task.status"
-                :options="getStatusOptionsForTask(task)"
-                optionLabel="label"
-                optionValue="value"
-                class="status-pill-dropdown"
-                :class="getStatusClass(task.status)"
-                @change="updateTaskStatus(task, task.status)"
-                @click.stop
-              />
-            <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
-            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
-            <div v-if="task.recurrence" class="recurrence-badge">
-              <i class="pi pi-refresh"></i>
-              {{ getRecurrenceLabelFromDays(task.recurrence) }}
-            </div>
-          </template>
-        </Card>
-      </div>
+      <div class="employee-name">{{ emp.employee_name }}</div>
+      <div class="employee-role">{{ emp.role }}</div>
     </div>
+  </div>
+</div>
+</div>
 
-    <!-- Medium Priority Tasks -->
-    <div v-if="tasksByPriority.medium.length > 0" class="priority-section">
-      <div class="priority-header medium-priority">
-        <i class="pi pi-clock"></i>
-        <span>Medium Priority (Range 5 - 7)</span>
-        <span class="task-count">{{ tasksByPriority.medium.length }}</span>
-      </div>
-      <div class="tasks-grid">
-        <Card v-for="task in tasksByPriority.medium" :key="task.id" class="task-card" :class="{'task-overdue': isOverdue(task)}" @click="openDetails(task)">
-          <template #title>
-            <div class="task-title-row">
-              <span>{{ task.name }}</span>
-            </div>
-          </template>
-          <template #content>
-            <p class="desc">{{ task.description }}</p>
-            <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
-            <p class="meta">📅 {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
-            <Dropdown
-                v-if="isOwnerOrCollaborator(task)"
-                v-model="task.status"
-                :options="getStatusOptionsForTask(task)"
-                optionLabel="label"
-                optionValue="value"
-                class="status-pill-dropdown"
-                :class="getStatusClass(task.status)"
-                @change="updateTaskStatus(task, task.status)"
-                @click.stop
-              />
-            <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
-            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
-            <div v-if="task.recurrence" class="recurrence-badge">
-              <i class="pi pi-refresh"></i>
-              {{ getRecurrenceLabelFromDays(task.recurrence) }}
-            </div>
-          </template>
-        </Card>
-      </div>
+<div v-if="currentTab !== 'report'" class="tasks-container">
+  <!-- High Priority Tasks -->
+  <div v-if="tasksByPriority.high.length > 0" class="priority-section">
+    <div class="priority-header high-priority">
+      <i class="pi pi-exclamation-triangle"></i>
+      <span>High Priority (Range 8 - 10)</span>
+      <span class="task-count">{{ tasksByPriority.high.length }}</span>
     </div>
-
-    <!-- Low Priority Tasks -->
-    <div v-if="tasksByPriority.low.length > 0" class="priority-section">
-      <div class="priority-header low-priority">
-        <i class="pi pi-check-circle"></i>
-        <span>Low Priority (Range 1 - 4)</span>
-        <span class="task-count">{{ tasksByPriority.low.length }}</span>
-      </div>
-      <div class="tasks-grid">
-        <Card v-for="task in tasksByPriority.low" :key="task.id" class="task-card" :class="{ 'task-overdue': isOverdue(task) }" @click="openDetails(task)">
-          <template #title>
-            <div class="task-title-row">
-              <span>{{ task.name }}</span>
-            </div>
-          </template>
-          <template #content>
-            <p class="desc">{{ task.description }}</p>
-            <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
-            <p class="meta">📅 {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
-            <Dropdown
-                v-if="isOwnerOrCollaborator(task)"
-                v-model="task.status"
-                :options="getStatusOptionsForTask(task)"
-                optionLabel="label"
-                optionValue="value"
-                class="status-pill-dropdown"
-                :class="getStatusClass(task.status)"
-                @change="updateTaskStatus(task, task.status)"
-                @click.stop
-              />
-            <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
-            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
-            <div v-if="task.recurrence" class="recurrence-badge">
-              <i class="pi pi-refresh"></i>
-              {{ getRecurrenceLabelFromDays(task.recurrence) }}
-            </div>
-          </template>
-        </Card>
-      </div>
-    </div>
-
-    <!-- No tasks message -->
-    <div v-if="shouldShowNoTasksMessage" class="no-tasks">
-      <i class="pi pi-inbox"></i>
-      <p>No tasks found</p>
+    <div class="tasks-grid">
+      <Card v-for="task in tasksByPriority.high" :key="task.id" class="task-card"
+        :class="{'task-overdue': isOverdue(task)}" @click="openDetails(task) ">
+        <template #title>
+          <div class="task-title-row">
+            <span>{{ task.name }}</span>
+          </div>
+        </template>
+        <template #content>
+          <p class="desc">{{ task.description }}</p>
+          <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
+          <p class="meta">📅 {{ formatDate(task.due_date) }} <span class="relative-time">({{
+              formatDateRelative(task.due_date) }})</span></p>
+          <Dropdown v-if="isOwnerOrCollaborator(task)" v-model="task.status" :options="getStatusOptionsForTask(task)"
+            optionLabel="label" optionValue="value" class="status-pill-dropdown" :class="getStatusClass(task.status)"
+            @change="updateTaskStatus(task, task.status)" @click.stop />
+          <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
+          <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
+          <div v-if="task.recurrence" class="recurrence-badge">
+            <i class="pi pi-refresh"></i>
+            {{ getRecurrenceLabelFromDays(task.recurrence) }}
+          </div>
+        </template>
+      </Card>
     </div>
   </div>
 
-  <Dialog v-model:visible="showModal" modal 
-        :header="isEditing && !selectedTask ? 'New Task' : (isEditing ? 'Edit Task' : 'Task Details')" 
-        class="clean-modal">
-    <form @submit.prevent="() => {}">
-      <div class="modal-content">
+  <!-- Medium Priority Tasks -->
+  <div v-if="tasksByPriority.medium.length > 0" class="priority-section">
+    <div class="priority-header medium-priority">
+      <i class="pi pi-clock"></i>
+      <span>Medium Priority (Range 5 - 7)</span>
+      <span class="task-count">{{ tasksByPriority.medium.length }}</span>
+    </div>
+    <div class="tasks-grid">
+      <Card v-for="task in tasksByPriority.medium" :key="task.id" class="task-card"
+        :class="{'task-overdue': isOverdue(task)}" @click="openDetails(task)">
+        <template #title>
+          <div class="task-title-row">
+            <span>{{ task.name }}</span>
+          </div>
+        </template>
+        <template #content>
+          <p class="desc">{{ task.description }}</p>
+          <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
+          <p class="meta">📅 {{ formatDate(task.due_date) }} <span class="relative-time">({{
+              formatDateRelative(task.due_date) }})</span></p>
+          <Dropdown v-if="isOwnerOrCollaborator(task)" v-model="task.status" :options="getStatusOptionsForTask(task)"
+            optionLabel="label" optionValue="value" class="status-pill-dropdown" :class="getStatusClass(task.status)"
+            @change="updateTaskStatus(task, task.status)" @click.stop />
+          <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
+          <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
+          <div v-if="task.recurrence" class="recurrence-badge">
+            <i class="pi pi-refresh"></i>
+            {{ getRecurrenceLabelFromDays(task.recurrence) }}
+          </div>
+        </template>
+      </Card>
+    </div>
+  </div>
+
+  <!-- Low Priority Tasks -->
+  <div v-if="tasksByPriority.low.length > 0" class="priority-section">
+    <div class="priority-header low-priority">
+      <i class="pi pi-check-circle"></i>
+      <span>Low Priority (Range 1 - 4)</span>
+      <span class="task-count">{{ tasksByPriority.low.length }}</span>
+    </div>
+    <div class="tasks-grid">
+      <Card v-for="task in tasksByPriority.low" :key="task.id" class="task-card"
+        :class="{ 'task-overdue': isOverdue(task) }" @click="openDetails(task)">
+        <template #title>
+          <div class="task-title-row">
+            <span>{{ task.name }}</span>
+          </div>
+        </template>
+        <template #content>
+          <p class="desc">{{ task.description }}</p>
+          <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
+          <p class="meta">📅 {{ formatDate(task.due_date) }} <span class="relative-time">({{
+              formatDateRelative(task.due_date) }})</span></p>
+          <Dropdown v-if="isOwnerOrCollaborator(task)" v-model="task.status" :options="getStatusOptionsForTask(task)"
+            optionLabel="label" optionValue="value" class="status-pill-dropdown" :class="getStatusClass(task.status)"
+            @change="updateTaskStatus(task, task.status)" @click.stop />
+          <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
+          <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
+          <div v-if="task.recurrence" class="recurrence-badge">
+            <i class="pi pi-refresh"></i>
+            {{ getRecurrenceLabelFromDays(task.recurrence) }}
+          </div>
+        </template>
+      </Card>
+    </div>
+  </div>
+
+  <!-- No tasks message -->
+  <div v-if="shouldShowNoTasksMessage" class="no-tasks">
+    <i class="pi pi-inbox"></i>
+    <p>No tasks found</p>
+  </div>
+</div>
+<!-- No tasks message -->
+<div v-if="shouldShowNoTasksMessage" class="no-tasks">
+  <i class="pi pi-inbox"></i>
+  <p>No tasks found</p>
+</div>
+
+
+<Dialog v-model:visible="showModal" modal
+  :header="isEditing && !selectedTask ? 'New Task' : (isEditing ? 'Edit Task' : 'Task Details')" class="clean-modal">
+  <form @submit.prevent="() => {}">
+    <div class="modal-content">
       <!-- Basic Information Section -->
       <div class="form-section">
         <h3 class="section-title">Basic Information</h3>
-        
+
         <!-- Validation Error Summary (Parent Task Only) -->
-        <div v-if="showValidationErrors && Object.keys(formErrors).some(key => !key.startsWith('subtask_'))" class="validation-summary">
+        <div v-if="showValidationErrors && Object.keys(formErrors).some(key => !key.startsWith('subtask_'))"
+          class="validation-summary">
           <div class="validation-icon">⚠️</div>
           <div class="validation-content">
             <h4>{{ formErrors.backend ? 'Error' : 'Please fill in the following fields:' }}</h4>
@@ -306,32 +510,28 @@
             </ul>
           </div>
         </div>
-        
+
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Task Name *</label>
             <template v-if="isEditing || !selectedTask">
-              <InputText 
-                v-model="taskForm.name" 
-                :class="['form-input', { 'error': getFieldError('name') }]"
-                :disabled="!canEdit(selectedTask)" 
-                placeholder="Enter task name" 
-                data-field="name"
-              />
+              <InputText v-model="taskForm.name" :class="['form-input', { 'error': getFieldError('name') }]"
+                :disabled="!canEdit(selectedTask)" placeholder="Enter task name" data-field="name" />
               <div v-if="getFieldError('name')" class="field-error">{{ getFieldError('name') }}</div>
             </template>
             <template v-else>
               <div class="form-display">{{ taskForm.name }}</div>
             </template>
           </div>
-        </div> 
+        </div>
 
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Description *</label>
             <template v-if="isEditing || !selectedTask">
-              <Textarea 
-                v-model="taskForm.description" rows="3" :class="['form-input', { 'error': getFieldError('description') }]" :disabled="!canEdit(selectedTask)" placeholder="Enter task description" data-field="description"/>
+              <Textarea v-model="taskForm.description" rows="3"
+                :class="['form-input', { 'error': getFieldError('description') }]" :disabled="!canEdit(selectedTask)"
+                placeholder="Enter task description" data-field="description" />
               <div v-if="getFieldError('description')" class="field-error">{{ getFieldError('description') }}</div>
             </template>
             <template v-else>
@@ -344,29 +544,33 @@
           <div class="form-group">
             <label class="form-label">Due Date *</label>
             <template v-if="isEditing || !selectedTask">
-              <input 
-                type="datetime-local" v-model="taskForm.due_date" :min="minDate" :class="['form-input', { 'error': getFieldError('due_date') }]" :disabled="!canEdit(selectedTask)" data-field="due_date" />
+              <input type="datetime-local" v-model="taskForm.due_date" :min="minDate"
+                :class="['form-input', { 'error': getFieldError('due_date') }]" :disabled="!canEdit(selectedTask)"
+                data-field="due_date" />
               <div v-if="getFieldError('due_date')" class="field-error">{{ getFieldError('due_date') }}</div>
             </template>
             <template v-else>
               <div class="form-display">{{ formatDate(taskForm.due_date) }}</div>
             </template>
           </div>
-          
+
           <div class="form-group">
             <label class="form-label">Status</label>
-            <div class="form-display status-display" :class="getStatusClass(taskForm.status)">{{ taskForm.status }}</div>
+            <div class="form-display status-display" :class="getStatusClass(taskForm.status)">{{ taskForm.status }}
+            </div>
           </div>
-          
+
           <div class="form-group">
             <label class="form-label">Priority *</label>
             <template v-if="isEditing || !selectedTask">
-              <Dropdown 
-                v-model="taskForm.priority" :options="priorityOptions" optionLabel="label" optionValue="value" :class="['form-input', { 'error': getFieldError('priority') }]" :disabled="!canEdit(selectedTask)" placeholder="Select priority..." data-field="priority" />
+              <Dropdown v-model="taskForm.priority" :options="priorityOptions" optionLabel="label" optionValue="value"
+                :class="['form-input', { 'error': getFieldError('priority') }]" :disabled="!canEdit(selectedTask)"
+                placeholder="Select priority..." data-field="priority" />
               <div v-if="getFieldError('priority')" class="field-error">{{ getFieldError('priority') }}</div>
             </template>
             <template v-else>
-              <div class="form-display priority-display" :class="getPriorityClass(taskForm.priority)">P{{ taskForm.priority }}</div>
+              <div class="form-display priority-display" :class="getPriorityClass(taskForm.priority)">P{{
+                taskForm.priority }}</div>
             </template>
           </div>
         </div>
@@ -375,7 +579,8 @@
           <div class="form-group">
             <label class="form-label">Project</label>
             <template v-if="isEditing || !selectedTask">
-              <Dropdown v-model="taskForm.project_id" :options="projectOptions" optionLabel="label" optionValue="value" class="form-input" placeholder="Select project" />
+              <Dropdown v-model="taskForm.project_id" :options="projectOptions" optionLabel="label" optionValue="value"
+                class="form-input" placeholder="Select project" />
             </template>
             <template v-else>
               <div class="form-display">{{ getProjectLabelById(taskForm.project_id) }}</div>
@@ -388,26 +593,15 @@
             <label class="form-label">Recurrence</label>
             <template v-if="isEditing || !selectedTask">
               <div class="recurrence-fields">
-                <Dropdown 
-                  v-model="taskForm.recurrence_unit" 
-                  :options="recurrenceUnitOptions" 
-                  optionLabel="label" 
-                  optionValue="value" 
-                  class="form-input recurrence-unit"
-                  placeholder="Select recurrence type..." 
-                  data-field="recurrence_unit"
-                />
-                <InputText 
-                  v-if="taskForm.recurrence_unit && taskForm.recurrence_unit !== 'none'"
-                  v-model.number="taskForm.recurrence_frequency" 
-                  type="number"
-                  min="1"
-                  class="form-input recurrence-frequency"
-                  placeholder="Frequency"
-                  data-field="recurrence_frequency"
-                />
+                <Dropdown v-model="taskForm.recurrence_unit" :options="recurrenceUnitOptions" optionLabel="label"
+                  optionValue="value" class="form-input recurrence-unit" placeholder="Select recurrence type..."
+                  data-field="recurrence_unit" />
+                <InputText v-if="taskForm.recurrence_unit && taskForm.recurrence_unit !== 'none'"
+                  v-model.number="taskForm.recurrence_frequency" type="number" min="1"
+                  class="form-input recurrence-frequency" placeholder="Frequency" data-field="recurrence_frequency" />
               </div>
-              <div v-if="getFieldError('recurrence_frequency')" class="field-error">{{ getFieldError('recurrence_frequency') }}</div>
+              <div v-if="getFieldError('recurrence_frequency')" class="field-error">{{
+                getFieldError('recurrence_frequency') }}</div>
             </template>
             <template v-else>
               <div class="form-display">
@@ -427,22 +621,18 @@
         <h3 class="section-title">
           Task Assignment
         </h3>
-        
+
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Owner</label>
             <div v-if="canAssignTasks() && isEditing && selectedTask" class="assignment-notice">
-              <label>You are assigning this task to a team member. The selected person will become the new owner.</label>
+              <label>You are assigning this task to a team member. The selected person will become the new
+                owner.</label>
             </div>
             <template v-if="canAssignTasks() && isEditing && selectedTask">
-              <Dropdown
-                v-model="taskForm.owner" :options="ownerAssignmentList"
-                optionLabel="display_label" optionValue="employee_id" 
-                class="form-input assignment-dropdown" 
-                :disabled="!canEdit(selectedTask)" 
-                placeholder="Select new owner..." 
-                data-field="owner" 
-                filter 
+              <Dropdown v-model="taskForm.owner" :options="ownerAssignmentList" optionLabel="display_label"
+                optionValue="employee_id" class="form-input assignment-dropdown" :disabled="!canEdit(selectedTask)"
+                placeholder="Select new owner..." data-field="owner" filter
                 filterBy="display_label,employee_name,role,team,department" />
             </template>
             <template v-else>
@@ -455,10 +645,11 @@
           <div class="form-group">
             <label class="form-label">Collaborators</label>
             <template v-if="isEditing || !selectedTask">
-              <MultiSelect
-                v-model="taskForm.collaborators"
+              <MultiSelect v-model="taskForm.collaborators"
                 :options="employeeDisplayList.filter(emp => emp.employee_id !== taskForm.owner)"
-                optionLabel="display_label" optionValue="employee_id" class="form-input" :disabled="!canEdit(selectedTask)" placeholder="Select collaborators..." filter filterBy="display_label,employee_name,role,team,department" />
+                optionLabel="display_label" optionValue="employee_id" class="form-input"
+                :disabled="!canEdit(selectedTask)" placeholder="Select collaborators..." filter
+                filterBy="display_label,employee_name,role,team,department" />
             </template>
             <template v-else>
               <div class="form-display">{{ getCollaboratorNames(taskForm.collaborators) || 'None' }}</div>
@@ -470,22 +661,13 @@
       <!-- Attachments Section -->
       <div class="form-section">
         <h3 class="section-title">Attachments</h3>
-        
+
         <div class="form-row">
           <div class="form-group">
             <template v-if="isEditing || !selectedTask">
-              <FileUpload 
-                ref="fileUploadRef"
-                mode="basic" 
-                accept=".pdf" 
-                :multiple="true"
-                chooseLabel="Upload" 
-                :auto="false" 
-                :customUpload="true" 
-                @select="handleMainTaskAttachment"
-                :disabled="selectedTask && isCollaboratorOnly(selectedTask)" 
-                class="file-upload"
-              />
+              <FileUpload ref="fileUploadRef" mode="basic" accept=".pdf" :multiple="true" chooseLabel="Upload"
+                :auto="false" :customUpload="true" @select="handleMainTaskAttachment"
+                :disabled="selectedTask && isCollaboratorOnly(selectedTask)" class="file-upload" />
               <div v-if="taskForm.attachments.length > 0" class="file-list">
                 <div v-for="(file, index) in taskForm.attachments" :key="index" class="file-item">
                   <a v-if="file.url" :href="file.url" target="_blank" class="file-link">
@@ -494,7 +676,8 @@
                   <span v-else class="file-name pending-upload">
                     <i class="pi pi-clock"></i> {{ file.name }} <small>(uploading...)</small>
                   </span>
-                  <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove" @click="removeMainTaskAttachment(index)" v-if="isEditing || !selectedTask"/>
+                  <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove"
+                    @click="removeMainTaskAttachment(index)" v-if="isEditing || !selectedTask" />
                 </div>
               </div>
             </template>
@@ -515,9 +698,9 @@
       <!-- Comments Section -->
       <div class="form-section">
         <h3 class="section-title">Comments</h3>
-        
+
         <div v-if="commentError" class="comment-error">{{ commentError }}</div>
-        
+
         <div class="comments-list" v-if="comments.length > 0">
           <div class="comment-item" v-for="c in comments" :key="c.id">
             <div class="comment-content">
@@ -535,15 +718,19 @@
               <div v-else class="comment-text">
                 {{ c.content }}
                 <div v-if="(c.attachments || []).length" class="comment-attachments">
-                  <a v-for="a in c.attachments" :key="a.id || a.filename" :href="`http://localhost:5002${a.url || '/attachments/' + a.filename}`" target="_blank" rel="noopener" class="attachment-link">
+                  <a v-for="a in c.attachments" :key="a.id || a.filename"
+                    :href="`http://localhost:5002${a.url || '/attachments/' + a.filename}`" target="_blank"
+                    rel="noopener" class="attachment-link">
                     {{ a.original_name || a.filename }}
                   </a>
                 </div>
               </div>
             </div>
-            <div class="comment-ops" v-if="(isOwnerOrCollaborator(selectedTask) || (sessionStorage.getItem('role') || '').toLowerCase() !== 'staff') && isEditing">
+            <div class="comment-ops"
+              v-if="(isOwnerOrCollaborator(selectedTask) || (sessionStorage.getItem('role') || '').toLowerCase() !== 'staff') && isEditing">
               <Button label="Edit" type="button" class="p-button-text p-button-sm" @click="startEditComment(c)" />
-              <Button label="Delete" type="button" class="p-button-danger p-button-text p-button-sm" @click="deleteComment(c.id)" />
+              <Button label="Delete" type="button" class="p-button-danger p-button-text p-button-sm"
+                @click="deleteComment(c.id)" />
             </div>
           </div>
         </div>
@@ -551,20 +738,12 @@
 
         <div class="comment-new">
           <div class="comment-input-wrapper">
-            <Textarea 
-              v-model="newComment" 
-              rows="2" 
-              class="form-input" 
-              placeholder="Write a comment..."
-              @input="onCommentInput"
-              @keydown.down.prevent="moveMentionSelection(1)"
-              @keydown.up.prevent="moveMentionSelection(-1)"
-              @keydown.enter.prevent="handleCommentEnter"
+            <Textarea v-model="newComment" rows="2" class="form-input" placeholder="Write a comment..."
+              @input="onCommentInput" @keydown.down.prevent="moveMentionSelection(1)"
+              @keydown.up.prevent="moveMentionSelection(-1)" @keydown.enter.prevent="handleCommentEnter"
               @blur="hideMentionList" />
             <div v-if="showMentionList && filteredMentionable.length > 0" class="mention-list">
-              <div 
-                v-for="(u, idx) in filteredMentionable" 
-                :key="u.employee_id" 
+              <div v-for="(u, idx) in filteredMentionable" :key="u.employee_id"
                 :class="['mention-item', idx === mentionHighlighted ? 'active' : '']"
                 @mousedown.prevent="insertMention(u)">
                 <span class="mention-name">{{ u.employee_name }}</span>
@@ -572,29 +751,20 @@
               </div>
             </div>
           </div>
-          <FileUpload
-            mode="basic"
-            name="attachment"
-            url="http://localhost:5002/upload-attachment"
-            :withCredentials="true"
-            :auto="true"
-            multiple
-            accept=".pdf,.png,.jpg,.jpeg"
-            :maxFileSize="16777216"
-            :showUploadButton="false"
-            :showCancelButton="false"
-            chooseLabel="Attach File"
-            @upload="onCommentFileUploaded"
-            class="comment-file-upload"
-          />
+          <FileUpload mode="basic" name="attachment" url="http://localhost:5002/upload-attachment"
+            :withCredentials="true" :auto="true" multiple accept=".pdf,.png,.jpg,.jpeg" :maxFileSize="16777216"
+            :showUploadButton="false" :showCancelButton="false" chooseLabel="Attach File"
+            @upload="onCommentFileUploaded" class="comment-file-upload" />
           <div class="attached-files" v-if="newCommentAttachments.length">
             <div v-for="(f, i) in newCommentAttachments" :key="i" class="attached-file">
               <span>{{ f.original_name || f.filename }}</span>
-              <Button type="button" class="p-button-danger p-button-text p-button-sm" @click="removeNewAttachment(i)">Remove</Button>
+              <Button type="button" class="p-button-danger p-button-text p-button-sm"
+                @click="removeNewAttachment(i)">Remove</Button>
             </div>
           </div>
           <div class="comment-actions">
-            <Button label="Add Comment" type="button" @click="addComment" :disabled="!newComment.trim()" class="add-comment-btn" />
+            <Button label="Add Comment" type="button" @click="addComment" :disabled="!newComment.trim()"
+              class="add-comment-btn" />
           </div>
         </div>
       </div>
@@ -603,35 +773,29 @@
       <div class="form-section">
         <div class="subtasks-header">
           <h3 class="section-title">Subtasks</h3>
-          <Button 
-            v-if="isEditing || !selectedTask" 
-            icon="pi pi-plus" 
-            label="Add Subtask" 
-            class="add-subtask-btn" 
-            @click="toggleSubtaskForm"
-          />
+          <Button v-if="isEditing || !selectedTask" icon="pi pi-plus" label="Add Subtask" class="add-subtask-btn"
+            @click="toggleSubtaskForm" />
         </div>
-        
+
         <!-- Progress Bar -->
         <div v-if="subtasks.length > 0" class="subtask-progress">
           <div class="progress-header">
             <span class="progress-title">Progress</span>
-            <span class="progress-stats">{{ subtaskProgress.completed }}/{{ subtaskProgress.total }} completed</span>
+            <span class="progress-stats">{{ subtaskProgress.completed }}/{{ subtaskProgress.total }}
+              completed</span>
           </div>
           <div class="progress-bar-container">
             <div class="progress-bar">
-              <div 
-                class="progress-fill" 
-                :style="{ width: subtaskProgress.percentage + '%' }"
-              ></div>
+              <div class="progress-fill" :style="{ width: subtaskProgress.percentage + '%' }"></div>
             </div>
             <span class="progress-percentage">{{ subtaskProgress.percentage }}%</span>
           </div>
         </div>
-        
+
         <!-- Subtask Form -->
         <div v-if="showSubtaskForm && (isEditing || !selectedTask)" class="subtask-form">
-          <div v-if="showValidationErrors && Object.keys(formErrors).some(key => key.startsWith('subtask_'))" class="validation-summary">
+          <div v-if="showValidationErrors && Object.keys(formErrors).some(key => key.startsWith('subtask_'))"
+            class="validation-summary">
             <div class="validation-icon">⚠️</div>
             <div class="validation-content">
               <h4>Please fill in the following fields:</h4>
@@ -642,73 +806,79 @@
               </ul>
             </div>
           </div>
-          
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Subtask Name *</label>
-              <InputText v-model="newSubtask.name" placeholder="Enter subtask name" :class="['form-input', { 'error': getFieldError('subtask_name') }]" data-field="subtask_name" />
-              <div v-if="getFieldError('subtask_name')" class="field-error">{{ getFieldError('subtask_name') }}</div>
+              <InputText v-model="newSubtask.name" placeholder="Enter subtask name"
+                :class="['form-input', { 'error': getFieldError('subtask_name') }]" data-field="subtask_name" />
+              <div v-if="getFieldError('subtask_name')" class="field-error">{{ getFieldError('subtask_name') }}
+              </div>
             </div>
           </div>
-          
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Description *</label>
-              <Textarea v-model="newSubtask.description" placeholder="Enter description" rows="2" :class="['form-input', { 'error': getFieldError('subtask_description') }]" data-field="subtask_description" />
-              <div v-if="getFieldError('subtask_description')" class="field-error">{{ getFieldError('subtask_description') }}</div>
+              <Textarea v-model="newSubtask.description" placeholder="Enter description" rows="2"
+                :class="['form-input', { 'error': getFieldError('subtask_description') }]"
+                data-field="subtask_description" />
+              <div v-if="getFieldError('subtask_description')" class="field-error">{{
+                getFieldError('subtask_description') }}</div>
             </div>
           </div>
-          
+
           <div class="form-row form-row-3">
             <div class="form-group">
               <label class="form-label">Due Date *</label>
-              <input type="datetime-local" v-model="newSubtask.due_date" :min="subtaskMinDate" :max="subtaskMaxDate" :class="['form-input', { 'error': getFieldError('subtask_due_date') }]" data-field="subtask_due_date" />
-              <div v-if="getFieldError('subtask_due_date')" class="field-error">{{ getFieldError('subtask_due_date') }}</div>
+              <input type="datetime-local" v-model="newSubtask.due_date" :min="subtaskMinDate" :max="subtaskMaxDate"
+                :class="['form-input', { 'error': getFieldError('subtask_due_date') }]" data-field="subtask_due_date" />
+              <div v-if="getFieldError('subtask_due_date')" class="field-error">{{ getFieldError('subtask_due_date')
+                }}</div>
             </div>
             <div class="form-group">
               <label class="form-label">Status</label>
-              <div class="form-display status-display" :class="getStatusClass(newSubtask.status)">{{ newSubtask.status }}</div>
+              <div class="form-display status-display" :class="getStatusClass(newSubtask.status)">{{
+                newSubtask.status }}</div>
             </div>
             <div class="form-group">
               <label class="form-label">Priority *</label>
-              <Dropdown v-model="newSubtask.priority" :options="priorityOptions" optionLabel="label" optionValue="value" :class="['form-input', { 'error': getFieldError('subtask_priority') }]" data-field="subtask_priority" placeholder="Select priority..." />
-              <div v-if="getFieldError('subtask_priority')" class="field-error">{{ getFieldError('subtask_priority') }}</div>
+              <Dropdown v-model="newSubtask.priority" :options="priorityOptions" optionLabel="label" optionValue="value"
+                :class="['form-input', { 'error': getFieldError('subtask_priority') }]" data-field="subtask_priority"
+                placeholder="Select priority..." />
+              <div v-if="getFieldError('subtask_priority')" class="field-error">{{ getFieldError('subtask_priority')
+                }}</div>
             </div>
           </div>
-          
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Assign to *</label>
-              <Dropdown
-                v-model="newSubtask.owner" :options="subtaskOwnerList"
-                optionLabel="display_label" optionValue="employee_id" :class="['form-input', { 'error': getFieldError('subtask_owner') }]" :disabled="!canEdit(selectedTask)" placeholder="Select owner..." data-field="subtask_owner" filter filterBy="display_label,employee_name,role,team,department" />
-              <div v-if="getFieldError('subtask_owner')" class="field-error">{{ getFieldError('subtask_owner') }}</div>
+              <Dropdown v-model="newSubtask.owner" :options="subtaskOwnerList" optionLabel="display_label"
+                optionValue="employee_id" :class="['form-input', { 'error': getFieldError('subtask_owner') }]"
+                :disabled="!canEdit(selectedTask)" placeholder="Select owner..." data-field="subtask_owner" filter
+                filterBy="display_label,employee_name,role,team,department" />
+              <div v-if="getFieldError('subtask_owner')" class="field-error">{{ getFieldError('subtask_owner') }}
+              </div>
             </div>
           </div>
-          
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Collaborators</label>
-              <MultiSelect
-                v-model="newSubtask.collaborators"
-                :options="subtaskOwnerList.filter(emp => emp.employee_id !== newSubtask.owner)" optionLabel="display_label" optionValue="employee_id" class="form-input" :disabled="!canEdit(selectedTask)" placeholder="Select collaborators..." filter filterBy="display_label,employee_name,role,team,department" />
+              <MultiSelect v-model="newSubtask.collaborators"
+                :options="subtaskOwnerList.filter(emp => emp.employee_id !== newSubtask.owner)"
+                optionLabel="display_label" optionValue="employee_id" class="form-input"
+                :disabled="!canEdit(selectedTask)" placeholder="Select collaborators..." filter
+                filterBy="display_label,employee_name,role,team,department" />
             </div>
           </div>
-          
+
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Attachments</label>
-              <FileUpload 
-                ref="subtaskFileUploadRef"
-                mode="basic" 
-                accept=".pdf" 
-                :multiple="true"
-                chooseLabel="Upload" 
-                :auto="false" 
-                :customUpload="true" 
-                @select="handleSubtaskAttachment"
-                class="file-upload"
-              />
+              <FileUpload ref="subtaskFileUploadRef" mode="basic" accept=".pdf" :multiple="true" chooseLabel="Upload"
+                :auto="false" :customUpload="true" @select="handleSubtaskAttachment" class="file-upload" />
               <div v-if="newSubtask.attachments.length > 0" class="file-list">
                 <div v-for="(file, index) in newSubtask.attachments" :key="index" class="file-item">
                   <a v-if="file.url" :href="file.url" target="_blank" class="file-link">
@@ -717,12 +887,13 @@
                   <span v-else class="file-name pending-upload">
                     <i class="pi pi-clock"></i> {{ file.name }} <small>(uploading...)</small>
                   </span>
-                  <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove" @click="removeSubtaskAttachment(index)" />
+                  <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove"
+                    @click="removeSubtaskAttachment(index)" />
                 </div>
               </div>
             </div>
           </div>
-          
+
           <div class="subtask-form-actions">
             <Button label="Add Subtask" type="button" @click="addSubtask" class="add-subtask-confirm-btn" />
             <Button label="Cancel" type="button" @click="toggleSubtaskForm" class="p-button-text cancel-subtask-btn" />
@@ -742,57 +913,60 @@
                       <InputText v-model="subtask.name" placeholder="Enter subtask name" class="form-input" />
                     </div>
                   </div>
-                  
+
                   <div class="form-row">
                     <div class="form-group">
                       <label class="form-label">Description *</label>
-                      <Textarea v-model="subtask.description" placeholder="Enter description" rows="2" class="form-input" />
+                      <Textarea v-model="subtask.description" placeholder="Enter description" rows="2"
+                        class="form-input" />
                     </div>
                   </div>
-                  
+
                   <div class="form-row form-row-3">
                     <div class="form-group">
                       <label class="form-label">Due Date *</label>
-                      <input type="datetime-local" v-model="subtask.due_date" :min="subtaskMinDate" :max="subtaskMaxDate" class="form-input" />
+                      <input type="datetime-local" v-model="subtask.due_date" :min="subtaskMinDate"
+                        :max="subtaskMaxDate" class="form-input" />
                     </div>
                     <div class="form-group">
                       <label class="form-label">Status</label>
-                      <div class="form-display status-display" :class="getStatusClass(subtask.status)">{{ subtask.status }}</div>
+                      <div class="form-display status-display" :class="getStatusClass(subtask.status)">{{
+                        subtask.status
+                        }}</div>
                     </div>
                     <div class="form-group">
                       <label class="form-label">Priority *</label>
-                      <Dropdown v-model="subtask.priority" :options="priorityOptions" optionLabel="label" optionValue="value" class="form-input" />
+                      <Dropdown v-model="subtask.priority" :options="priorityOptions" optionLabel="label"
+                        optionValue="value" class="form-input" />
                     </div>
                   </div>
-                  
+
                   <div class="form-row">
                     <div class="form-group">
                       <label class="form-label">Assign to</label>
-                      <Dropdown v-model="subtask.owner" :options="subtaskOwnerList" optionLabel="display_label" optionValue="employee_id" class="form-input" placeholder="Select owner..." filter filterBy="display_label,employee_name,role,team,department" />
+                      <Dropdown v-model="subtask.owner" :options="subtaskOwnerList" optionLabel="display_label"
+                        optionValue="employee_id" class="form-input" placeholder="Select owner..." filter
+                        filterBy="display_label,employee_name,role,team,department" />
                     </div>
                   </div>
-                  
+
                   <div class="form-row">
                     <div class="form-group">
                       <label class="form-label">Collaborators</label>
-                      <MultiSelect v-model="subtask.collaborators" :options="subtaskOwnerList.filter(emp => emp.employee_id !== subtask.owner)" optionLabel="display_label" optionValue="employee_id" class="form-input" placeholder="Select collaborators..." filter filterBy="display_label,employee_name,role,team,department" />
+                      <MultiSelect v-model="subtask.collaborators"
+                        :options="subtaskOwnerList.filter(emp => emp.employee_id !== subtask.owner)"
+                        optionLabel="display_label" optionValue="employee_id" class="form-input"
+                        placeholder="Select collaborators..." filter
+                        filterBy="display_label,employee_name,role,team,department" />
                     </div>
                   </div>
-                  
+
                   <div class="form-row">
                     <div class="form-group">
                       <label class="form-label">Attachments</label>
-                      <FileUpload 
-                        ref="subtaskEditFileUploadRef"
-                        mode="basic" 
-                        accept=".pdf" 
-                        :multiple="true"
-                        chooseLabel="Upload" 
-                        :auto="false" 
-                        :customUpload="true" 
-                        @select="handleSubtaskEditAttachment"
-                        class="file-upload"
-                      />
+                      <FileUpload ref="subtaskEditFileUploadRef" mode="basic" accept=".pdf" :multiple="true"
+                        chooseLabel="Upload" :auto="false" :customUpload="true" @select="handleSubtaskEditAttachment"
+                        class="file-upload" />
                       <div v-if="subtask.attachments && subtask.attachments.length > 0" class="file-list">
                         <div v-for="(file, index) in subtask.attachments" :key="index" class="file-item">
                           <a v-if="file.url" :href="file.url" target="_blank" class="file-link">
@@ -801,66 +975,67 @@
                           <span v-else class="file-name pending-upload">
                             <i class="pi pi-clock"></i> {{ file.name }} <small>(uploading...)</small>
                           </span>
-                          <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove" @click="removeSubtaskEditAttachment(index)" />
+                          <Button icon="pi pi-times" class="p-button-danger p-button-text p-button-sm file-remove"
+                            @click="removeSubtaskEditAttachment(index)" />
                         </div>
                       </div>
                     </div>
                   </div>
-                  
+
                   <div class="subtask-edit-actions">
                     <Button label="Save" @click="saveEditingSubtask(subtask)" class="p-button-sm" />
                     <Button label="Cancel" @click="cancelEditingSubtask" class="p-button-text p-button-sm" />
                   </div>
                 </div>
               </template>
-              
+
               <!-- View Mode -->
               <template v-else>
                 <div class="subtask-header">
                   <h4 class="subtask-title">{{ subtask.name }}</h4>
                   <div class="subtask-meta">
-                    <Dropdown 
-                      v-model="subtask.status" :options="getStatusOptionsForSubtask(subtask)" optionLabel="label" 
-                      optionValue="value" 
-                      class="subtask-status-dropdown"
-                      :class="getStatusClass(subtask.status)"
-                      @change="updateSubtaskStatus(subtask, subtask.status)"
-                      @click.stop
-                    />
-                    <span class="priority-badge" :class="getPriorityClass(subtask.priority)">P{{ subtask.priority }}</span>
+                    <Dropdown v-model="subtask.status" :options="getStatusOptionsForSubtask(subtask)"
+                      optionLabel="label" optionValue="value" class="subtask-status-dropdown"
+                      :class="getStatusClass(subtask.status)" @change="updateSubtaskStatus(subtask, subtask.status)"
+                      @click.stop />
+                    <span class="priority-badge" :class="getPriorityClass(subtask.priority)">P{{ subtask.priority
+                      }}</span>
                   </div>
                 </div>
                 <p v-if="subtask.description" class="subtask-description">{{ subtask.description }}</p>
                 <div class="subtask-details">
                   <div class="subtask-meta-row">
-                    <span v-if="subtask.due_date" class="subtask-due">📅 {{ formatDate(subtask.due_date) }} <span class="relative-time">({{ formatDateRelative(subtask.due_date) }})</span></span>
+                    <span v-if="subtask.due_date" class="subtask-due">📅 {{ formatDate(subtask.due_date) }} <span
+                        class="relative-time">({{ formatDateRelative(subtask.due_date) }})</span></span>
                     <span class="subtask-owner">👤 {{ getOwnerName(subtask.owner) }}</span>
                     <span v-if="subtask.collaborators && subtask.collaborators.length > 0" class="subtask-collabs">
                       🤝 {{ getCollaboratorNames(subtask.collaborators) }}
                     </span>
                   </div>
-                  
+
                   <!-- Attachments on separate row but same size -->
                   <div v-if="subtask.attachments && subtask.attachments.length > 0" class="subtask-attachments-row">
                     <span class="subtask-attachments">
-                      <i class="pi pi-paperclip"></i> 
+                      <i class="pi pi-paperclip"></i>
                       <span v-for="(attachment, idx) in subtask.attachments" :key="idx">
-                        <a :href="attachment.url" target="_blank" class="subtask-attachment-link">{{ attachment.name }}</a>
+                        <a :href="attachment.url" target="_blank" class="subtask-attachment-link">{{ attachment.name
+                          }}</a>
                         <span v-if="idx < subtask.attachments.length - 1"> </span>
                       </span>
                     </span>
                   </div>
                 </div>
-                
+
                 <!-- Edit button for parent task owner -->
                 <div v-if="isEditing && canEdit(selectedTask)" class="subtask-actions">
-                  <Button label="Edit" icon="pi pi-pencil" @click="startEditingSubtask(subtask)" class="p-button-text p-button-sm" />
+                  <Button label="Edit" icon="pi pi-pencil" @click="startEditingSubtask(subtask)"
+                    class="p-button-text p-button-sm" />
                 </div>
               </template>
             </div>
           </div>
         </div>
-        
+
         <div v-else-if="!showSubtaskForm" class="no-subtasks">
           <span>No subtasks yet</span>
         </div>
@@ -870,9 +1045,10 @@
         <template v-if="selectedTask && !isEditing && canEdit(selectedTask)">
           <Button label="Edit" type="button" class="save-task-btn" @click="startEditing" />
         </template>
-        <Button label="Save" type="button" class="save-task-btn" @click="saveTask" v-if="isEditing || !selectedTask" :disabled="!canEdit(selectedTask)"/>
+        <Button label="Save" type="button" class="save-task-btn" @click="saveTask" v-if="isEditing || !selectedTask"
+          :disabled="!canEdit(selectedTask)" />
       </div>
 
     </div>
-    </form>
-  </Dialog>
+  </form>
+</Dialog>

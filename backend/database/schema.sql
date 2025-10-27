@@ -124,36 +124,41 @@ CREATE TABLE IF NOT EXISTS `notification_preferences` (
   CONSTRAINT `notification_preferences_ibfk_1` FOREIGN KEY (`staff_id`) REFERENCES `staff` (`employee_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- Create notifications table
+-- Create notifications table (matching SQLAlchemy model)
 CREATE TABLE IF NOT EXISTS `notifications` (
-  `id` int NOT NULL AUTO_INCREMENT,
+  `notification_id` varchar(36) NOT NULL,
   `staff_id` int NOT NULL,
-  `title` varchar(255) NOT NULL,
-  `message` text NOT NULL,
   `type` varchar(50) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `message` text,
+  `related_task_id` int DEFAULT NULL,
+  `related_project_id` int DEFAULT NULL,
+  `related_comment_id` int DEFAULT NULL,
   `is_read` tinyint(1) NOT NULL DEFAULT 0,
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `task_id` int DEFAULT NULL,
-  `project_id` int DEFAULT NULL,
-  PRIMARY KEY (`id`),
+  `created_at` datetime DEFAULT NULL,
+  `read_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`notification_id`),
   KEY `staff_id` (`staff_id`),
-  KEY `task_id` (`task_id`),
-  KEY `project_id` (`project_id`),
+  KEY `created_at` (`created_at`),
+  KEY `related_task_id` (`related_task_id`),
+  KEY `related_project_id` (`related_project_id`),
   CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`staff_id`) REFERENCES `staff` (`employee_id`) ON DELETE CASCADE,
-  CONSTRAINT `notifications_ibfk_2` FOREIGN KEY (`task_id`) REFERENCES `task` (`task_id`) ON DELETE CASCADE,
-  CONSTRAINT `notifications_ibfk_3` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE
+  CONSTRAINT `notifications_ibfk_2` FOREIGN KEY (`related_task_id`) REFERENCES `task` (`task_id`) ON DELETE CASCADE,
+  CONSTRAINT `notifications_ibfk_3` FOREIGN KEY (`related_project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `notifications_ibfk_4` FOREIGN KEY (`related_comment_id`) REFERENCES `task_comments` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- Create deadline_notification_log table
+-- Create deadline_notification_log table (matching SQLAlchemy model)
 CREATE TABLE IF NOT EXISTS `deadline_notification_log` (
-  `id` int NOT NULL AUTO_INCREMENT,
+  `log_id` varchar(36) NOT NULL,
   `task_id` int NOT NULL,
   `staff_id` int NOT NULL,
-  `days_before_deadline` int NOT NULL,
-  `notification_sent_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
+  `notification_type` varchar(50) NOT NULL,
+  `sent_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`log_id`),
   KEY `task_id` (`task_id`),
   KEY `staff_id` (`staff_id`),
+  UNIQUE KEY `unique_deadline_notification` (`task_id`, `staff_id`, `notification_type`),
   CONSTRAINT `deadline_notification_log_ibfk_1` FOREIGN KEY (`task_id`) REFERENCES `task` (`task_id`) ON DELETE CASCADE,
   CONSTRAINT `deadline_notification_log_ibfk_2` FOREIGN KEY (`staff_id`) REFERENCES `staff` (`employee_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

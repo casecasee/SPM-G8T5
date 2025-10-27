@@ -63,6 +63,7 @@ const route = useRoute()
 
     const mentionHighlighted = ref(0)
 
+    //running on comment input
     function onCommentInput(e) {
         const text = newComment.value || ''
         const cursor = e?.target?.selectionStart ?? text.length
@@ -457,7 +458,8 @@ const route = useRoute()
     })
 
     const myTasks = computed(() => {
-    return tasks.value || []
+    const collabIncludes = (task) => Array.isArray(task.collaborators) && task.collaborators.includes(currentEmployeeId)
+    return (tasks.value || []).filter(task => task.owner === currentEmployeeId || collabIncludes(task))
     })
 
     const displayTasks = computed(() => {
@@ -524,28 +526,112 @@ const route = useRoute()
         return priorityB - priorityA
     })
     })
+    
 
-    const tasksByPriority = computed(() => {
-    const tasks = displayTasks.value
-    const groups = {
-        high: [],
-        medium: [],
-        low: []
+const tasksByPriority = computed(() => {
+  // Only show the user's visible tasks
+  const visibleTasks = displayTasks.value
+
+  // Sort by priority score first, then due date (ascending)
+  const sortedTasks = [...visibleTasks].sort((a, b) => {
+    const priorityA = a.priority || 5
+    const priorityB = b.priority || 5
+
+    if (priorityA === priorityB) {
+      const dateA = new Date(a.due_date)
+      const dateB = new Date(b.due_date)
+      return dateA - dateB // earliest due date first
     }
-    
-    tasks.forEach(task => {
-        const priority = task.priority || 5
-        if (priority >= 8) {
-        groups.high.push(task)
-        } else if (priority >= 5) {
-        groups.medium.push(task)
-        } else {
-        groups.low.push(task)
-        }
+
+    // Higher priority first
+    return priorityB - priorityA
+  })
+
+  const groups = {
+    high: [],
+    medium: [],
+    low: []
+  }
+
+  sortedTasks.forEach(task => {
+    const score = task.priority || 5
+    if (score >= 8) groups.high.push(task)
+    else if (score >= 5) groups.medium.push(task)
+    else groups.low.push(task)
+  })
+
+  return groups
+})
+
+
+const report_displayTasks = computed(() => {
+  // 1️⃣ Start with only user's tasks
+  let filteredTasks = myTasks.value
+
+  // 2️⃣ Prepare date range
+  const start = startDate.value ? new Date(startDate.value) : null
+  const end = endDate.value ? new Date(endDate.value) : null
+
+  if (start && end) {
+    filteredTasks = filteredTasks.filter(t => {
+      if (!t.created_at || !t.due_date) return false
+
+      const created = new Date(t.created_at)
+      const due = new Date(t.due_date)
+      if (isNaN(created) || isNaN(due)) return false
+
+      // ✅ Include tasks that *overlap* with the range
+      // Meaning: task started before the end date AND ends after the start date
+      return created <= end && due >= start
     })
+  }
+
+  // 3️⃣ Sort: higher priority first, then earliest due date
+  return filteredTasks.sort((a, b) => {
+    const pA = a.priority || 5
+    const pB = b.priority || 5
+    if (pA === pB) return new Date(a.due_date) - new Date(b.due_date)
+    return pB - pA
+  })
+})
+
+
     
-    return groups
-    })
+
+
+const report_tasksByPriority = computed(() => {
+  const tasks = report_displayTasks.value
+  const groups = { high: [], medium: [], low: [] }
+
+  tasks.forEach(task => {
+    const score = task.priority || 5
+    if (score >= 8) groups.high.push(task)
+    else if (score >= 5) groups.medium.push(task)
+    else groups.low.push(task)
+  })
+
+  return groups
+})
+
+const report_overdueTasks = computed(() => 
+  report_displayTasks.value.filter(t => isOverdue(t))
+)
+
+const report_overallProgress = computed(() => {
+  const total = report_displayTasks.value.length
+  if (total === 0) return 'No Data'
+
+  const overdueCount = report_overdueTasks.value.length
+  if (overdueCount === 0) return 'Good'
+  if (overdueCount === 1) return 'Average'
+  return 'Poor'
+})
+
+function hasTasksInSection(section) {
+  const groups = report_tasksByPriority.value
+  return groups[section] && groups[section].length > 0
+}
+
 
     const shouldShowNoTasksMessage = computed(() => {
     if (displayTasks.value.length > 0) return false
@@ -1494,7 +1580,8 @@ const route = useRoute()
         comments.value = []
     }
     }
-
+    
+    //fetches mentionable users from /task/<id>/mentionable
     async function loadMentionable(taskId) {
     mentionable.value = []
     try {
@@ -1608,4 +1695,87 @@ const route = useRoute()
         const now = new Date()
         return due < now && task.status.toLowerCase() !== 'done'
     }
+
+// ----------------- Report Filter & Summary -----------------
+const startDate = ref('')
+const endDate = ref('')
+
+// Default filter: past month
+onMounted(() => {
+  const today = new Date()
+  const lastMonth = new Date()
+  lastMonth.setMonth(today.getMonth() - 1)
+  startDate.value = lastMonth.toISOString().split('T')[0]
+  endDate.value = today.toISOString().split('T')[0]
+})
+
+// Compute filtered tasks based on selected dates
+const filteredTasks = computed(() => {
+  if (!tasks.value?.length) return []
+  const start = new Date(startDate.value)
+  const end = new Date(endDate.value)
+  return tasks.value.filter((task) => {
+    if (!task.due_date) return false
+    const due = new Date(task.due_date)
+    return due >= start && due <= end
+  })
+})
+
+const totalTasks = computed(() => displayTasks.value.length)
+const completedTasks = computed(() =>
+//   filteredTasks.value.filter(
+//     (t) => t.status?.toLowerCase() === 'done' || t.status?.toLowerCase() === 'completed'
+//   )
+displayTasks.value.filter(
+    (t) => t.status?.toLowerCase() === 'done' || t.status?.toLowerCase() === 'completed'
+  )
+)
+
+const ongoingTasks = computed(() =>
+//   filteredTasks.value.filter((t) => t.status?.toLowerCase() === 'ongoing')
+    displayTasks.value.filter((t) => t.status?.toLowerCase() === 'ongoing')
+)
+
+const overdueTasks = computed(() =>
+  displayTasks.value.filter((t) => {
+    if (!t.due_date) return false
+    const due = new Date(t.due_date)
+    const today = new Date()
+    return due < today && (t.status?.toLowerCase() !== 'done' && t.status?.toLowerCase() !== 'completed')
+  })
+)
+
+const highPriorityCount = computed(() => tasksByPriority.value.high.length)
+const mediumPriorityCount = computed(() => tasksByPriority.value.medium.length)
+const lowPriorityCount = computed(() => tasksByPriority.value.low.length)
+
+const overallProgress = computed(() => {
+  const total = totalTasks.value
+  if (total === 0) return 'No Data'
+  const ratio = completedTasks.value.length / total
+  if (ratio >= 0.7) return 'Good'
+  if (ratio >= 0.4) return 'Average'
+  return 'Poor'
+})
+
+function formatDateDisplay(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('en-SG', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  })
+}
+
+const formattedDateRange = computed(() => {
+  if (!startDate.value || !endDate.value) return ''
+  return `${formatDateDisplay(startDate.value)} - ${formatDateDisplay(endDate.value)}`
+})
+
+// Trigger recomputation manually if needed
+function updateDateFilter() {
+  // Nothing needed — computed handles reactivity
+}
+
 </script>
