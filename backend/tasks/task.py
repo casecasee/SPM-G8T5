@@ -133,18 +133,13 @@ def notify_task_status_updated(task_id, old_status, new_status, updated_by_id):
         if not task:
             return
         
+        # Use the same task-updated endpoint as other field changes
         requests.post(
-            f'{NOTIFICATION_SERVICE_URL}/api/internal/events/task-status-updated',
+            f'{NOTIFICATION_SERVICE_URL}/api/events/task-updated',
             json={
                 'task_id': task_id,
-                'task_title': task.title,
-                'owner_id': task.owner,
-                'collaborators': get_task_collaborators_ids(task_id),
-                'old_status': old_status,
-                'new_status': new_status,
-                'updated_by_id': updated_by_id,
-                'updated_by_name': get_employee_name(updated_by_id),
-                'is_subtask': task.parent_id is not None
+                'changed_fields': ['status'],
+                'actor_id': updated_by_id
             },
             timeout=2
         )
@@ -428,7 +423,7 @@ def create_task():
                 # handle owner
                 sub_owner = subtask.get('owner', eid)  # default to parent task owner if not given
                 if sub_owner not in collaborators_ids:
-                    raise ValueError(f"Subtask owner {sub_owner} is not a collaborator of the parent task")
+                    raise ValueError(f"1. Subtask owner {sub_owner} is not a collaborator of the parent task")
                 
                 # add owner as collaborator
                 sub_collaborators_ids = subtask.get('collaborators', [])
@@ -437,7 +432,7 @@ def create_task():
                 # make sure subtask collaborators are subset of task collaborators
                 for cid in sub_collaborators_ids:
                     if cid not in collaborators_ids:
-                        raise ValueError(f"Subtask collaborator {cid} is not a collaborator of the parent task")
+                        raise ValueError(f"2. Subtask collaborator {cid} is not a collaborator of the parent task")
                 sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
                 
                 # handle deadline
@@ -776,9 +771,13 @@ def update_task(task_id):
     
     # validate and update fields
     if 'title' in data:
+        if not data['title'].strip():
+            return {"message": "Title cannot be empty"}, 400
         curr_task.title = data['title']
 
     if 'description' in data:
+        if not data['description'].strip():
+            return {"message": "Description cannot be empty"}, 400
         curr_task.description = data['description']
 
     if 'deadline' in data:
@@ -788,6 +787,10 @@ def update_task(task_id):
         curr_task.deadline = deadline
 
     if 'priority' in data:
+        if not isinstance(data['priority'], int):
+            return {"message": "Priority must be an integer"}, 400
+        if data['priority'] not in range(1, 11):
+            return {"message": "Invalid priority value"}, 400
         curr_task.priority = data['priority']
 
     # TODO: check if collaborators are subset of project if project_id is given
@@ -877,10 +880,12 @@ def update_task(task_id):
 
     # Update collaborators in database
     if 'collaborators' in data or 'project_id' in data:
+        # print('Updating collaborators to:', collaborators_ids)
         staff_list = Staff.query.filter(Staff.employee_id.in_(collaborators_ids)).all()
         curr_task.collaborators = staff_list
 
     db.session.commit()
+    # print("updated task collaborators are:", [s.employee_id for s in curr_task.collaborators])
 
     # handle subtasks
     # TODO: check this
@@ -945,7 +950,7 @@ def update_task(task_id):
                             return {"message": "Manager cannot assign tasks upwards"}, 400
                         # TODO: finish business rules for assignment hierarchy
                         if new_owner not in collaborators_ids:
-                            return {"message": f"Subtask owner {new_owner} is not a collaborator of the parent task"}, 400
+                            return {"message": f"3. Subtask owner {new_owner} is not a collaborator of the parent task"}, 400
                         existing_subtask.owner = new_owner
                     
                 if 'collaborators' in subtask:
@@ -956,7 +961,7 @@ def update_task(task_id):
                     # make sure subtask collaborators are subset of task collaborators
                     for cid in sub_collaborators_ids:
                         if cid not in collaborators_ids:
-                            return {"message": f"Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
+                            return {"message": f"4. Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
                     sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
                     existing_subtask.collaborators = sub_collaborators
                 
@@ -986,7 +991,7 @@ def update_task(task_id):
                 # make sure subtask collaborators are subset of task collaborators
                 for cid in sub_collaborators_ids:
                     if cid not in collaborators_ids:
-                        return {"message": f"Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
+                        return {"message": f" 5. Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
                 sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
                 
                 # handle deadline
@@ -1023,6 +1028,28 @@ def update_task(task_id):
     # SEND NOTIFICATION IF DEADLINE CHANGED
     if old_deadline != curr_task.deadline:
         notify_due_date_changed(task_id, old_deadline, curr_task.deadline, eid)
+    
+    # SEND NOTIFICATION IF OTHER TASK FIELDS CHANGED
+    if main_changes:
+        changed_field_names = list(main_changes.keys())
+        # Don't duplicate deadline notifications
+        if 'deadline' in changed_field_names:
+            changed_field_names.remove('deadline')
+        
+        if changed_field_names:
+            try:
+                requests.post(
+                    f'{NOTIFICATION_SERVICE_URL}/api/events/task-updated',
+                    json={
+                        'task_id': task_id,
+                        'changed_fields': changed_field_names,
+                        'actor_id': data.get('actor_id', eid)
+                    },
+                    timeout=3
+                )
+                print(f"[Notification] Sent task update notification for fields: {changed_field_names}")
+            except Exception as e:
+                print(f"[Notification] Failed to send task update notification: {e}")
 
     return {"message": "Task updated"}, 200
 
