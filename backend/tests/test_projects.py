@@ -7,6 +7,7 @@ from unittest.mock import patch, MagicMock
 # Import the projects app and models
 from projects.app import app, db
 from models.project import Project
+from models.task import Task
 from models.staff import Staff
 
 
@@ -74,6 +75,9 @@ class TestProjectsAPI(unittest.TestCase):
             Project.query.delete()
             # Explicitly clean up the association table
             db.session.execute(db.text("DELETE FROM project_members"))
+            # Also clear tasks and their collaborators to avoid stale counts/id reuse
+            db.session.execute(db.text("DELETE FROM task_collaborators"))
+            Task.query.delete()
             db.session.commit()
 
     def tearDown(self):
@@ -83,6 +87,9 @@ class TestProjectsAPI(unittest.TestCase):
             Project.query.delete()
             # Explicitly clean up the association table
             db.session.execute(db.text("DELETE FROM project_members"))
+            # Clear tasks and collaborators as well
+            db.session.execute(db.text("DELETE FROM task_collaborators"))
+            Task.query.delete()
             db.session.commit()
 
     # ----------------------------------------------------------------------
@@ -94,8 +101,7 @@ class TestProjectsAPI(unittest.TestCase):
         payload = {
             "name": "Test Project",
             "owner": "John Doe",
-            "ownerId": self.staff1_id,
-            "status": "Active"
+            "ownerId": self.staff1_id
         }
         
         response = self.client.post("/projects", json=payload)
@@ -108,13 +114,14 @@ class TestProjectsAPI(unittest.TestCase):
         self.assertEqual(data["name"], "Test Project")
         self.assertEqual(data["owner"], "John Doe")
         self.assertEqual(data["ownerId"], self.staff1_id)
-        self.assertEqual(data["status"], "Active")
+        # status removed from API
         self.assertEqual(data["tasksDone"], 0)
         self.assertEqual(data["tasksTotal"], 0)
         self.assertIsNone(data["dueDate"])
         self.assertIn("updatedAt", data)
-        self.assertEqual(data["memberIds"], [])
-        self.assertEqual(data["memberNames"], [])
+        # owner is auto-added as sole member
+        self.assertEqual(data["memberIds"], [self.staff1_id])
+        self.assertEqual(data["memberNames"], ["John Doe"])
 
     def test_create_project_with_members(self):
         """Test creating a project with team members"""
@@ -122,7 +129,6 @@ class TestProjectsAPI(unittest.TestCase):
             "name": "Team Project",
             "owner": "Jane Smith",
             "ownerId": self.staff2_id,
-            "status": "Active",
             "members": [self.staff1_id, self.staff3_id]
         }
         
@@ -131,9 +137,9 @@ class TestProjectsAPI(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         data = response.get_json()
         
-        # Verify members are included
-        self.assertEqual(set(data["memberIds"]), {self.staff1_id, self.staff3_id})
-        self.assertEqual(set(data["memberNames"]), {"John Doe", "Bob Wilson"})
+        # Verify members include provided AND owner (auto-added)
+        self.assertEqual(set(data["memberIds"]), {self.staff2_id, self.staff1_id, self.staff3_id})
+        self.assertEqual(set(data["memberNames"]), {"Jane Smith", "John Doe", "Bob Wilson"})
 
     def test_create_project_with_due_date(self):
         """Test creating a project with a due date"""
@@ -143,7 +149,6 @@ class TestProjectsAPI(unittest.TestCase):
             "name": "Project with Deadline",
             "owner": "John Doe",
             "ownerId": self.staff1_id,
-            "status": "Active",
             "dueDate": due_date
         }
         
@@ -158,7 +163,7 @@ class TestProjectsAPI(unittest.TestCase):
 
     def test_create_project_defaults(self):
         """Test creating a project with minimal data uses defaults"""
-        payload = {}  # Empty payload
+        payload = {"ownerId": self.staff1_id}  # ownerId is required now
         
         response = self.client.post("/projects", json=payload)
         
@@ -168,10 +173,13 @@ class TestProjectsAPI(unittest.TestCase):
         # Verify defaults are applied
         self.assertEqual(data["name"], "Untitled Project")
         self.assertEqual(data["owner"], "Unassigned")
-        self.assertIsNone(data["ownerId"])
-        self.assertEqual(data["status"], "Active")
+        self.assertEqual(data["ownerId"], self.staff1_id)
+        # status removed from API
         self.assertEqual(data["tasksDone"], 0)
         self.assertEqual(data["tasksTotal"], 0)
+        # owner auto-added as member
+        self.assertEqual(data["memberIds"], [self.staff1_id])
+        self.assertEqual(data["memberNames"], ["John Doe"])
 
     def test_create_project_invalid_due_date(self):
         """Test creating a project with invalid due date format"""
@@ -208,14 +216,12 @@ class TestProjectsAPI(unittest.TestCase):
             project1 = Project(
                 name="Project 1",
                 owner="John Doe",
-                owner_id=self.staff1_id,
-                status="Active"
+                owner_id=self.staff1_id
             )
             project2 = Project(
                 name="Project 2",
                 owner="Jane Smith",
-                owner_id=self.staff2_id,
-                status="On Hold"
+                owner_id=self.staff2_id
             )
             
             db.session.add_all([project1, project2])
@@ -245,6 +251,186 @@ class TestProjectsAPI(unittest.TestCase):
         project1_data = next(p for p in data if p["name"] == "Project 1")
         self.assertEqual(len(project1_data["memberIds"]), 2)
 
+    def test_list_projects_staff_member_scope(self):
+        """
+        Staff should only see projects they are a member of.
+        """
+        # Create two projects: one with staff1 as member, one without
+        with self.app.app_context():
+            project_with_me = Project(name="Mine", owner="O", owner_id=self.staff2_id)
+            project_without_me = Project(name="NotMine", owner="O", owner_id=self.staff2_id)
+            db.session.add_all([project_with_me, project_without_me]); db.session.commit()
+
+            me = Staff.query.get(self.staff1_id)  # staff1 is IT staff
+            project_with_me.members.append(me)
+            db.session.commit()
+
+        # Run list in production mode (role filtering), with a staff session
+        original_testing = self.app.config.get("TESTING", False)
+        try:
+            self.app.config["TESTING"] = False
+            with self.client.session_transaction() as sess:
+                sess["employee_id"] = self.staff1_id
+                sess["role"] = "staff"
+                sess["department"] = "IT"
+
+            res = self.client.get("/projects")
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            names = {p["name"] for p in data}
+            self.assertIn("Mine", names)
+            self.assertNotIn("NotMine", names)
+        finally:
+            self.app.config["TESTING"] = original_testing
+
+    def test_list_projects_manager_department_scope(self):
+        """
+        Manager should see projects in their department (even if not a member).
+        """
+        with self.app.app_context():
+            # Project with IT member
+            proj_it = Project(name="IT Project", owner="O", owner_id=self.staff2_id)
+            # Project with Finance member
+            proj_fin = Project(name="FIN Project", owner="O", owner_id=self.staff2_id)
+            db.session.add_all([proj_it, proj_fin]); db.session.commit()
+
+            it_member = Staff.query.get(self.staff1_id)     # department IT
+            fin_member = Staff.query.get(self.staff3_id)    # department Finance
+            proj_it.members.append(it_member)
+            proj_fin.members.append(fin_member)
+            db.session.commit()
+
+        original_testing = self.app.config.get("TESTING", False)
+        try:
+            self.app.config["TESTING"] = False
+            with self.client.session_transaction() as sess:
+                sess["employee_id"] = self.staff2_id  # Jane Smith (manager, IT)
+                sess["role"] = "manager"
+                sess["department"] = "IT"
+
+            res = self.client.get("/projects")
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            names = {p["name"] for p in data}
+            self.assertIn("IT Project", names)
+            self.assertNotIn("FIN Project", names)
+        finally:
+            self.app.config["TESTING"] = original_testing
+
+    def test_list_projects_senior_manager_sees_all(self):
+        """
+        Senior manager (or HR/Director) should see all projects.
+        """
+        with self.app.app_context():
+            p1 = Project(name="P1", owner="O", owner_id=self.staff1_id)
+            p2 = Project(name="P2", owner="O", owner_id=self.staff2_id)
+            db.session.add_all([p1, p2]); db.session.commit()
+
+        original_testing = self.app.config.get("TESTING", False)
+        try:
+            self.app.config["TESTING"] = False
+            with self.client.session_transaction() as sess:
+                sess["employee_id"] = self.staff2_id
+                sess["role"] = "senior manager"
+                sess["department"] = "IT"
+
+            res = self.client.get("/projects")
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            names = {p["name"] for p in data}
+            self.assertIn("P1", names)
+            self.assertIn("P2", names)
+        finally:
+            self.app.config["TESTING"] = original_testing
+
+    # ----------------------------------------------------------------------
+    # Task counts persisted
+    # ----------------------------------------------------------------------
+
+    def test_task_counts_persisted_to_db(self):
+        """
+        GET /projects should compute tasksTotal/tasksDone and persist them to the DB.
+        """
+        from models.task import Task
+
+        with self.app.app_context():
+            # Create two projects
+            p1 = Project(name="Counts P1", owner="O", owner_id=self.staff1_id)
+            p2 = Project(name="Counts P2", owner="O", owner_id=self.staff1_id)
+            db.session.add_all([p1, p2]); db.session.commit()
+            pid1, pid2 = p1.id, p2.id
+
+            # Create tasks for p1: 3 total, 2 done; p2: 1 done
+            t1 = Task(title="T1", description="D1",
+                      deadline=datetime.utcnow() + timedelta(days=7),
+                      status="done", owner=self.staff1_id,
+                      project_id=pid1, priority=5, collaborators=[])
+            t2 = Task(title="T2", description="D2",
+                      deadline=datetime.utcnow() + timedelta(days=7),
+                      status="ongoing", owner=self.staff1_id,
+                      project_id=pid1, priority=5, collaborators=[])
+            t3 = Task(title="T3", description="D3",
+                      deadline=datetime.utcnow() + timedelta(days=7),
+                      status="done", owner=self.staff1_id,
+                      project_id=pid1, priority=5, collaborators=[])
+            t4 = Task(title="T4", description="D4",
+                      deadline=datetime.utcnow() + timedelta(days=7),
+                      status="done", owner=self.staff1_id,
+                      project_id=pid2, priority=5, collaborators=[])
+            db.session.add_all([t1, t2, t3, t4]); db.session.commit()
+
+        res = self.client.get("/projects")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+
+        p1_data = next(p for p in data if p["name"] == "Counts P1")
+        p2_data = next(p for p in data if p["name"] == "Counts P2")
+
+        self.assertEqual(p1_data["tasksTotal"], 3)
+        self.assertEqual(p1_data["tasksDone"], 2)
+        self.assertEqual(p2_data["tasksTotal"], 1)
+        self.assertEqual(p2_data["tasksDone"], 1)
+
+        # Verify persisted in DB
+        with self.app.app_context():
+            p1_row = Project.query.get(pid1)
+            p2_row = Project.query.get(pid2)
+            self.assertEqual(p1_row.tasks_total, 3)
+            self.assertEqual(p1_row.tasks_done, 2)
+            self.assertEqual(p2_row.tasks_total, 1)
+            self.assertEqual(p2_row.tasks_done, 1)
+
+    def test_task_counts_persist_commit_failure_returns_counts(self):
+        """
+        If persisting counts fails, the endpoint should still return computed counts.
+        """
+        from models.task import Task
+        from unittest.mock import patch
+
+        with self.app.app_context():
+            p = Project(name="Persist Fail P", owner="O", owner_id=self.staff1_id)
+            db.session.add(p); db.session.commit()
+            pid = p.id
+            # 2 tasks, 1 done
+            t1 = Task(title="T1", description="D1",
+                      deadline=datetime.utcnow() + timedelta(days=7),
+                      status="done", owner=self.staff1_id,
+                      project_id=pid, priority=5, collaborators=[])
+            t2 = Task(title="T2", description="D2",
+                      deadline=datetime.utcnow() + timedelta(days=7),
+                      status="ongoing", owner=self.staff1_id,
+                      project_id=pid, priority=5, collaborators=[])
+            db.session.add_all([t1, t2]); db.session.commit()
+
+        # Mock commit to fail during GET
+        with patch("projects.app.db.session.commit", side_effect=Exception("commit failed")):
+            res = self.client.get("/projects")
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            p_data = next(x for x in data if x["name"] == "Persist Fail P")
+            self.assertEqual(p_data["tasksTotal"], 2)
+            self.assertEqual(p_data["tasksDone"], 1)
+
     @patch('projects.app.Task')
     def test_list_projects_with_task_counts(self, mock_task_class):
         """Test that project listing includes task counts from tasks service"""
@@ -253,8 +439,7 @@ class TestProjectsAPI(unittest.TestCase):
             project = Project(
                 name="Project with Tasks",
                 owner="John Doe",
-                owner_id=self.staff1_id,
-                status="Active"
+                owner_id=self.staff1_id
             )
             db.session.add(project)
             db.session.commit()
@@ -298,8 +483,7 @@ class TestProjectsAPI(unittest.TestCase):
             project = Project(
                 name="Project with Error",
                 owner="John Doe",
-                owner_id=self.staff1_id,
-                status="Active"
+                owner_id=self.staff1_id
             )
             db.session.add(project)
             db.session.commit()
@@ -329,7 +513,6 @@ class TestProjectsAPI(unittest.TestCase):
                 name="Test Project",
                 owner="John Doe",
                 owner_id=self.staff1_id,
-                status="Active",
                 tasks_done=5,
                 tasks_total=10
             )
@@ -348,7 +531,7 @@ class TestProjectsAPI(unittest.TestCase):
             
             # Verify all fields are present
             expected_keys = {
-                "id", "name", "owner", "ownerId", "status", 
+                "id", "name", "owner", "ownerId",
                 "tasksDone", "tasksTotal", "dueDate", "updatedAt",
                 "memberIds", "memberNames"
             }
@@ -358,7 +541,7 @@ class TestProjectsAPI(unittest.TestCase):
             self.assertEqual(result["name"], "Test Project")
             self.assertEqual(result["owner"], "John Doe")
             self.assertEqual(result["ownerId"], self.staff1_id)
-            self.assertEqual(result["status"], "Active")
+            # status removed from API
             self.assertEqual(result["tasksDone"], 5)
             self.assertEqual(result["tasksTotal"], 10)
             self.assertIsNone(result["dueDate"])
@@ -374,7 +557,6 @@ class TestProjectsAPI(unittest.TestCase):
                 name="Project with Due Date",
                 owner="John Doe",
                 owner_id=self.staff1_id,
-                status="Active",
                 due_date=due_date
             )
             db.session.add(project)
@@ -402,10 +584,11 @@ class TestProjectsAPI(unittest.TestCase):
         
         response = self.client.post("/projects", json=payload)
         
-        # Should still succeed but with no members
+        # Should still succeed; owner is auto-added as sole member
         self.assertEqual(response.status_code, 201)
         data = response.get_json()
-        self.assertEqual(data["memberIds"], [])
+        self.assertEqual(data["memberIds"], [self.staff1_id])
+        self.assertEqual(data["memberNames"], ["John Doe"])
 
     def test_create_project_malformed_json(self):
         """Test creating project with malformed JSON"""
@@ -418,6 +601,17 @@ class TestProjectsAPI(unittest.TestCase):
         # Should handle gracefully
         self.assertIn(response.status_code, [400, 500])
 
+    def test_create_project_missing_owner_id(self):
+        """Should reject create when ownerId is missing"""
+        payload = {
+            "name": "No OwnerId Project",
+            "owner": "Someone"
+        }
+        response = self.client.post("/projects", json=payload)
+        self.assertEqual(response.status_code, 400)
+        data = response.get_json()
+        self.assertIn("ownerId is required", data.get("error", ""))
+
     def test_list_projects_large_dataset(self):
         """Test listing projects with many projects"""
         with self.app.app_context():
@@ -427,8 +621,7 @@ class TestProjectsAPI(unittest.TestCase):
                 project = Project(
                     name=f"Project {i}",
                     owner=f"Owner {i}",
-                    owner_id=self.staff1_id,
-                    status="Active"
+                    owner_id=self.staff1_id
                 )
                 projects.append(project)
             
@@ -446,6 +639,134 @@ class TestProjectsAPI(unittest.TestCase):
             current_time = datetime.fromisoformat(data[i]["updatedAt"].replace("Z", "+00:00"))
             next_time = datetime.fromisoformat(data[i + 1]["updatedAt"].replace("Z", "+00:00"))
             self.assertGreaterEqual(current_time, next_time)
+
+    # ----------------------------------------------------------------------
+    # Test Update Project (owner-only)
+    # ----------------------------------------------------------------------
+
+    def test_update_project_due_date_owner_success(self):
+        with self.app.app_context():
+            project = Project(name="P", owner="Owner", owner_id=self.staff1_id)
+            db.session.add(project); db.session.commit()
+            pid = project.id
+
+        with self.client.session_transaction() as sess:
+            sess["employee_id"] = self.staff1_id
+
+        new_due = (datetime.utcnow() + timedelta(days=10)).isoformat() + "Z"
+        res = self.client.put(f"/projects/{pid}", json={"dueDate": new_due})
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(data["id"], pid)
+        self.assertIsNotNone(data["dueDate"])
+        self.assertIn("T", data["dueDate"])  # ISO
+        self.assertTrue(data["dueDate"].endswith("Z"))
+
+        with self.app.app_context():
+            p = Project.query.get(pid)
+            self.assertIsNotNone(p.due_date)
+
+    def test_update_project_due_date_unauthorized(self):
+        with self.app.app_context():
+            project = Project(name="P", owner="Owner", owner_id=self.staff1_id)
+            db.session.add(project); db.session.commit()
+            pid = project.id
+
+        # Ensure no session carries over
+        with self.client.session_transaction() as sess:
+            sess.clear()
+
+        res = self.client.put(f"/projects/{pid}", json={"dueDate": (datetime.utcnow().isoformat() + "Z")})
+        self.assertEqual(res.status_code, 401)
+
+    def test_update_project_due_date_forbidden(self):
+        with self.app.app_context():
+            project = Project(name="P", owner="Owner", owner_id=self.staff1_id)
+            db.session.add(project); db.session.commit()
+            pid = project.id
+
+        with self.client.session_transaction() as sess:
+            sess["employee_id"] = self.staff2_id
+
+        res = self.client.put(f"/projects/{pid}", json={"dueDate": (datetime.utcnow().isoformat() + "Z")})
+        self.assertEqual(res.status_code, 403)
+
+    # ----------------------------------------------------------------------
+    # Test Members Update Semantics
+    # ----------------------------------------------------------------------
+
+    def test_update_members_add_valid_dedupe_and_ignore_nonexistent(self):
+        with self.app.app_context():
+            project = Project(name="P", owner="Owner", owner_id=self.staff1_id)
+            db.session.add(project); db.session.commit()
+            pid = project.id
+
+        with self.client.session_transaction() as sess:
+            sess["employee_id"] = self.staff1_id  # owner
+
+        res = self.client.put(f"/projects/{pid}", json={"add": [self.staff1_id, self.staff1_id, self.staff2_id, 9999]})
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(set(data["memberIds"]), {self.staff1_id, self.staff2_id})
+
+    def test_update_members_remove_allowed_when_not_involved(self):
+        with self.app.app_context():
+            project = Project(name="P", owner="Owner", owner_id=self.staff1_id)
+            db.session.add(project); db.session.commit()
+            pid = project.id
+            owner = Staff.query.get(self.staff1_id)
+            s2 = Staff.query.get(self.staff2_id)
+            project.members.append(owner)
+            project.members.append(s2)
+            db.session.commit()
+
+        with self.client.session_transaction() as sess:
+            sess["employee_id"] = self.staff1_id
+
+        res = self.client.put(f"/projects/{pid}", json={"remove": [self.staff2_id]})
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(set(data["memberIds"]), {self.staff1_id})
+
+    def test_update_members_remove_blocked_when_involved(self):
+        with self.app.app_context():
+            project = Project(name="P", owner="Owner", owner_id=self.staff1_id)
+            db.session.add(project); db.session.commit()
+            pid = project.id
+            s1 = Staff.query.get(self.staff1_id)
+            s2 = Staff.query.get(self.staff2_id)
+            project.members.append(s1)
+            project.members.append(s2)
+            db.session.commit()
+
+            # Create a task in this project with staff2 as owner (involved)
+            from models.task import Task
+            t = Task(title="T", description="D",
+                     deadline=datetime.utcnow() + timedelta(days=7),
+                     status="ongoing", owner=self.staff2_id,
+                     project_id=pid, priority=5, collaborators=[])
+            db.session.add(t); db.session.commit()
+
+        with self.client.session_transaction() as sess:
+            sess["employee_id"] = self.staff1_id
+
+        res = self.client.put(f"/projects/{pid}", json={"remove": [self.staff2_id]})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("unable to remove member", res.get_json().get("error", "").lower())
+
+    def test_update_members_cannot_remove_owner(self):
+        with self.app.app_context():
+            project = Project(name="P", owner="Owner", owner_id=self.staff1_id)
+            db.session.add(project); db.session.commit()
+            pid = project.id
+
+        with self.client.session_transaction() as sess:
+            sess["employee_id"] = self.staff1_id
+
+        res = self.client.put(f"/projects/{pid}", json={"remove": [self.staff1_id]})
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertIn(self.staff1_id, data["memberIds"])
 
 
 if __name__ == "__main__":
