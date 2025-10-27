@@ -319,28 +319,61 @@ def event_task_updated():
 # Scheduler: approaching deadlines and overdue
 scheduler = BackgroundScheduler()
 
-def _within_day(target: datetime, days_from_now: int) -> bool:
+def _within_day(target: datetime, days_before_deadline: int) -> bool:
+    """
+    Check if today is exactly 'days_before_deadline' days before the target deadline.
+    
+    Example: If deadline is Oct 10, and days_before_deadline=7, this returns True on Oct 3.
+    The check happens at midnight of the reminder day, regardless of the deadline time.
+    """
     now = datetime.now(timezone.utc)
-    start = (now + timedelta(days=days_from_now)).replace(hour=0, minute=0, second=0, microsecond=0)
-    end = start + timedelta(days=1)
-    return start <= target < end
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
+    
+    # Ensure target is timezone-naive (stored in UTC in DB as naive datetime)
+    if target.tzinfo is not None:
+        target = target.replace(tzinfo=None)
+    
+    # Calculate the reminder date (deadline minus days_before_deadline)
+    reminder_date = target.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=days_before_deadline)
+    
+    # Debug logging
+    print(f"DEBUG _within_day: target={target}, days_before_deadline={days_before_deadline}")
+    print(f"DEBUG _within_day: today={today}, reminder_date={reminder_date}")
+    print(f"DEBUG _within_day: match={today == reminder_date}")
+    
+    # Check if today is exactly the reminder date
+    return today == reminder_date
 
 def _send_deadline_reminders():
+    print("=" * 60)
+    print(f"🔔 Running deadline reminder check at {datetime.now(timezone.utc)}")
+    print("=" * 60)
+    
     # Fetch tasks via tasks service (unfiltered, then filter here if needed)
     try:
         resp = requests.get(f"{TASK_SERVICE_URL}/api/internal/tasks/all")
         if not resp.ok:
+            print("❌ Failed to fetch tasks from task service")
             return
         tasks_data = resp.json()
         # Get tasks from the response
         tasks = tasks_data.get('tasks', [])
-    except Exception:
+        print(f"✅ Fetched {len(tasks)} tasks from task service")
+    except Exception as e:
+        print(f"❌ Exception fetching tasks: {e}")
         return
     now = datetime.now(timezone.utc)
     for t in tasks:
         deadline_str = t.get('deadline')
         status = t.get('status')
+        task_id = t.get('task_id')
+        task_title = t.get('title', 'Unknown')
+        
+        print(f"\n📋 Checking task: {task_title} (ID: {task_id})")
+        print(f"   Status: {status}, Deadline: {deadline_str}")
+        
         if not deadline_str or not status or status.lower() in ('done', 'completed'):
+            print(f"   ⏭️  Skipping (no deadline or completed)")
             continue
         try:
             # Handle both ISO format and MySQL DATETIME format
@@ -350,8 +383,9 @@ def _send_deadline_reminders():
             else:
                 # MySQL DATETIME format: "2025-10-30 15:18:00"
                 deadline = datetime.strptime(deadline_str, '%Y-%m-%d %H:%M:%S')
+            print(f"   Parsed deadline: {deadline}")
         except Exception as e:
-            print(f"Error parsing deadline {deadline_str}: {e}")
+            print(f"   ❌ Error parsing deadline {deadline_str}: {e}")
             continue
         # Get unique reminder days from all users' preferences
         all_reminder_days = set()
@@ -388,8 +422,8 @@ def _send_deadline_reminders():
                     db.session.add(DeadlineNotificationLog(log_id=str(uuid.uuid4()), task_id=t.get('task_id'), staff_id=staff_id, notification_type=notif_type))
                     db.session.commit()
 
-        # Overdue initial
-        if deadline < now:
+        # Overdue initial - convert now to naive UTC for comparison
+        if deadline < now.replace(tzinfo=None):
             notif_type = 'overdue_task'
             for staff_id in _get_task_recipients(t):
                 exists = DeadlineNotificationLog.query.filter_by(task_id=t.get('task_id'), staff_id=staff_id, notification_type=notif_type).first()
@@ -401,8 +435,18 @@ def _send_deadline_reminders():
                 db.session.add(DeadlineNotificationLog(log_id=str(uuid.uuid4()), task_id=t.get('task_id'), staff_id=staff_id, notification_type=notif_type))
                 db.session.commit()
 
-scheduler.add_job(_send_deadline_reminders, 'interval', hours=24, id='deadline_reminders')
+scheduler.add_job(_send_deadline_reminders, 'interval', hours=1, id='deadline_reminders')
 scheduler.start()
+
+# Manual trigger endpoint for testing
+@app.route('/api/test/deadline-reminders', methods=['POST'])
+def trigger_deadline_reminders():
+    """Manually trigger deadline reminders for testing"""
+    try:
+        _send_deadline_reminders()
+        return jsonify({'message': 'Deadline reminders triggered successfully'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Add OPTIONS handler for CORS preflight
 @app.route('/api/<path:path>', methods=['OPTIONS'])

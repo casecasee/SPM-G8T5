@@ -37,7 +37,6 @@
           <div class="notification-content">
             <strong>{{ notif.title }}</strong>
             <p>{{ notif.message }}</p>
-            <small>{{ formatTime(notif.created_at) }}</small>
           </div>
         </div>
       </div>

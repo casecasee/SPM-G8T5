@@ -188,6 +188,20 @@ def notify_due_date_changed(task_id, old_date, new_date, changed_by_id):
     except Exception as e:
         print(f"[Notification] Failed to send due date notification: {e}")
 
+def trigger_deadline_reminder_check():
+    """Trigger deadline reminder check immediately after task creation/update"""
+    try:
+        response = requests.post(
+            f'{NOTIFICATION_SERVICE_URL}/api/test/deadline-reminders',
+            timeout=5
+        )
+        if response.ok:
+            print(f"[Notification] Triggered deadline reminder check")
+        else:
+            print(f"[Notification] Failed to trigger deadline reminder check: {response.status_code}")
+    except Exception as e:
+        print(f"[Notification] Failed to trigger deadline reminder check: {e}")
+
 # ------------------ Mentions Helpers ------------------
 MENTION_RE = re.compile(r'@(\d+)')  # numeric ids (still supported)
 # Captures mentions like @Name, @FirstName LastName, @Name-With-Hyphens
@@ -474,6 +488,9 @@ def create_task():
                 set_timestamps_by_status(new_subtask, None, sub_status)
                 db.session.add(new_subtask)
         db.session.commit()
+
+        # Trigger immediate deadline reminder check for newly created task
+        trigger_deadline_reminder_check()
 
         return {"message": "Task created", "task_id": id}, 201
     except ValueError as ve:
@@ -1028,6 +1045,8 @@ def update_task(task_id):
     # SEND NOTIFICATION IF DEADLINE CHANGED
     if old_deadline != curr_task.deadline:
         notify_due_date_changed(task_id, old_deadline, curr_task.deadline, eid)
+        # Trigger deadline reminder check for updated deadline
+        trigger_deadline_reminder_check()
     
     # SEND NOTIFICATION IF OTHER TASK FIELDS CHANGED
     if main_changes:
