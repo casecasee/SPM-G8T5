@@ -756,6 +756,7 @@ const route = useRoute()
                 name: t.title,
                 description: t.description,
                 due_date: toLocal(t.deadline),  // Keep ISO format from backend
+                start_date: toLocal(t.created_at),  // Use created_at as start date
                 created_at: toLocal(t.created_at),  // Keep ISO format
                 status: t.status,
                 priority: t.priority || 5,
@@ -786,6 +787,7 @@ const route = useRoute()
                         name: sub.title,
                         description: sub.description,
                         due_date: toLocal(sub.deadline),
+                        start_date: toLocal(sub.created_at),  // Use created_at as start date for subtasks
                         status: sub.status,
                         priority: sub.priority || 5,
                         owner: sub.owner,
@@ -1316,6 +1318,7 @@ const route = useRoute()
         name: task.name,
         description: task.description,
         due_date: formattedDueDate,
+        start_date: task.created_at,  // Use created_at as start date (read-only)
         status: task.status,
         priority: task.priority,
         owner: task.owner,
