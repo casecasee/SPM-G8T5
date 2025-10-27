@@ -133,18 +133,13 @@ def notify_task_status_updated(task_id, old_status, new_status, updated_by_id):
         if not task:
             return
         
+        # Use the same task-updated endpoint as other field changes
         requests.post(
-            f'{NOTIFICATION_SERVICE_URL}/api/internal/events/task-status-updated',
+            f'{NOTIFICATION_SERVICE_URL}/api/events/task-updated',
             json={
                 'task_id': task_id,
-                'task_title': task.title,
-                'owner_id': task.owner,
-                'collaborators': get_task_collaborators_ids(task_id),
-                'old_status': old_status,
-                'new_status': new_status,
-                'updated_by_id': updated_by_id,
-                'updated_by_name': get_employee_name(updated_by_id),
-                'is_subtask': task.parent_id is not None
+                'changed_fields': ['status'],
+                'actor_id': updated_by_id
             },
             timeout=2
         )
@@ -1023,6 +1018,28 @@ def update_task(task_id):
     # SEND NOTIFICATION IF DEADLINE CHANGED
     if old_deadline != curr_task.deadline:
         notify_due_date_changed(task_id, old_deadline, curr_task.deadline, eid)
+    
+    # SEND NOTIFICATION IF OTHER TASK FIELDS CHANGED
+    if main_changes:
+        changed_field_names = list(main_changes.keys())
+        # Don't duplicate deadline notifications
+        if 'deadline' in changed_field_names:
+            changed_field_names.remove('deadline')
+        
+        if changed_field_names:
+            try:
+                requests.post(
+                    f'{NOTIFICATION_SERVICE_URL}/api/events/task-updated',
+                    json={
+                        'task_id': task_id,
+                        'changed_fields': changed_field_names,
+                        'actor_id': data.get('actor_id', eid)
+                    },
+                    timeout=3
+                )
+                print(f"[Notification] Sent task update notification for fields: {changed_field_names}")
+            except Exception as e:
+                print(f"[Notification] Failed to send task update notification: {e}")
 
     return {"message": "Task updated"}, 200
 
