@@ -133,18 +133,13 @@ def notify_task_status_updated(task_id, old_status, new_status, updated_by_id):
         if not task:
             return
         
+        # Use the same task-updated endpoint as other field changes
         requests.post(
-            f'{NOTIFICATION_SERVICE_URL}/api/internal/events/task-status-updated',
+            f'{NOTIFICATION_SERVICE_URL}/api/events/task-updated',
             json={
                 'task_id': task_id,
-                'task_title': task.title,
-                'owner_id': task.owner,
-                'collaborators': get_task_collaborators_ids(task_id),
-                'old_status': old_status,
-                'new_status': new_status,
-                'updated_by_id': updated_by_id,
-                'updated_by_name': get_employee_name(updated_by_id),
-                'is_subtask': task.parent_id is not None
+                'changed_fields': ['status'],
+                'actor_id': updated_by_id
             },
             timeout=2
         )
@@ -195,7 +190,9 @@ def notify_due_date_changed(task_id, old_date, new_date, changed_by_id):
 
 # ------------------ Mentions Helpers ------------------
 MENTION_RE = re.compile(r'@(\d+)')  # numeric ids (still supported)
-ANY_AT = re.compile(r'@(\S+)')      # any token after '@' up to whitespace
+# Captures mentions like @Name, @FirstName LastName, @Name-With-Hyphens
+# Stops at word boundaries or common punctuation
+ANY_AT = re.compile(r'@([\w]+(?:[\s\.\-]\w+){0,2}(?=[\s,\.;!?]|$))')
 
 def _normalize_token(value: str) -> str:
     return re.sub(r'[^a-z0-9]', '', (value or '').lower())
@@ -204,6 +201,7 @@ def _resolve_name_mentions(allowed_ids: set, name_tokens: set):
     """Resolve @name tokens to employee_ids within allowed_ids.
 
     - Normalizes both names and tokens by removing non-alnum and lowercasing
+    - Supports prefix matching (e.g., @Alice matches Alice Collaborator)
     - Returns (resolved_ids, invalid_names, ambiguous_names)
     """
     if not name_tokens:
@@ -225,11 +223,25 @@ def _resolve_name_mentions(allowed_ids: set, name_tokens: set):
 
     for raw in name_tokens:
         key = _normalize_token(raw)
+        
+        # First try exact match
         candidates = list(name_key_to_ids.get(key, []))
+        
+        # If no exact match, try prefix matching
+        if not candidates:
+            for normalized_name, emp_ids in name_key_to_ids.items():
+                if normalized_name.startswith(key):
+                    candidates.extend(emp_ids)
+        
         if not candidates:
             invalid_names.append(raw)
         elif len(candidates) > 1:
-            ambiguous_names.append(raw)
+            # If multiple matches, deduplicate but still mark as ambiguous
+            unique_candidates = list(set(candidates))
+            if len(unique_candidates) == 1:
+                resolved_ids.add(unique_candidates[0])
+            else:
+                ambiguous_names.append(raw)
         else:
             resolved_ids.add(candidates[0])
 
@@ -1006,6 +1018,28 @@ def update_task(task_id):
     # SEND NOTIFICATION IF DEADLINE CHANGED
     if old_deadline != curr_task.deadline:
         notify_due_date_changed(task_id, old_deadline, curr_task.deadline, eid)
+    
+    # SEND NOTIFICATION IF OTHER TASK FIELDS CHANGED
+    if main_changes:
+        changed_field_names = list(main_changes.keys())
+        # Don't duplicate deadline notifications
+        if 'deadline' in changed_field_names:
+            changed_field_names.remove('deadline')
+        
+        if changed_field_names:
+            try:
+                requests.post(
+                    f'{NOTIFICATION_SERVICE_URL}/api/events/task-updated',
+                    json={
+                        'task_id': task_id,
+                        'changed_fields': changed_field_names,
+                        'actor_id': data.get('actor_id', eid)
+                    },
+                    timeout=3
+                )
+                print(f"[Notification] Sent task update notification for fields: {changed_field_names}")
+            except Exception as e:
+                print(f"[Notification] Failed to send task update notification: {e}")
 
     return {"message": "Task updated"}, 200
 
