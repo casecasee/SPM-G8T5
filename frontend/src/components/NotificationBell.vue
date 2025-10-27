@@ -2,10 +2,7 @@
   <div class="notification-bell">
     <!-- Bell Icon Button -->
     <button @click="toggleDropdown" class="bell-button">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25-2 7-2 7h14s-2-1.75-2-7c0-3.87-3.13-7-7-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M9 21c0 1.66 1.34 3 3 3s3-1.34 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
+      <i class="pi pi-bell" style="font-size: 1.5rem;"></i>
       <span v-if="unreadCount > 0" class="badge">{{ unreadCount }}</span>
     </button>
 
