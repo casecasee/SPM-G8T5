@@ -309,6 +309,36 @@
   font-size: 1rem;
 }
 
+
+
+.report-high-priority-header {
+  background: linear-gradient(90deg, #fee2e2, #fecaca);
+  border-left: 6px solid #dc2626;
+}
+
+.report-medium-priority-header {
+  background: linear-gradient(90deg, #fef3c7, #fde68a);
+  border-left: 6px solid #d97706;
+}
+
+.report-low-priority-header {
+  background: linear-gradient(90deg, #d1fae5, #a7f3d0);
+  border-left: 6px solid #059669;
+}
+
+
+.report-overdue-label {
+  color: #fefcfc;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: inline-block;
+  padding: 2px 8px;    
+  border-radius: 20px;       
+  background-color: #e44b3a;
+  min-width: auto;       
+  text-align: center;
+}
+
 .high-priority {
   background: #fef2f2;
   color: #dc2626;
@@ -316,7 +346,7 @@
 }
 
 .medium-priority {
-  background: #fffbeb;
+  background: #ffeda5;
   color: #d97706;
   border-left: 4px solid #d97706;
 }
@@ -326,6 +356,8 @@
   color: #059669;
   border-left: 4px solid #059669;
 }
+
+
 
 .task-count {
   background: rgba(0, 0, 0, 0.1);
@@ -341,6 +373,15 @@
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
 }
 
+.no-tasks-message {
+  text-align: center;
+  color: #9ca3af;
+  font-style: italic;
+  padding: 2rem;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px dashed #d1d5db;
+}
 /* Responsive Task Grid */
 @media (max-width: 768px) {
   .tasks-grid {
@@ -390,6 +431,15 @@
 .meta, .status { font-size: 0.9rem; margin-top: 0.5rem; }
 .relative-time { color: #6b7280; font-size: 0.85rem; font-style: italic; }
 
+.duedate {
+  background: #fff2e6;
+  color: #eb7617;
+  padding: 5px;
+  border-radius: 6px;
+  display:block;
+  margin-bottom:20px
+
+}
 /* Responsive Modal Styling */
 .p-dialog.clean-modal {
   width: 95vw !important;
@@ -1564,6 +1614,14 @@ input[type="datetime-local"] {
   border: 1px dashed #d1d5db;
 }
 
+.report-tab {
+  max-width: 1100px;
+  margin: 2rem auto;
+  padding: 1rem;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  color: #1f2937;
+}
+
 .report-card {
   background: #fff;
   border-radius: 16px;
@@ -1578,21 +1636,27 @@ input[type="datetime-local"] {
   text-align: center;
   font-size: 1.8rem;
   font-weight: 700;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
+  color: #111827;
 }
 
 .task-section {
-  border: 1px solid #ddd;
   border-radius: 12px;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
   overflow: hidden;
+  background: #fafafa;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.05);
 }
 
 .section-header {
-  color: white;
-  padding: 0.7rem 1rem;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.5rem;
   font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
 }
 
 /* Color variations */
@@ -1623,15 +1687,18 @@ input[type="datetime-local"] {
 }
 
 .download-btn {
-  display: block; /* Makes the button a block-level element */
-  margin: 0 auto;
-  padding: 12px 24px;
-  font-size: 16px;
-  font-weight: bold;
-  background: #6edc46;
-  border-radius: 20px;
-  color: #fff;
-  cursor: pointer;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.download-btn:hover {
+  background: linear-gradient(135deg, #34d399, #059669);
+  transform: translateY(-1px);
 }
 
 .task-overdue {
@@ -1639,6 +1706,8 @@ input[type="datetime-local"] {
   /* background-color: #fdecea;        */
   box-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
 }
+
+
 
 .overdue-label {
   color: #fefcfc;
@@ -1652,6 +1721,7 @@ input[type="datetime-local"] {
   text-align: center;
   animation: text-blink 3s infinite;
 }
+
 
 @keyframes text-blink {
   0%, 50%, 100% { color: #fefcfc; }
@@ -1879,5 +1949,279 @@ input[type="datetime-local"] {
 }
 
 @media print {
-  
+  /* Hide the navbar, buttons, and anything else not part of the report */
+  header,
+  nav,
+  .tasks-page,
+  .download-btn,
+  .tabs, 
+  .left-controls,
+  .report-controls,
+  .filter-btn
+  {
+    display: none !important;
+  }
+
+  /* Only show the report card */
+ .report-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+}
+
+
+
+  /* Optional: Adjust text or layout for printing */
+  body {
+    background: white !important;
+  }
+
+  h1, h2, h3 {
+    color: black !important;
+  }
+}
+
+.report-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+.report-controls label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.report-controls input[type="date"] {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+.report-controls button {
+  transition: all 0.2s ease;
+}
+
+
+.left-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.right-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+}
+
+.filter-btn:hover {
+  background: #2563eb;
+}
+
+.report-summary {
+  background: linear-gradient(135deg, #f9fafb, #eef2ff);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.report-summary h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+
+.report-summary ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 2rem;
+}
+
+.report-summary li {
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid #3b82f6;
+  font-size: 0.95rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.progress-pill {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.progress-good { background: #d1fae5; color: #065f46; }
+.progress-average { background: #fef3c7; color: #92400e; }
+.progress-poor { background: #fee2e2; color: #991b1b; }
+
+/* ============================= */
+/* ✨ Task Card Styling Refresh */
+/* ============================= */
+
+.task-card {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  transition: all 0.25s ease;
+  border-left: 5px solid #3b82f6;
+}
+
+.task-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+}
+
+
+
+.task-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.report-overdue-label {
+  background: #ef4444;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.task-body {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1rem;
+}
+
+.desc {
+  font-size: 0.95rem;
+  color: #4b5563;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.info-item i {
+  color: #6b7280;
+  font-size: 0.9rem;
+  width: 18px;
+  text-align: center;
+}
+
+/* Priority & Status Badges */
+.priority-tag {
+  display: inline;
+  border-radius: 6px;
+  color: rgb(17, 17, 17);
+}
+
+.priority-high {
+  color: black;
+}
+
+.priority-medium {
+  background: #f59e0b;
+}
+
+.priority-low {
+  background: #10b981;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: capitalize;
+  color: white;
+}
+
+.status-ongoing {
+  background: #3b82f6;
+}
+
+.status-under-review {
+  background: #f59e0b;
+}
+
+.status-completed {
+  background: #10b981;
+}
+
+.status-default {
+  background: #6b7280;
+}
+
+.relative-time {
+  color: #6b7280;
+  font-style: italic;
+  font-size: 0.8rem;
+  margin-left: 0.25rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .task-card {
+    padding: 1rem;
+  }
+
+  .task-title-row {
+    font-size: 1rem;
+  }
+
+  .desc {
+    font-size: 0.9rem;
+  }
+
+  .info-item {
+    font-size: 0.85rem;
+  }
 }
