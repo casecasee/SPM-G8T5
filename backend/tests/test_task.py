@@ -4,6 +4,9 @@ import unittest
 from datetime import datetime, timedelta, timezone
 import zoneinfo
 
+# Set TESTING environment variable BEFORE importing the app
+os.environ['TESTING'] = 'True'
+
 # Import the Task service app & models
 from employee.employee import Staff
 from tasks.task import app, db  # type: ignore  # relies on your project structure
