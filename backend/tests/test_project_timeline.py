@@ -78,11 +78,17 @@ class TestProjectTimelineAPI(unittest.TestCase):
                 name="Test Project",
                 owner="Manager User",
                 owner_id=1,
-                status="active",
                 tasks_done=0,
                 tasks_total=3
             )
             db.session.add(cls.project)
+            db.session.commit()
+            
+            # Ensure project has members from multiple departments for HR visibility tests
+            cls.project.members.append(cls.manager)
+            cls.project.members.append(cls.staff1)
+            cls.project.members.append(cls.staff2)
+            cls.project.members.append(cls.hr_user)
             db.session.commit()
     
     @classmethod
