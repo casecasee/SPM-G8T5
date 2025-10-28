@@ -4,6 +4,9 @@ import unittest
 from datetime import datetime, timedelta, timezone
 import zoneinfo
 
+# Set TESTING environment variable BEFORE importing the app
+os.environ['TESTING'] = 'True'
+
 # Import the Task service app & models
 from employee.employee import Staff
 from tasks.task import app, db  # type: ignore  # relies on your project structure
@@ -50,8 +53,9 @@ class TaskApiTestCase(unittest.TestCase):
             collab = Staff(employee_name="Collab Two", email="collab@example.com", role="staff", department="Finance", team="A", password="Test123")
             manager = Staff(employee_name="Manager Three", email="manager@example.com", role="manager", department="Finance", team="A", password="Test123")
             different_dept = Staff(employee_name="Other Dept", email="other@example.com", role="staff", department="IT", team="B", password="Test123")
+            new_person = Staff(employee_name="New Person", email="new_person@example.com", role="staff", department="Finance", team="A", password="Test123")
 
-            db.session.add_all([owner, collab, manager, different_dept])
+            db.session.add_all([owner, collab, manager, different_dept, new_person])
             db.session.commit()
 
             # seed tasks
@@ -61,6 +65,7 @@ class TaskApiTestCase(unittest.TestCase):
             cls.collab_id = collab.employee_id
             cls.manager_id = manager.employee_id
             cls.different_dept_id = different_dept.employee_id
+            cls.new_collab_id = new_person.employee_id
 
     @classmethod
     def tearDownClass(cls):
@@ -801,24 +806,261 @@ class TaskApiTestCase(unittest.TestCase):
     # main task can only be updated by task owner, subtasks can only be updated by their own owners (task owner cannot update subtasks unless they are also the subtask owner)
 
     # test update metadata task not found
+    def test_metadata_update_task_not_found(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Updated Title",
+            "description": "Updated Description",
+            "priority": 3,
+            "deadline": generate_deadline(10),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.put("/task/999999", json=payload)
+        self.assertEqual(response.status_code, 404, msg=f"Expected 404 for non-existent task, got {response.status_code}")
 
     # test update metadata by non-owner
+    def test_metadata_update_by_non_owner(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Metadata Update Test Task (non-owner)",
+            "description": "Testing metadata update by non-owner.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Try to update metadata as collaborator (non-owner)
+        self.login_as(self.collab_id, "staff")
+        update_payload = {
+            "title": "Updated Metadata Task (non-owner)",
+            "description": "Updated description by non-owner.",
+            "priority": 3,
+            "deadline": generate_deadline(10),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 403, msg=f"Expected 403 for non-owner, got {response.status_code}")
 
     # test update metadata invalid title
+    def test_metadata_update_invalid_title(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Metadata Update Test Task (invalid title)",
+            "description": "Testing metadata update with invalid title.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Try to update metadata with invalid title
+        update_payload = {
+            "title": "",  # invalid title
+            "description": "Updated description with invalid title.",
+            "priority": 3,
+            "deadline": generate_deadline(10),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid title, got {response.status_code}")
 
     # test update metadata invalid description
+    def test_metadata_update_invalid_description(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Metadata Update Test Task (invalid description)",
+            "description": "Testing metadata update with invalid description.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Try to update metadata with invalid description
+        update_payload = {
+            "title": "Updated Metadata Task (invalid description)",
+            "description": "",  # invalid description
+            "priority": 3,
+            "deadline": generate_deadline(10),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid description, got {response.status_code}")
 
     # test update metadata invalid deadline
+    def test_metadata_update_invalid_deadline(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Metadata Update Test Task (invalid deadline)",
+            "description": "Testing metadata update with invalid deadline.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Try to update metadata with invalid deadline
+        update_payload = {
+            "title": "Updated Metadata Task (invalid deadline)",
+            "description": "Updated description with invalid deadline.",
+            "priority": 3,
+            "deadline": "2023/10/10 10:00:00",  # invalid format
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid deadline, got {response.status_code}")
 
     # test update metadata invalid priority
-
+    def test_metadata_update_invalid_priority(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Metadata Update Test Task (invalid priority)",
+            "description": "Testing metadata update with invalid priority.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Try to update metadata with invalid priority
+        update_payload = {
+            "title": "Updated Metadata Task (invalid priority)",
+            "description": "Updated description with invalid priority.",
+            "priority": 0,  # invalid priority
+            "deadline": generate_deadline(10),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid priority, got {response.status_code}")
 
     # edit project metadata (move from lonely to project. not doing project to lonely and project to project for now)
     # test update metadata project id (project does not exist)
+    def test_metadata_update_invalid_project_id(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Metadata Update Test Task (invalid project id)",
+            "description": "Testing metadata update with invalid project id.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Try to update metadata with invalid project id
+        update_payload = {
+            "title": "Updated Metadata Task (invalid project id)",
+            "description": "Updated description with invalid project id.",
+            "priority": 3,
+            "deadline": generate_deadline(10),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "project_id": 999999,  # non-existent project
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 404, msg=f"Expected 404 for project id not found, got {response.status_code}")
 
     # test update metadata owner (assignment) - need to be same dept if lonely task, need to be project collaborator if project task, can only assign downwards, status needs to be updated from unassigned to ongoing if owner changed and task was unassigned, else status remains same
+    def test_metadata_update_owner_assignment(self):
+        self.login_as(self.manager_id, "manager")
+        payload = {
+            "title": "Metadata Update Test Task (owner assignment)",
+            "description": "Testing metadata update with owner assignment.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Try to update metadata with owner assignment
+        update_payload = {
+            "title": "Updated Metadata Task (owner assignment)",
+            "description": "Updated description with owner assignment.",
+            "priority": 3,
+            "deadline": generate_deadline(10),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "owner": self.collab_id,  # assign owner to collab_id
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 200, msg=f"Owner assignment update failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(task.owner, self.collab_id, msg=f"Expected owner '{self.collab_id}', got '{task.owner}'")
 
     # test update metadata collaborators (must include owner, must be same dept if lonely task, must be project collaborators if project task)
+    def test_metadata_update_collaborators(self):
+        self.login_as(self.owner_id, "staff")
+        print("self.new_collab_id:", self.new_collab_id)
+        print("self.collab_id:", self.collab_id)
+        print("self.owner_id:", self.owner_id)
+        
+        payload = {
+            "title": "Metadata Update Test Task (collaborators update)",
+            "description": "Testing metadata update with collaborators update.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Try to update metadata with collaborators update
+        # new_collab_id = self.seed_employee(department_id=self.department_id)
+        update_payload = {
+            "title": "Updated Metadata Task (collaborators update)",
+            "description": "Updated description with collaborators update.",
+            "priority": 3,
+            "deadline": generate_deadline(10),
+            "collaborators": [self.collab_id, self.new_collab_id],  # add new collaborator
+            "attachments": [],
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 200, msg=f"Collaborators update failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertIn(self.new_collab_id, [collab.employee_id for collab in task.collaborators], msg=f"Expected collaborator '{self.new_collab_id}' not found in task collaborators")
 
     # test update metadata attachments ?
 
@@ -826,7 +1068,196 @@ class TaskApiTestCase(unittest.TestCase):
 
     # test update metadata recurrence ?
 
-    # test update subtask metadata
+    # ------------------------- test update subtask metadata ---------------------------------------
+
+    # test update subtask (create subtask) - given subtask without an id
+    def test_update_subtask_create(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Task with Subtask to Update",
+            "description": "Testing subtask creation during update.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Now update the task to add a subtask
+        # updated payload should still contain the main task details
+
+
+
+        update_payload = {
+            "title": "Task with Subtask to Update",
+            "description": "Testing subtask creation during update.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "subtasks": [{
+                "title": "New Subtask Created During Update",
+                "description": "This subtask is created during task update.",
+                "priority": 2,
+                "deadline": generate_deadline(),
+                "collaborators": [self.collab_id],
+                "attachments": [],
+            }]
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 200, msg=f"Subtask creation during update failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(len(task.subtasks.all()), 1, msg="Subtask not created during update")
+            subtask = task.subtasks[0]
+            self.assertEqual(subtask.title, update_payload["subtasks"][0]["title"], msg="Subtask title mismatch")
+
+    # test update subtask (update existing subtask) - given subtask with an id
+    def test_update_subtask_update_existing(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Task with Subtask to Update Existing",
+            "description": "Testing subtask update during task update.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "subtasks": [{
+                "title": "Existing Subtask",
+                "description": "This subtask will be updated.",
+                "priority": 2,
+                "deadline": generate_deadline(),
+                "collaborators": [self.collab_id],
+                "attachments": [],
+            }]
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task with subtask failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(len(task.subtasks.all()), 1, msg="Subtask not created")
+            subtask = task.subtasks[0]
+            subtask_id = subtask.task_id
+        # Now update the task to modify the existing subtask
+        # updated payload should still contain the main task details
+        
+        update_payload = {
+            "title": "Task with Subtask to Update",
+            "description": "Testing subtask creation during update.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "subtasks": [{
+                "task_id": subtask_id,
+                "title": "Updated Existing Subtask",
+                "description": "This subtask has been updated.",
+                "priority": 3,
+                "deadline": generate_deadline(5),
+                "collaborators": [self.collab_id],
+                "attachments": [],
+            }]
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 200, msg=f"Subtask update during task update failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(len(task.subtasks.all()), 1, msg="Subtask not created during update")
+            subtask = task.subtasks[0]
+            self.assertEqual(subtask.title, update_payload["subtasks"][0]["title"], msg="Subtask title not updated")
+
+    # test update subtask task id given but task not found
+    def test_update_subtask_task_not_found(self):
+        self.login_as(self.owner_id, "staff")
+        update_payload = {
+            "subtasks": [{
+                "id": 1,
+                "title": "Subtask for Non-existent Task",
+                "description": "This subtask is for a non-existent task.",
+                "priority": 2,
+                "deadline": generate_deadline(),
+                "collaborators": [self.collab_id],
+                "attachments": [],
+            }]
+        }
+        response = self.client.put("/task/999999", json=update_payload)
+        self.assertEqual(response.status_code, 404, msg=f"Expected 404 for non-existent task, got {response.status_code}")
+
+    # test update subtask by non-owner (subtasks can only be updated by main task owner or subtask owner)
+    def test_update_subtask_by_non_owner(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Task with Subtask to Test Non-owner Update",
+            "description": "Testing subtask update by non-owner.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "subtasks": [{
+                "title": "Subtask to be Updated by Non-owner",
+                "description": "This subtask will be attempted to be updated by non-owner.",
+                "priority": 2,
+                "deadline": generate_deadline(),
+                "collaborators": [self.collab_id],
+                "attachments": [],
+            }]
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task with subtask failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(len(task.subtasks.all()), 1, msg="Subtask not created")
+            subtask = task.subtasks[0]
+            subtask_id = subtask.task_id
+        # Now try to update the subtask as a non-owner
+        self.login_as(self.collab_id, "staff")  # collab is not owner of main task
+        update_payload = {
+            "subtasks": [{
+                "id": subtask_id,
+                "title": "Attempted Update by Non-owner",
+                "description": "This update should fail.",
+                "priority": 3,
+                "deadline": generate_deadline(5),
+                "collaborators": [self.collab_id],
+                "attachments": [],
+            }]
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 403, msg=f"Expected 403 for non-owner subtask update, got {response.status_code}")
+
+    # below tests are for subtask update (create)
+    # test update subtask invalid title
+
+    # test update subtask invalid description
+
+    # test update subtask invalid deadline (must be within main task deadline)
+
+    # test update subtask invalid priority
+
+    # test update subtask collaborators (must be subset of main task collaborators)
+
+    # test update subtask project id (should inherit from main task)
+
+
+    # 
+
+    # below tests are for subtask update (update existing)
+
 
 
 

@@ -290,6 +290,7 @@
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  margin-top: 2rem;
 }
 
 .priority-section {
@@ -346,7 +347,7 @@
 }
 
 .medium-priority {
-  background: #ffeda5;
+  background: #fbf0c4;
   color: #d97706;
   border-left: 4px solid #d97706;
 }
@@ -1571,7 +1572,7 @@ input[type="datetime-local"] {
 
 .priority-badge.priority-medium {
   background: #fffbeb;
-  color: #d97706;
+  color: #d4780e;
   border: 1px solid #fed7aa;
 }
 

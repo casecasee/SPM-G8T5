@@ -188,6 +188,20 @@ def notify_due_date_changed(task_id, old_date, new_date, changed_by_id):
     except Exception as e:
         print(f"[Notification] Failed to send due date notification: {e}")
 
+def trigger_deadline_reminder_check():
+    """Trigger deadline reminder check immediately after task creation/update"""
+    try:
+        response = requests.post(
+            f'{NOTIFICATION_SERVICE_URL}/api/test/deadline-reminders',
+            timeout=5
+        )
+        if response.ok:
+            print(f"[Notification] Triggered deadline reminder check")
+        else:
+            print(f"[Notification] Failed to trigger deadline reminder check: {response.status_code}")
+    except Exception as e:
+        print(f"[Notification] Failed to trigger deadline reminder check: {e}")
+
 # ------------------ Mentions Helpers ------------------
 MENTION_RE = re.compile(r'@(\d+)')  # numeric ids (still supported)
 # Captures mentions like @Name, @FirstName LastName, @Name-With-Hyphens
@@ -423,7 +437,7 @@ def create_task():
                 # handle owner
                 sub_owner = subtask.get('owner', eid)  # default to parent task owner if not given
                 if sub_owner not in collaborators_ids:
-                    raise ValueError(f"Subtask owner {sub_owner} is not a collaborator of the parent task")
+                    raise ValueError(f"1. Subtask owner {sub_owner} is not a collaborator of the parent task")
                 
                 # add owner as collaborator
                 sub_collaborators_ids = subtask.get('collaborators', [])
@@ -432,7 +446,7 @@ def create_task():
                 # make sure subtask collaborators are subset of task collaborators
                 for cid in sub_collaborators_ids:
                     if cid not in collaborators_ids:
-                        raise ValueError(f"Subtask collaborator {cid} is not a collaborator of the parent task")
+                        raise ValueError(f"2. Subtask collaborator {cid} is not a collaborator of the parent task")
                 sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
                 
                 # handle deadline
@@ -474,6 +488,9 @@ def create_task():
                 set_timestamps_by_status(new_subtask, None, sub_status)
                 db.session.add(new_subtask)
         db.session.commit()
+
+        # Trigger immediate deadline reminder check for newly created task
+        trigger_deadline_reminder_check()
 
         return {"message": "Task created", "task_id": id}, 201
     except ValueError as ve:
@@ -771,9 +788,13 @@ def update_task(task_id):
     
     # validate and update fields
     if 'title' in data:
+        if not data['title'].strip():
+            return {"message": "Title cannot be empty"}, 400
         curr_task.title = data['title']
 
     if 'description' in data:
+        if not data['description'].strip():
+            return {"message": "Description cannot be empty"}, 400
         curr_task.description = data['description']
 
     if 'deadline' in data:
@@ -783,6 +804,10 @@ def update_task(task_id):
         curr_task.deadline = deadline
 
     if 'priority' in data:
+        if not isinstance(data['priority'], int):
+            return {"message": "Priority must be an integer"}, 400
+        if data['priority'] not in range(1, 11):
+            return {"message": "Invalid priority value"}, 400
         curr_task.priority = data['priority']
 
     # TODO: check if collaborators are subset of project if project_id is given
@@ -872,10 +897,12 @@ def update_task(task_id):
 
     # Update collaborators in database
     if 'collaborators' in data or 'project_id' in data:
+        # print('Updating collaborators to:', collaborators_ids)
         staff_list = Staff.query.filter(Staff.employee_id.in_(collaborators_ids)).all()
         curr_task.collaborators = staff_list
 
     db.session.commit()
+    # print("updated task collaborators are:", [s.employee_id for s in curr_task.collaborators])
 
     # handle subtasks
     # TODO: check this
@@ -940,7 +967,7 @@ def update_task(task_id):
                             return {"message": "Manager cannot assign tasks upwards"}, 400
                         # TODO: finish business rules for assignment hierarchy
                         if new_owner not in collaborators_ids:
-                            return {"message": f"Subtask owner {new_owner} is not a collaborator of the parent task"}, 400
+                            return {"message": f"3. Subtask owner {new_owner} is not a collaborator of the parent task"}, 400
                         existing_subtask.owner = new_owner
                     
                 if 'collaborators' in subtask:
@@ -951,7 +978,7 @@ def update_task(task_id):
                     # make sure subtask collaborators are subset of task collaborators
                     for cid in sub_collaborators_ids:
                         if cid not in collaborators_ids:
-                            return {"message": f"Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
+                            return {"message": f"4. Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
                     sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
                     existing_subtask.collaborators = sub_collaborators
                 
@@ -981,7 +1008,7 @@ def update_task(task_id):
                 # make sure subtask collaborators are subset of task collaborators
                 for cid in sub_collaborators_ids:
                     if cid not in collaborators_ids:
-                        return {"message": f"Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
+                        return {"message": f" 5. Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
                 sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
                 
                 # handle deadline
@@ -1018,6 +1045,8 @@ def update_task(task_id):
     # SEND NOTIFICATION IF DEADLINE CHANGED
     if old_deadline != curr_task.deadline:
         notify_due_date_changed(task_id, old_deadline, curr_task.deadline, eid)
+        # Trigger deadline reminder check for updated deadline
+        trigger_deadline_reminder_check()
     
     # SEND NOTIFICATION IF OTHER TASK FIELDS CHANGED
     if main_changes:
