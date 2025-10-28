@@ -1961,7 +1961,8 @@ input[type="datetime-local"] {
   /* Hide the navbar, buttons, and anything else not part of the report */
   header,
   nav,
-  .tasks-page,
+.tasks-header,
+
   .download-btn,
   .tabs, 
   .left-controls,

@@ -619,13 +619,71 @@ const report_overdueTasks = computed(() =>
 
 const report_overallProgress = computed(() => {
   const total = report_displayTasks.value.length
-  if (total === 0) return 'No Data'
+  if (total === 0) return 'Nil'
 
   const overdueCount = report_overdueTasks.value.length
   if (overdueCount === 0) return 'Good'
   if (overdueCount === 1) return 'Average'
   return 'Poor'
 })
+
+
+
+// --- Company-wide report filtering ---
+const companyStartDate = ref(null)
+const companyEndDate = ref(null)
+
+const filterCompanyTasksByDate = () => {
+  // This triggers recomputation
+  company_report_displayTasks.value
+}
+
+const company_report_displayTasks = computed(() => {
+  const start = companyStartDate.value ? new Date(companyStartDate.value) : null
+  const end = companyEndDate.value ? new Date(companyEndDate.value) : null
+
+  return allTasks.value.filter(t => {
+    const createdAt = new Date(t.created_at)
+    const dueDate = new Date(t.due_date)
+
+    // Include tasks if overlapping with chosen range
+    const overlaps = (!start || dueDate >= start) && (!end || createdAt <= end)
+    return overlaps
+  })
+})
+
+const company_tasksByDepartment = computed(() => {
+  const grouped = {}
+  company_report_displayTasks.value.forEach(task => {
+    const dept = task.department || 'Unassigned'
+    if (!grouped[dept]) grouped[dept] = { high: [], medium: [], low: [] }
+
+    const p = task.priority || 5
+    if (p >= 8) grouped[dept].high.push(task)
+    else if (p >= 5) grouped[dept].medium.push(task)
+    else grouped[dept].low.push(task)
+  })
+  return grouped
+})
+
+const company_report_overdueTasks = computed(() => company_report_displayTasks.value.filter(t => isOverdue(t)))
+
+const company_overallProgress = computed(() => {
+  const count = company_report_overdueTasks.value.length
+  if (count === 0) return 'Good'
+  if (count === 1) return 'Average'
+  return 'Poor'
+})
+
+const companyFormattedDateRange = computed(() => {
+  if (!companyStartDate.value || !companyEndDate.value) return 'All Time'
+  return `${formatDate(companyStartDate.value)} - ${formatDate(companyEndDate.value)}`
+})
+
+
+
+
+
 
 function hasTasksInSection(section) {
   const groups = report_tasksByPriority.value
@@ -1777,5 +1835,6 @@ const formattedDateRange = computed(() => {
 function updateDateFilter() {
   // Nothing needed — computed handles reactivity
 }
+
 
 </script>

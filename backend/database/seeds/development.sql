@@ -46,6 +46,7 @@ INSERT INTO task (task_id, title, description, attachment, priority, recurrence,
 (11, 'Approve Capital Expenditure Requests', 'Evaluate all CAPEX requests exceeding department thresholds and approve or reject accordingly.', '[]', 9, NULL, NULL, '2025-10-23 14:03:00', NULL, '2025-10-18 23:00:14', 'unassigned', 35, NULL, NULL),
 (12, 'Financial Policy Revision', 'Oversee the revision of internal finance policies to align with new regulatory standards.', '[]', 5, NULL, NULL, '2025-10-21 15:04:00', NULL, '2025-10-18 23:00:36', 'unassigned', 35, NULL, NULL);
 
+
 -- Insert project members (from your current data)
 INSERT INTO project_members (project_id, staff_id) VALUES
 (1, 1), (1, 2),  -- Website Redesign team

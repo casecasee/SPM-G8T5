@@ -16,17 +16,13 @@
   <!-- Tabs visible to all users -->
   <div class="tabs">
     <button :class="['tab', currentTab==='my' ? 'active' : '']" @click="currentTab='my'">My Tasks</button>
-    <button :class="['tab', currentTab==='team' ? 'active' : '']" @click="currentTab='team'"
-      v-if="canViewTeamTasks">Team's Tasks</button>
-    <button :class="['tab', currentTab==='departments' ? 'active' : '']" @click="currentTab='departments'"
-      v-if="isSeniorManagerOrHR">All Departments</button>
-
-    <button :class="['tab', currentTab==='report' ? 'active' : '']" @click="currentTab='report'"
-      v-if="isManagerRole">Task Report</button>
+    <button :class="['tab', currentTab==='team' ? 'active' : '']" @click="currentTab='team'" v-if="canViewTeamTasks">Team's Tasks</button>
+    <button :class="['tab', currentTab==='departments' ? 'active' : '']" @click="currentTab='departments'" v-if="isSeniorManagerOrHR">All Departments</button>
+    <button :class="['tab', currentTab==='individual_report' ? 'active' : '']" @click="currentTab='individual_report'">My Task Report</button>
+    <button :class="['tab', currentTab==='company_report' ? 'active' : '']" @click="currentTab='company_report'" v-if="isSeniorManagerOrHR">Company's Task Report</button>
  
   </div>
 
-  <!-- Team search bar -->
   <!-- Team search bar -->
 <div v-if="currentTab==='team'" class="team-search-section">
   <!-- Search bar -->
@@ -52,8 +48,7 @@
 
   <!-- Employee grid -->
 
-
-<div v-if="currentTab==='report'" class="report-tab">
+<div v-else-if="currentTab==='individual_report'" class="report-tab">
   <div class="report-controls">
     <div class="left-controls">
       <label for="start-date">Start:</label>
@@ -310,6 +305,112 @@
 
 
 
+<!-- Company-wide Task Report -->
+<div v-if="isSeniorManagerOrHR && currentTab==='company_report'" class="report-tab">
+  <div class="report-controls">
+    <div class="left-controls">
+      <label for="company-start-date">Start:</label>
+      <input type="date" v-model="companyStartDate" id="company-start-date" @change="filterCompanyTasksByDate" />
+      <label for="company-end-date">End:</label>
+      <input type="date" v-model="companyEndDate" id="company-end-date" @change="filterCompanyTasksByDate" />
+      <button class="filter-btn" @click="filterCompanyTasksByDate">Filter by Date</button>
+    </div>
+    <div class="right-controls">
+      <button class="download-btn" @click="printCompanyReport">Download Report</button>
+    </div>
+  </div>
+
+  <div class="report-card">
+    <h2 class="report-title">🏢 Company Task Report</h2>
+    <div class="report-summary">
+      <h3>Task Summary ({{ companyFormattedDateRange }})</h3>
+      <ul>
+        <li><strong>Total Tasks:</strong> {{ company_report_displayTasks.length }}</li>
+        <li><strong>Overdue Tasks:</strong> {{ company_report_overdueTasks.length }}</li>
+        <li><strong>Overall Progress:</strong> {{ company_overallProgress }}</li>
+      </ul>
+    </div>
+
+    <!-- Department Breakdown -->
+    <div v-for="(deptTasks, deptName) in company_tasksByDepartment" :key="deptName" class="department-report-section">
+      <h3 class="department-header">🏬 {{ deptName }}</h3>
+
+      <!-- High Priority -->
+      <div class="task-section">
+        <div class="section-header report-high-priority-header">
+          <span>High Priority</span>
+          <span class="task-count">{{ deptTasks.high.length }}</span>
+        </div>
+        <div v-if="deptTasks.high.length" class="tasks-grid">
+          <Card v-for="task in deptTasks.high" :key="task.id" class="task-card" :class="{'task-overdue': isOverdue(task)}">
+            <template #title>
+              <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
+              <div class="task-title-row">
+                <span>{{ task.name }}</span>
+              </div>
+              <p class="desc">{{ task.description }}</p>
+            </template>
+            <template #content>
+              <p><strong>Owner:</strong> {{ getOwnerName(task.owner) }}</p>
+              <p><strong>Due:</strong> {{ formatDate(task.due_date) }}</p>
+              <p><strong>Priority Score:</strong> {{ task.priority }}</p>
+            </template>
+          </Card>
+        </div>
+        <p v-else class="no-tasks-message">No high priority tasks in this timeframe</p>
+      </div>
+
+      <!-- Medium Priority -->
+      <div class="task-section">
+        <div class="section-header report-medium-priority-header">
+          <span>Medium Priority</span>
+          <span class="task-count">{{ deptTasks.medium.length }}</span>
+        </div>
+        <div v-if="deptTasks.medium.length" class="tasks-grid">
+          <Card v-for="task in deptTasks.medium" :key="task.id" class="task-card">
+            <template #title>
+              <div class="task-title-row">
+                <span>{{ task.name }}</span>
+              </div>
+              <p class="desc">{{ task.description }}</p>
+            </template>
+            <template #content>
+              <p><strong>Owner:</strong> {{ getOwnerName(task.owner) }}</p>
+              <p><strong>Due:</strong> {{ formatDate(task.due_date) }}</p>
+              <p><strong>Priority Score:</strong> {{ task.priority }}</p>
+            </template>
+          </Card>
+        </div>
+        <p v-else class="no-tasks-message">No medium priority tasks in this timeframe</p>
+      </div>
+
+      <!-- Low Priority -->
+      <div class="task-section">
+        <div class="section-header report-low-priority-header">
+          <span>Low Priority</span>
+          <span class="task-count">{{ deptTasks.low.length }}</span>
+        </div>
+        <div v-if="deptTasks.low.length" class="tasks-grid">
+          <Card v-for="task in deptTasks.low" :key="task.id" class="task-card">
+            <template #title>
+              <div class="task-title-row">
+                <span>{{ task.name }}</span>
+              </div>
+              <p class="desc">{{ task.description }}</p>
+            </template>
+            <template #content>
+              <p><strong>Owner:</strong> {{ getOwnerName(task.owner) }}</p>
+              <p><strong>Due:</strong> {{ formatDate(task.due_date) }}</p>
+              <p><strong>Priority Score:</strong> {{ task.priority }}</p>
+            </template>
+          </Card>
+        </div>
+        <p v-else class="no-tasks-message">No low priority tasks in this timeframe</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 
 
@@ -373,7 +474,7 @@
 </div>
 </div>
 
-<div v-if="currentTab !== 'report'" class="tasks-container">
+<div v-if="currentTab !== 'report' && currentTab !== 'individual_report'" class="tasks-container">
   <!-- High Priority Tasks -->
   <div v-if="tasksByPriority.high.length > 0" class="priority-section">
     <div class="priority-header high-priority">
@@ -487,6 +588,7 @@
   <i class="pi pi-inbox"></i>
   <p>No tasks found</p>
 </div>
+
 
 
 <Dialog v-model:visible="showModal" modal
