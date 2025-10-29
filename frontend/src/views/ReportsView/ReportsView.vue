@@ -1,5 +1,5 @@
-<template src="./TasksView.template.html"></template>
-<style src="./TasksView.style.css"></style>
+<template src="./ReportsView.template.html"></template>
+<style src="./ReportsView.style.css"></style>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
@@ -1838,6 +1838,7 @@ const formattedDateRange = computed(() => {
 function updateDateFilter() {
   // Nothing needed — computed handles reactivity
 }
+
 
 
 </script>

@@ -29,7 +29,13 @@ INSERT INTO staff (employee_id, employee_name, email, department, role, password
 INSERT INTO projects (id, name, owner, owner_id, tasks_done, tasks_total, due_date) VALUES
 (1, 'Website Redesign', 'test', 1, 0, 0, '2025-12-15 00:00:00'),
 (2, 'Marketing Launch', 'test2', 2, 0, 0, '2025-12-20 00:00:00'),
-(3, 'Data Migration', 'James Connor', 47, 0, 0, '2025-12-31 00:00:00');
+(3, 'Data Migration', 'James Connor', 47, 0, 0, '2025-12-31 00:00:00'),
+(4, 'admin project', 'James Connor' , 47, 0,0, '2025-12-31 00:00:00' ),
+(5, 'finance project', 'David Tan', 35, 0,0, '2025-12-31 00:00:00' ),
+(6, 'HR project', 'Samuel Lee', 36, 0,0, '2025-12-31 00:00:00' ),
+(7, 'IT project', 'Charlie Owner', 48, 0,0, '2025-12-31 00:00:00' ),
+(8, 'marketing project', 'Michael Adams', 42, 0,0, '2025-12-31 00:00:00' ),
+(9, 'operations project', 'Lucas Grant', 45, 0,0, '2025-12-31 00:00:00' );
 
 -- Insert tasks data (EXACT match to your current data)
 INSERT INTO task (task_id, title, description, attachment, priority, recurrence, start_date, deadline, completed_date, created_at, status, owner, project_id, parent_id) VALUES
@@ -45,6 +51,86 @@ INSERT INTO task (task_id, title, description, attachment, priority, recurrence,
 (10, 'Expense Policy Training', 'Conduct training for staff on updated expense reimbursement policies.', '[]', 3, NULL, NULL, '2025-11-07 12:00:00', NULL, '2025-10-18 22:58:45', 'unassigned', 1, NULL, NULL),
 (11, 'Approve Capital Expenditure Requests', 'Evaluate all CAPEX requests exceeding department thresholds and approve or reject accordingly.', '[]', 9, NULL, NULL, '2025-10-23 14:03:00', NULL, '2025-10-18 23:00:14', 'unassigned', 35, NULL, NULL),
 (12, 'Financial Policy Revision', 'Oversee the revision of internal finance policies to align with new regulatory standards.', '[]', 5, NULL, NULL, '2025-10-21 15:04:00', NULL, '2025-10-18 23:00:36', 'unassigned', 35, NULL, NULL);
+
+INSERT INTO task (task_id, title, description, attachment, priority, recurrence, start_date, deadline, completed_date, created_at, status, owner, project_id, parent_id) VALUES
+-- Admin (33)
+(13, 'Update Office Asset Register', 'Record all new office assets and ensure disposal of outdated equipment is logged properly.', '[]', 6, NULL, NULL, '2025-11-02 10:00:00', NULL, '2025-10-29 10:00:00', 'ongoing', 33, 4, NULL),
+(14, 'Coordinate Meeting Room Bookings', 'Oversee scheduling of meeting rooms for upcoming departmental events and staff meetings.', '[]', 4, NULL, NULL, '2025-11-05 09:00:00', NULL, '2025-10-29 10:02:00', 'under review', 33, 4, NULL),
+(15, 'Organize Office Supplies Inventory', 'Perform quarterly stocktake of stationery and raise purchase requests for low items.', '[]', 5, NULL, NULL, '2025-11-08 14:00:00', NULL, '2025-10-29 10:05:00', 'unassigned', 33, 4, NULL),
+
+-- Finance (34–35)
+(16, 'Quarterly Tax Filing Preparation', 'Compile all financial statements and ensure all tax documents are in order for submission.', '[]', 9, NULL, NULL, '2025-11-10 12:00:00', NULL, '2025-10-29 10:10:00', 'ongoing', 34, 5, NULL),
+(17, 'Vendor Payment Schedule Update', 'Review and update the vendor payment calendar for upcoming month.', '[]', 7, NULL, NULL, '2025-11-06 17:00:00', NULL, '2025-10-29 10:12:00', 'done', 34, 5, NULL),
+(18, 'Expense Audit Follow-up', 'Coordinate with departments to clarify flagged expenses during last internal audit.', '[]', 8, NULL, NULL, '2025-11-04 11:00:00', NULL, '2025-10-29 10:14:00', 'ongoing', 34, 5, NULL),
+
+(19, 'Forecast Departmental Budgets', 'Analyze spending patterns and prepare Q1 2026 budget forecasts for each department.', '[]', 9, NULL, NULL, '2025-11-12 15:00:00', NULL, '2025-10-29 10:15:00', 'under review', 35, 5, NULL),
+(20, 'Reconcile Corporate Credit Cards', 'Verify all corporate card statements for discrepancies and submit reconciliation reports.', '[]', 7, NULL, NULL, '2025-11-03 10:30:00', NULL, '2025-10-29 10:17:00', 'ongoing', 35, 5, NULL),
+(21, 'Finance SOP Documentation', 'Update internal finance standard operating procedures for onboarding new staff.', '[]', 5, NULL, NULL, '2025-11-09 09:00:00', NULL, '2025-10-29 10:18:00', 'unassigned', 35, 5, NULL),
+
+-- HR (36–38)
+(22, 'Recruitment Drive Coordination', 'Plan and schedule interviews for upcoming graduate hiring round.', '[]', 8, NULL, NULL, '2025-11-07 10:00:00', NULL, '2025-10-29 10:19:00', 'ongoing', 36, 6, NULL),
+(23, 'Employee Engagement Survey', 'Design and launch the annual employee satisfaction survey to all staff.', '[]', 6, NULL, NULL, '2025-11-10 13:00:00', NULL, '2025-10-29 10:21:00', 'under review', 36, 6, NULL),
+(24, 'HR Compliance Checklist', 'Ensure HR policies align with latest labor law requirements.', '[]', 9, NULL, NULL, '2025-11-02 12:00:00', NULL, '2025-10-29 10:23:00', 'done', 36, 6, NULL),
+
+(25, 'Performance Appraisal Tracking', 'Monitor completion status of mid-year performance appraisals.', '[]', 7, NULL, NULL, '2025-11-08 11:00:00', NULL, '2025-10-29 10:24:00', 'ongoing', 37, 6, NULL),
+(26, 'Update Employee Database', 'Review and update employee records with recent promotions and role changes.', '[]', 5, NULL, NULL, '2025-11-04 17:00:00', NULL, '2025-10-29 10:26:00', 'unassigned', 37, 6, NULL),
+(27, 'Training Needs Analysis', 'Identify departments that require training and create proposals for next quarter.', '[]', 6, NULL, NULL, '2025-11-11 09:30:00', NULL, '2025-10-29 10:27:00', 'under review', 37, 6, NULL),
+
+(28, 'Onboarding Kit Preparation', 'Prepare welcome materials and access passes for incoming new hires.', '[]', 4, NULL, NULL, '2025-11-03 09:00:00', NULL, '2025-10-29 10:29:00', 'done', 38, 6, NULL),
+(29, 'Exit Interview Reports', 'Summarize findings from recent employee exit interviews.', '[]', 5, NULL, NULL, '2025-11-05 15:00:00', NULL, '2025-10-29 10:30:00', 'ongoing', 38, 6, NULL),
+(30, 'Wellness Program Planning', 'Design monthly wellness initiatives to promote employee health.', '[]', 7, NULL, NULL, '2025-11-09 16:00:00', NULL, '2025-10-29 10:31:00', 'unassigned', 38, 6, NULL),
+
+-- IT (39–41, 48–50)
+(31, 'Network Security Audit', 'Conduct a full audit of firewall configurations and access control lists.', '[]', 9, NULL, NULL, '2025-11-12 12:00:00', NULL, '2025-10-29 10:32:00', 'ongoing', 39, 7, NULL),
+(32, 'Server Maintenance Schedule', 'Draft a new maintenance plan for quarterly server updates.', '[]', 6, NULL, NULL, '2025-11-06 14:00:00', NULL, '2025-10-29 10:33:00', 'done', 39, 7, NULL),
+(33, 'Software License Renewal', 'Review software subscriptions and renew those expiring next month.', '[]', 8, NULL, NULL, '2025-11-10 09:00:00', NULL, '2025-10-29 10:34:00', 'unassigned', 39, 7, NULL),
+
+(34, 'Database Optimization', 'Analyze query performance and apply necessary database indexing.', '[]', 7, NULL, NULL, '2025-11-05 13:00:00', NULL, '2025-10-29 10:35:00', 'ongoing', 40, 7, NULL),
+(35, 'Helpdesk Ticket Review', 'Analyze recurring IT issues from the past month and identify patterns.', '[]', 5, NULL, NULL, '2025-11-08 11:00:00', NULL, '2025-10-29 10:36:00', 'under review', 40, 7, NULL),
+(36, 'Deploy Security Patches', 'Install latest OS and software security updates across all systems.', '[]', 9, NULL, NULL, '2025-11-11 16:00:00', NULL, '2025-10-29 10:37:00', 'ongoing', 40, 7, NULL),
+
+(37, 'Set Up Backup Server', 'Configure backup server and test disaster recovery procedures.', '[]', 8, NULL, NULL, '2025-11-07 14:00:00', NULL, '2025-10-29 10:38:00', 'under review', 41, 7, NULL),
+(38, 'Asset Tagging for Laptops', 'Implement asset tags for all new laptops to enhance tracking.', '[]', 6, NULL, NULL, '2025-11-09 10:00:00', NULL, '2025-10-29 10:39:00', 'done', 41, 7, NULL),
+(39, 'VPN Access Review', 'Revalidate VPN access permissions and remove inactive users.', '[]', 5, NULL, NULL, '2025-11-03 09:30:00', NULL, '2025-10-29 10:40:00', 'unassigned', 41, 7, NULL),
+
+(40, 'IT Helpdesk Training', 'Conduct refresher training for helpdesk staff on incident management.', '[]', 6, NULL, NULL, '2025-11-06 09:00:00', NULL, '2025-10-29 10:41:00', 'ongoing', 48, 7, NULL),
+(41, 'System Access Audit', 'Review user access rights to ensure compliance with IT policies.', '[]', 9, NULL, NULL, '2025-11-08 11:00:00', NULL, '2025-10-29 10:42:00', 'done', 48, 7, NULL),
+(42, 'Software Deployment Testing', 'Run UAT for newly developed internal software tools.', '[]', 8, NULL, NULL, '2025-11-10 14:00:00', NULL, '2025-10-29 10:43:00', 'under review', 48, 7, NULL),
+
+(43, 'Cloud Service Cost Analysis', 'Compare cloud provider costs and suggest optimization strategies.', '[]', 7, NULL, NULL, '2025-11-11 13:00:00', NULL, '2025-10-29 10:44:00', 'unassigned', 49, 7, NULL),
+(44, 'Implement MFA for Staff', 'Roll out multi-factor authentication for all employee accounts.', '[]', 8, NULL, NULL, '2025-11-05 12:00:00', NULL, '2025-10-29 10:45:00', 'ongoing', 49, 7, NULL),
+(45, 'IT Asset Disposal Plan', 'Prepare disposal strategy for obsolete devices following compliance protocols.', '[]', 6, NULL, NULL, '2025-11-09 16:00:00', NULL, '2025-10-29 10:46:00', 'done', 49, 7, NULL),
+
+(46, 'Upgrade Internal Network', 'Coordinate with vendor to upgrade switches and routers for faster connectivity.', '[]', 9, NULL, NULL, '2025-11-12 10:00:00', NULL, '2025-10-29 10:47:00', 'ongoing', 50, 7, NULL),
+(47, 'Data Backup Verification', 'Ensure backups are successfully completed and restorable from storage.', '[]', 7, NULL, NULL, '2025-11-08 15:00:00', NULL, '2025-10-29 10:48:00', 'under review', 50, 7, NULL),
+(48, 'Support Ticket Response Time Review', 'Evaluate current support response times and propose efficiency improvements.', '[]', 5, NULL, NULL, '2025-11-06 09:30:00', NULL, '2025-10-29 10:49:00', 'done', 50, 7, NULL),
+
+-- Marketing (42–44)
+(49, 'Social Media Campaign Planning', 'Develop campaign ideas for upcoming open house event.', '[]', 7, NULL, NULL, '2025-11-09 10:00:00', NULL, '2025-10-29 10:50:00', 'ongoing', 42, 8, NULL),
+(50, 'Content Calendar Update', 'Revise marketing content schedule for next month.', '[]', 4, NULL, NULL, '2025-11-05 11:00:00', NULL, '2025-10-29 10:51:00', 'unassigned', 42, 8, NULL),
+(51, 'Email Newsletter Design', 'Create and test email layouts for upcoming campaign.', '[]', 6, NULL, NULL, '2025-11-10 09:00:00', NULL, '2025-10-29 10:52:00', 'under review', 42, 8, NULL),
+
+(52, 'Market Research Report', 'Compile findings on competitor outreach and digital strategies.', '[]', 9, NULL, NULL, '2025-11-08 14:00:00', NULL, '2025-10-29 10:53:00', 'done', 43, 8, NULL),
+(53, 'Event Poster Design', 'Design promotional materials for the year-end showcase.', '[]', 5, NULL, NULL, '2025-11-07 15:00:00', NULL, '2025-10-29 10:54:00', 'ongoing', 43, 8, NULL),
+(54, 'Ad Performance Analysis', 'Review metrics from recent online ads to optimize targeting.', '[]', 8, NULL, NULL, '2025-11-11 09:30:00', NULL, '2025-10-29 10:55:00', 'under review', 43, 8, NULL),
+
+(55, 'Update Branding Guidelines', 'Revise color palette and typography standards for new campaigns.', '[]', 6, NULL, NULL, '2025-11-06 10:00:00', NULL, '2025-10-29 10:56:00', 'ongoing', 44, 8, NULL),
+(56, 'Collaborate with Influencers', 'Identify and reach out to potential influencers for partnership.', '[]', 7, NULL, NULL, '2025-11-09 11:00:00', NULL, '2025-10-29 10:57:00', 'done', 44, 8, NULL),
+(57, 'Photography Session Planning', 'Arrange photoshoot logistics for campaign visuals.', '[]', 5, NULL, NULL, '2025-11-12 15:00:00', NULL, '2025-10-29 10:58:00', 'under review', 44, 8, NULL),
+
+-- Operations (45–46)
+(58, 'Facility Maintenance Check', 'Inspect key facilities for safety compliance and repair needs.', '[]', 8, NULL, NULL, '2025-11-05 09:00:00', NULL, '2025-10-29 10:59:00', 'ongoing', 45, 9, NULL),
+(59, 'Supplier Contract Renewal', 'Negotiate contract extensions with main service vendors.', '[]', 7, NULL, NULL, '2025-11-08 10:00:00', NULL, '2025-10-29 11:00:00', 'unassigned', 45, 9, NULL),
+(60, 'Inventory Control Audit', 'Conduct audit to ensure accurate stock levels and documentation.', '[]', 9, NULL, NULL, '2025-11-11 13:00:00', NULL, '2025-10-29 11:01:00', 'under review', 45, 9, NULL),
+
+(61, 'Logistics Route Optimization', 'Evaluate transport routes to reduce operational costs.', '[]', 6, NULL, NULL, '2025-11-09 12:00:00', NULL, '2025-10-29 11:02:00', 'done', 46, 9, NULL),
+(62, 'Warehouse Space Planning', 'Reorganize storage areas for improved accessibility and safety.', '[]', 5, NULL, NULL, '2025-11-06 14:00:00', NULL, '2025-10-29 11:03:00', 'ongoing', 46, 9, NULL),
+(63, 'Vendor Delivery Review', 'Analyze vendor delivery performance metrics for the last quarter.', '[]', 4, NULL, NULL, '2025-11-10 11:00:00', NULL, '2025-10-29 11:04:00', 'unassigned', 46, 9, NULL),
+
+-- Admin (47)
+(64, 'Organize Digital File Archive', 'Reorganize shared drives and remove redundant documents.', '[]', 5, NULL, NULL, '2025-11-08 09:30:00', NULL, '2025-10-29 11:05:00', 'ongoing', 47, 4, NULL),
+(65, 'Prepare Monthly Staff Attendance Report', 'Compile attendance summaries and report to HR.', '[]', 6, NULL, NULL, '2025-11-05 10:00:00', NULL, '2025-10-29 11:06:00', 'done', 47, 4, NULL),
+(66, 'Office Layout Update Plan', 'Assist management in drafting new seating arrangement plans.', '[]', 7, NULL, NULL, '2025-11-11 12:00:00', NULL, '2025-10-29 11:07:00', 'under review', 47, 4, NULL);
 
 -- Insert project members (from your current data)
 INSERT INTO project_members (project_id, staff_id) VALUES
