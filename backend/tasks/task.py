@@ -76,13 +76,13 @@ def convert_datetime(iso_str: str):
 #     dt = datetime.now(local_tz)
 #     return dt
 
-# def get_collaborators(collaborator_ids):
-#     collaborators = []
-#     for cid in collaborator_ids:
-#         staff = Staff.query.get(cid)
-#         if staff:
-#             collaborators.append(staff)
-#     return collaborators
+def get_collaborators(collaborator_ids):
+    collaborators = []
+    for cid in collaborator_ids:
+        staff = Staff.query.get(cid)
+        if staff:
+            collaborators.append(staff)
+    return collaborators
 
 def set_timestamps_by_status(task, old_status, new_status):
     """Set start_date and completed_date based on status transitions"""

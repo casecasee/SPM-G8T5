@@ -1775,8 +1775,27 @@ class TaskApiTestCase(unittest.TestCase):
     #     response = self.client.put(f"/task/{task_id}", json=update_payload)
     #     self.assertEqual(response.status_code, 403, msg=f"Expected 403 for non-owner manager, got {response.status_code}")
 
-    # def test_assign_tasks(self):
-    #     pass
+
+# -------------------------- TEST GET TASKS ---------------------------------------------------
+
+# staff gets task (should get all the tasks they are owner of and collaborator of, as well as all the tasks in their team)
+# return format: {my_tasks: [...], team_tasks: [...]}
+def test_get_tasks_staff(self):
+    pass
+
+
+# manager gets task (should get all the tasks they are owner of and collaborator of, as well as all the tasks in their team - same as staff)
+def test_get_tasks_manager(self):
+    pass
+
+# director gets task (should get all the tasks they are owner of and collaborator of, as well as all the tasks in the company (because they are senior management))
+# return as {my_tasks: [], company_tasks: {dept1: {team1: {emp1: [list of tasks], emp2: [...]}, team2: {...}}, dept2: {...}}}
+def test_get_tasks_director(self):
+    pass
+
+# HR (dept) gets task (regardless of role) (should get all the tasks they are the owner of and collaborator of, as well as all the tasks in the company (because they are HR))
+def test_get_tasks_hr(self):
+    pass
 
 
 if __name__ == "__main__":
