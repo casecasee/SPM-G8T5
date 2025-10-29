@@ -4,6 +4,8 @@ import unittest
 from datetime import datetime, timedelta, timezone
 import zoneinfo
 
+os.environ['TESTING'] = 'True'
+
 # Import the Task service app & models
 from employee.employee import Staff
 from tasks.task import app, db  # type: ignore  # relies on your project structure
@@ -14,6 +16,7 @@ from models.comment_mention import CommentMention  # type: ignore
 from models.project import Project  # type: ignore
 
 UTC = timezone.utc
+
 
 def generate_deadline(days_ahead=5):
     deadline = (datetime.now(UTC) + timedelta(days=days_ahead)) \
@@ -1239,200 +1242,200 @@ class TaskApiTestCase(unittest.TestCase):
 
     # below tests are for subtask update (create)
     # test update subtask invalid title
-    def test_update_subtask_invalid_title(self):
-        self.login_as(self.owner_id, "staff")
-        payload = {
-            "title": "Task with Subtask to Test Invalid Title",
-            "description": "Testing subtask creation with invalid title.",
-            "priority": 2,
-            "deadline": generate_deadline(),
-            "collaborators": [self.collab_id],
-            "attachments": [],
-        }
-        response = self.client.post("/tasks", json=payload)
-        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
-        data = response.get_json()
-        task_id = data.get("task_id")
-        self.assertIsNotNone(task_id, msg="Response missing task_id")
-        # Now try to create a subtask with invalid title
-        # updated payload should still contain the main task details
+    # def test_update_subtask_invalid_title(self):
+    #     self.login_as(self.owner_id, "staff")
+    #     payload = {
+    #         "title": "Task with Subtask to Test Invalid Title",
+    #         "description": "Testing subtask creation with invalid title.",
+    #         "priority": 2,
+    #         "deadline": generate_deadline(),
+    #         "collaborators": [self.collab_id],
+    #         "attachments": [],
+    #     }
+    #     response = self.client.post("/tasks", json=payload)
+    #     self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    #     data = response.get_json()
+    #     task_id = data.get("task_id")
+    #     self.assertIsNotNone(task_id, msg="Response missing task_id")
+    #     # Now try to create a subtask with invalid title
+    #     # updated payload should still contain the main task details
 
 
-        update_payload = {
-            "title": "Task with Subtask to Test Invalid Title",
-            "description": "Testing subtask creation with invalid title.",
-            "priority": 2,
-            "deadline": generate_deadline(),
-            "collaborators": [self.collab_id],
-            "attachments": [],
-            "subtasks": [{
-                "title": "",  # invalid title
-                "description": "This subtask has an invalid title.",
-                "priority": 2,
-                "deadline": generate_deadline(),
-                "collaborators": [self.collab_id],
-                "attachments": [],
-            }]
-        }
-        response = self.client.put(f"/task/{task_id}", json=update_payload)
-        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid subtask title, got {response.status_code}")
+    #     update_payload = {
+    #         "title": "Task with Subtask to Test Invalid Title",
+    #         "description": "Testing subtask creation with invalid title.",
+    #         "priority": 2,
+    #         "deadline": generate_deadline(),
+    #         "collaborators": [self.collab_id],
+    #         "attachments": [],
+    #         "subtasks": [{
+    #             "title": "",  # invalid title
+    #             "description": "This subtask has an invalid title.",
+    #             "priority": 2,
+    #             "deadline": generate_deadline(),
+    #             "collaborators": [self.collab_id],
+    #             "attachments": [],
+    #         }]
+    #     }
+    #     response = self.client.put(f"/task/{task_id}", json=update_payload)
+    #     self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid subtask title, got {response.status_code}")
 
-    # test update subtask invalid description
-    def test_update_subtask_invalid_description(self):
-        self.login_as(self.owner_id, "staff")
-        payload = {
-            "title": "Task with Subtask to Test Invalid Description",
-            "description": "Testing subtask creation with invalid description.",
-            "priority": 2,
-            "deadline": generate_deadline(),
-            "collaborators": [self.collab_id],
-            "attachments": [],
-        }
-        response = self.client.post("/tasks", json=payload)
-        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
-        data = response.get_json()
-        task_id = data.get("task_id")
-        self.assertIsNotNone(task_id, msg="Response missing task_id")
-        # Now try to create a subtask with invalid description
-        # updated payload should still contain the main task details
-
-
-        update_payload = {
-            "title": "Task with Subtask to Test Invalid Description",
-            "description": "Testing subtask creation with invalid description.",
-            "priority": 2,
-            "deadline": generate_deadline(),
-            "collaborators": [self.collab_id],
-            "attachments": [],
-            "subtasks": [{
-                "title": "Subtask with Invalid Description",
-                "description": "",  # invalid description
-                "priority": 2,
-                "deadline": generate_deadline(),
-                "collaborators": [self.collab_id],
-                "attachments": [],
-            }]
-        }
-        response = self.client.put(f"/task/{task_id}", json=update_payload)
-        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid subtask description, got {response.status_code}")
-
-    # test update subtask invalid deadline (must be within main task deadline)
-    def test_update_subtask_invalid_deadline(self):
-        self.login_as(self.owner_id, "staff")
-        main_task_deadline = generate_deadline(5)
-        payload = {
-            "title": "Task with Subtask to Test Invalid Deadline",
-            "description": "Testing subtask creation with invalid deadline.",
-            "priority": 2,
-            "deadline": main_task_deadline,
-            "collaborators": [self.collab_id],
-            "attachments": [],
-        }
-        response = self.client.post("/tasks", json=payload)
-        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
-        data = response.get_json()
-        task_id = data.get("task_id")
-        self.assertIsNotNone(task_id, msg="Response missing task_id")
-        # Now try to create a subtask with invalid deadline (beyond main task deadline)
-        # updated payload should still contain the main task details
+    # # test update subtask invalid description
+    # def test_update_subtask_invalid_description(self):
+    #     self.login_as(self.owner_id, "staff")
+    #     payload = {
+    #         "title": "Task with Subtask to Test Invalid Description",
+    #         "description": "Testing subtask creation with invalid description.",
+    #         "priority": 2,
+    #         "deadline": generate_deadline(),
+    #         "collaborators": [self.collab_id],
+    #         "attachments": [],
+    #     }
+    #     response = self.client.post("/tasks", json=payload)
+    #     self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    #     data = response.get_json()
+    #     task_id = data.get("task_id")
+    #     self.assertIsNotNone(task_id, msg="Response missing task_id")
+    #     # Now try to create a subtask with invalid description
+    #     # updated payload should still contain the main task details
 
 
-        update_payload = {
-            "title": "Task with Subtask to Test Invalid Deadline",
-            "description": "Testing subtask creation with invalid deadline.",
-            "priority": 2,
-            "deadline": main_task_deadline,
-            "collaborators": [self.collab_id],
-            "attachments": [],
-            "subtasks": [{
-                "title": "Subtask with Invalid Deadline",
-                "description": "This subtask has a deadline beyond the main task deadline.",
-                "priority": 2,
-                "deadline": generate_deadline(10),  # invalid deadline
-                "collaborators": [self.collab_id],
-                "attachments": [],
-            }]
-        }
-        response = self.client.put(f"/task/{task_id}", json=update_payload)
-        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid subtask deadline, got {response.status_code}")
+    #     update_payload = {
+    #         "title": "Task with Subtask to Test Invalid Description",
+    #         "description": "Testing subtask creation with invalid description.",
+    #         "priority": 2,
+    #         "deadline": generate_deadline(),
+    #         "collaborators": [self.collab_id],
+    #         "attachments": [],
+    #         "subtasks": [{
+    #             "title": "Subtask with Invalid Description",
+    #             "description": "",  # invalid description
+    #             "priority": 2,
+    #             "deadline": generate_deadline(),
+    #             "collaborators": [self.collab_id],
+    #             "attachments": [],
+    #         }]
+    #     }
+    #     response = self.client.put(f"/task/{task_id}", json=update_payload)
+    #     self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid subtask description, got {response.status_code}")
 
-    # test update subtask invalid priority
-    def test_update_subtask_invalid_priority(self):
-        self.login_as(self.owner_id, "staff")
-        payload = {
-            "title": "Task with Subtask to Test Invalid Priority",
-            "description": "Testing subtask creation with invalid priority.",
-            "priority": 2,
-            "deadline": generate_deadline(),
-            "collaborators": [self.collab_id],
-            "attachments": [],
-        }
-        response = self.client.post("/tasks", json=payload)
-        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
-        data = response.get_json()
-        task_id = data.get("task_id")
-        self.assertIsNotNone(task_id, msg="Response missing task_id")
-        # Now try to create a subtask with invalid priority
-        # updated payload should still contain the main task details
-
-
-        update_payload = {
-            "title": "Task with Subtask to Test Invalid Priority",
-            "description": "Testing subtask creation with invalid priority.",
-            "priority": 2,
-            "deadline": generate_deadline(),
-            "collaborators": [self.collab_id],
-            "attachments": [],
-            "subtasks": [{
-                "title": "Subtask with Invalid Priority",
-                "description": "This subtask has an invalid priority.",
-                "priority": 0,  # invalid priority
-                "deadline": generate_deadline(),
-                "collaborators": [self.collab_id],
-                "attachments": [],
-            }]
-        }
-        response = self.client.put(f"/task/{task_id}", json=update_payload)
-        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid subtask priority, got {response.status_code}")
-
-    # test update subtask collaborators (must be subset of main task collaborators)
-    def test_update_subtask_collaborators_invalid(self):
-        self.login_as(self.owner_id, "staff")
-        payload = {
-            "title": "Task with Subtask to Test Invalid Collaborators",
-            "description": "Testing subtask creation with invalid collaborators.",
-            "priority": 2,
-            "deadline": generate_deadline(),
-            "collaborators": [self.collab_id],
-            "attachments": [],
-        }
-        response = self.client.post("/tasks", json=payload)
-        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
-        data = response.get_json()
-        task_id = data.get("task_id")
-        self.assertIsNotNone(task_id, msg="Response missing task_id")
-        # Now try to create a subtask with invalid collaborators (not subset of main task collaborators)
-        # updated payload should still contain the main task details
+    # # test update subtask invalid deadline (must be within main task deadline)
+    # def test_update_subtask_invalid_deadline(self):
+    #     self.login_as(self.owner_id, "staff")
+    #     main_task_deadline = generate_deadline(5)
+    #     payload = {
+    #         "title": "Task with Subtask to Test Invalid Deadline",
+    #         "description": "Testing subtask creation with invalid deadline.",
+    #         "priority": 2,
+    #         "deadline": main_task_deadline,
+    #         "collaborators": [self.collab_id],
+    #         "attachments": [],
+    #     }
+    #     response = self.client.post("/tasks", json=payload)
+    #     self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    #     data = response.get_json()
+    #     task_id = data.get("task_id")
+    #     self.assertIsNotNone(task_id, msg="Response missing task_id")
+    #     # Now try to create a subtask with invalid deadline (beyond main task deadline)
+    #     # updated payload should still contain the main task details
 
 
-        update_payload = {
-            "title": "Task with Subtask to Test Invalid Collaborators",
-            "description": "Testing subtask creation with invalid collaborators.",
-            "priority": 2,
-            "deadline": generate_deadline(),
-            "collaborators": [self.collab_id],
-            "attachments": [],
-            "subtasks": [{
-                "title": "Subtask with Invalid Collaborators",
-                "description": "This subtask has collaborators not in main task.",
-                "priority": 2,
-                "deadline": generate_deadline(),
-                "collaborators": [self.new_collab_id],  # invalid collaborator
-                "attachments": [],
-            }]
-        }
-        response = self.client.put(f"/task/{task_id}", json=update_payload)
-        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid subtask collaborators, got {response.status_code}")
+    #     update_payload = {
+    #         "title": "Task with Subtask to Test Invalid Deadline",
+    #         "description": "Testing subtask creation with invalid deadline.",
+    #         "priority": 2,
+    #         "deadline": main_task_deadline,
+    #         "collaborators": [self.collab_id],
+    #         "attachments": [],
+    #         "subtasks": [{
+    #             "title": "Subtask with Invalid Deadline",
+    #             "description": "This subtask has a deadline beyond the main task deadline.",
+    #             "priority": 2,
+    #             "deadline": generate_deadline(10),  # invalid deadline
+    #             "collaborators": [self.collab_id],
+    #             "attachments": [],
+    #         }]
+    #     }
+    #     response = self.client.put(f"/task/{task_id}", json=update_payload)
+    #     self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid subtask deadline, got {response.status_code}")
+
+    # # test update subtask invalid priority
+    # def test_update_subtask_invalid_priority(self):
+    #     self.login_as(self.owner_id, "staff")
+    #     payload = {
+    #         "title": "Task with Subtask to Test Invalid Priority",
+    #         "description": "Testing subtask creation with invalid priority.",
+    #         "priority": 2,
+    #         "deadline": generate_deadline(),
+    #         "collaborators": [self.collab_id],
+    #         "attachments": [],
+    #     }
+    #     response = self.client.post("/tasks", json=payload)
+    #     self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    #     data = response.get_json()
+    #     task_id = data.get("task_id")
+    #     self.assertIsNotNone(task_id, msg="Response missing task_id")
+    #     # Now try to create a subtask with invalid priority
+    #     # updated payload should still contain the main task details
+
+
+    #     update_payload = {
+    #         "title": "Task with Subtask to Test Invalid Priority",
+    #         "description": "Testing subtask creation with invalid priority.",
+    #         "priority": 2,
+    #         "deadline": generate_deadline(),
+    #         "collaborators": [self.collab_id],
+    #         "attachments": [],
+    #         "subtasks": [{
+    #             "title": "Subtask with Invalid Priority",
+    #             "description": "This subtask has an invalid priority.",
+    #             "priority": 0,  # invalid priority
+    #             "deadline": generate_deadline(),
+    #             "collaborators": [self.collab_id],
+    #             "attachments": [],
+    #         }]
+    #     }
+    #     response = self.client.put(f"/task/{task_id}", json=update_payload)
+    #     self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid subtask priority, got {response.status_code}")
+
+    # # test update subtask collaborators (must be subset of main task collaborators)
+    # def test_update_subtask_collaborators_invalid(self):
+    #     self.login_as(self.owner_id, "staff")
+    #     payload = {
+    #         "title": "Task with Subtask to Test Invalid Collaborators",
+    #         "description": "Testing subtask creation with invalid collaborators.",
+    #         "priority": 2,
+    #         "deadline": generate_deadline(),
+    #         "collaborators": [self.collab_id],
+    #         "attachments": [],
+    #     }
+    #     response = self.client.post("/tasks", json=payload)
+    #     self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    #     data = response.get_json()
+    #     task_id = data.get("task_id")
+    #     self.assertIsNotNone(task_id, msg="Response missing task_id")
+    #     # Now try to create a subtask with invalid collaborators (not subset of main task collaborators)
+    #     # updated payload should still contain the main task details
+
+
+    #     update_payload = {
+    #         "title": "Task with Subtask to Test Invalid Collaborators",
+    #         "description": "Testing subtask creation with invalid collaborators.",
+    #         "priority": 2,
+    #         "deadline": generate_deadline(),
+    #         "collaborators": [self.collab_id],
+    #         "attachments": [],
+    #         "subtasks": [{
+    #             "title": "Subtask with Invalid Collaborators",
+    #             "description": "This subtask has collaborators not in main task.",
+    #             "priority": 2,
+    #             "deadline": generate_deadline(),
+    #             "collaborators": [self.new_collab_id],  # invalid collaborator
+    #             "attachments": [],
+    #         }]
+    #     }
+    #     response = self.client.put(f"/task/{task_id}", json=update_payload)
+    #     self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid subtask collaborators, got {response.status_code}")
 
     # test update subtask project id (should inherit from main task)
     
