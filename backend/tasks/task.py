@@ -628,10 +628,7 @@ def update_task_status(task_id):
     
     curr_task.status = new_status
     set_timestamps_by_status(curr_task, old_status, new_status)
-
     # recurrence update
-    # TODO: if recurrence is set and status is done, create new task with same details and new deadline based on recurrence (wow)
-
     if new_status == 'done' and curr_task.recurrence: # this can only happen if all subtasks are done so dont need to check here
         # create new task with same details
         recurrence_days = int(curr_task.recurrence)
@@ -653,8 +650,9 @@ def update_task_status(task_id):
         set_timestamps_by_status(new_task, None, new_status)
         # comit here first to get new_task id
         db.session.add(new_task)
-        # db.session.flush()  # to get new_task.task_id (maybe not needed)
+        db.session.flush()  # to get new_task.task_id (maybe not needed)
         # db.session.commit()
+
         id = new_task.task_id
         #         # need to do subtasks too - subtasks are copied over too
         subtasks = Task.query.filter_by(parent_id=task_id).all()
@@ -677,8 +675,11 @@ def update_task_status(task_id):
             set_timestamps_by_status(new_subtask, None, new_status)
             db.session.add(new_subtask)
         # db.session.add(new_task)
+        db.session.commit()
 
     db.session.commit()
+
+    # tasks from recurrence
 
     # SEND NOTIFICATION IF STATUS CHANGED
     if old_status != new_status:
