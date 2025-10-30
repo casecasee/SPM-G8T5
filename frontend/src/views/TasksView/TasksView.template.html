@@ -109,8 +109,8 @@
           <template #content>
             <p class="desc">{{ task.description }}</p>
             <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
-            <p class="meta"><i class="pi pi-clock"></i> {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
-            <p v-if="task.start_date" class="meta"><i class="pi pi-play"></i> Started: {{ formatDate(task.start_date) }}</p>
+            <p class="meta"><i class="pi pi-calendar-times"></i> {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
+            <p v-if="task.start_date" class="meta"><i class="pi pi-calendar-plus"></i> Started: {{ formatDate(task.start_date) }}</p>
             <Dropdown
                 v-if="isOwnerOrCollaborator(task)"
                 v-model="task.status"
@@ -150,8 +150,8 @@
           <template #content>
             <p class="desc">{{ task.description }}</p>
             <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
-            <p class="meta"><i class="pi pi-clock"></i> {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
-            <p v-if="task.start_date" class="meta"><i class="pi pi-play"></i> Started: {{ formatDate(task.start_date) }}</p>
+            <p class="meta"><i class="pi pi-calendar-times"></i> {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
+            <p v-if="task.start_date" class="meta"><i class="pi pi-calendar-plus"></i> Started: {{ formatDate(task.start_date) }}</p>
             <Dropdown
                 v-if="isOwnerOrCollaborator(task)"
                 v-model="task.status"
@@ -191,8 +191,8 @@
           <template #content>
             <p class="desc">{{ task.description }}</p>
             <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
-            <p class="meta"><i class="pi pi-clock"></i> {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
-            <p v-if="task.start_date" class="meta"><i class="pi pi-play"></i> Started: {{ formatDate(task.start_date) }}</p>
+            <p class="meta"><i class="pi pi-calendar-times"></i> {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
+            <p v-if="task.start_date" class="meta"><i class="pi pi-calendar-plus"></i> Started: {{ formatDate(task.start_date) }}</p>
             <Dropdown
                 v-if="isOwnerOrCollaborator(task)"
                 v-model="task.status"
@@ -754,8 +754,8 @@
                 <p v-if="subtask.description" class="subtask-description">{{ subtask.description }}</p>
                 <div class="subtask-details">
                   <div class="subtask-meta-row">
-                    <span v-if="subtask.due_date" class="subtask-due"><i class="pi pi-calendar"></i> {{ formatDate(subtask.due_date) }} <span class="relative-time">({{ formatDateRelative(subtask.due_date) }})</span></span>
-                    <span v-if="subtask.start_date" class="subtask-start"><i class="pi pi-play"></i> Started: {{ formatDate(subtask.start_date) }}</span>
+                    <span v-if="subtask.due_date" class="subtask-due"><i class="pi pi-calendar-times"></i> {{ formatDate(subtask.due_date) }} <span class="relative-time">({{ formatDateRelative(subtask.due_date) }})</span></span>
+                    <span v-if="subtask.start_date" class="subtask-start"><i class="pi pi-calendar-plus"></i> Started: {{ formatDate(subtask.start_date) }}</span>
                     <span class="subtask-owner">👤 {{ getOwnerName(subtask.owner) }}</span>
                     <span v-if="subtask.collaborators && subtask.collaborators.length > 0" class="subtask-collabs">
                       🤝 {{ getCollaboratorNames(subtask.collaborators) }}
