@@ -1473,9 +1473,21 @@ function hasTasksInSection(section) {
     }
     // Initialize subtasks and format dates for datetime-local inputs
     subtasks.value = (task.subtasks || []).map(subtask => {
-        let formattedDate = subtask.due_date
-        if (formattedDate) {
-            formattedDate = formattedDate.replace(/:\d{2}[.Z].*$/, '')
+        let formattedDate = null
+        try {
+            if (subtask.due_date) {
+                const date = new Date(subtask.due_date)
+                if (!isNaN(date.getTime())) {
+                    const year = date.getFullYear()
+                    const month = String(date.getMonth() + 1).padStart(2, '0')
+                    const day = String(date.getDate()).padStart(2, '0')
+                    const hours = String(date.getHours()).padStart(2, '0')
+                    const minutes = String(date.getMinutes()).padStart(2, '0')
+                    formattedDate = `${year}-${month}-${day}T${hours}:${minutes}`
+                }
+            }
+        } catch (e) {
+            console.error('Error parsing subtask due date:', subtask.due_date, e)
         }
         return { ...subtask, due_date: formattedDate }
     })

@@ -926,62 +926,95 @@ def update_task(task_id):
                 if existing_subtask.owner != eid and curr_task.owner != eid: # subtask owner and task owner can update subtasks
                     return {"message": f"Only subtask owner or task owner can update subtask with id {subtask_id}"}, 403
                 
-                # update existing subtask
-                # TODO: validate fields - shld make this into a function later
+                # update existing subtask (compute diffs first, then assign)
+                changed = []
+
+                # Title
                 if 'title' in subtask:
-                    # check empty string or spaces
                     if not subtask['title'] or subtask['title'].isspace():
                         return {"message": "Subtask title cannot be empty"}, 400
+                    if subtask['title'] != existing_subtask.title:
+                        changed.append('title')
                     existing_subtask.title = subtask['title']
+
+                # Description
                 if 'description' in subtask:
-                    # check empty string or spaces
                     if not subtask['description'] or subtask['description'].isspace():
                         return {"message": "Subtask description cannot be empty"}, 400
+                    if subtask['description'] != existing_subtask.description:
+                        changed.append('description')
                     existing_subtask.description = subtask['description']
+
+                # Deadline
                 if 'deadline' in subtask:
                     sub_deadline = convert_datetime(subtask['deadline'])
                     if sub_deadline.replace(tzinfo=UTC) <= datetime.now(UTC):
                         return {"message": "Subtask deadline must be in the future"}, 400
-                    # check deadline is before parent task deadline
                     if sub_deadline > curr_task.deadline:
                         return {"message": "Subtask deadline cannot be after parent task deadline"}, 400
+                    if existing_subtask.deadline != sub_deadline:
+                        changed.append('deadline')
                     existing_subtask.deadline = sub_deadline
+
+                # Priority
                 if 'priority' in subtask:
-                    # check priority is int between 1-10
                     if not isinstance(subtask['priority'], int):
                         return {"message": "Subtask priority must be an integer"}, 400
                     if subtask['priority'] not in range(1, 11):
                         return {"message": "Invalid subtask priority value"}, 400
+                    if existing_subtask.priority != subtask['priority']:
+                        changed.append('priority')
                     existing_subtask.priority = subtask['priority']
+
+                # Attachments (do not notify on attachments)
                 if 'attachments' in subtask:
                     existing_subtask.attachment = json.dumps(subtask.get('attachments', []))
 
+                # Owner
                 if 'owner' in subtask:
                     new_owner = subtask['owner']
                     new_owner_role = Staff.query.get(new_owner).role.lower()
                     existing_subtask_owner_role = Staff.query.get(existing_subtask.owner).role.lower()
-                    if new_owner != existing_subtask.owner: # assigning subtask (also only downwards)
-                        # new subtask owner must be subtset of parent task collaborators
+                    if new_owner != existing_subtask.owner:  # assigning subtask (also only downwards)
                         if existing_subtask_owner_role == 'staff':
                             return {"message": "Staff cannot assign tasks"}, 400
                         if existing_subtask_owner_role == 'manager' and new_owner_role in ['senior manager', 'hr', 'director', 'manager']:
                             return {"message": "Manager cannot assign tasks upwards"}, 400
-                        # TODO: finish business rules for assignment hierarchy
                         if new_owner not in collaborators_ids:
                             return {"message": f"3. Subtask owner {new_owner} is not a collaborator of the parent task"}, 400
+                        changed.append('owner')
                         existing_subtask.owner = new_owner
-                    
+
+                # Collaborators
                 if 'collaborators' in subtask:
-                    sub_collaborators_ids = subtask['collaborators']
-                    # ensure owner is in collaborators
-                    if existing_subtask.owner not in sub_collaborators_ids:
-                        sub_collaborators_ids.append(existing_subtask.owner)
-                    # make sure subtask collaborators are subset of task collaborators
-                    for cid in sub_collaborators_ids:
+                    requested_collab_ids = list(subtask['collaborators'])
+                    if existing_subtask.owner not in requested_collab_ids:
+                        requested_collab_ids.append(existing_subtask.owner)
+                    for cid in requested_collab_ids:
                         if cid not in collaborators_ids:
                             return {"message": f"4. Subtask collaborator {cid} is not a collaborator of the parent task"}, 400
-                    sub_collaborators = Staff.query.filter(Staff.employee_id.in_(sub_collaborators_ids)).all()
+                    # Compare sets to detect real change
+                    before_ids = {s.employee_id for s in existing_subtask.collaborators}
+                    after_ids = set(requested_collab_ids)
+                    if before_ids != after_ids:
+                        changed.append('collaborators')
+                    sub_collaborators = Staff.query.filter(Staff.employee_id.in_(requested_collab_ids)).all()
                     existing_subtask.collaborators = sub_collaborators
+
+                # Emit notification event for subtask updates only if there are actual changes
+                if changed:
+                    try:
+                        requests.post(
+                            f'{NOTIFICATION_SERVICE_URL}/api/events/task-updated',
+                            json={
+                                'task_id': subtask_id,
+                                'changed_fields': changed,
+                                'actor_id': eid
+                            },
+                            timeout=3
+                        )
+                    except Exception as e:
+                        print(f"[Notification] Failed to send subtask update notification: {e}")
                 
                 
             else: # create new subtask
