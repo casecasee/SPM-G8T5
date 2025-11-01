@@ -147,7 +147,7 @@ const route = useRoute()
     // Department view state
     const departments = ref([])
     const selectedDepartment = ref(null)
-    const departmentEmployees = ref([])
+   
     const departmentSearch = ref('')
     const departmentSelectedEmployeeId = ref(null) 
 
@@ -366,6 +366,8 @@ const route = useRoute()
         removeAttachment(index, editingSubtask.attachments)
     }
     }
+    
+
 
     async function updateSubtaskStatus(subtask, newStatus) {
     // If subtask already exists (has id), update via API
@@ -465,7 +467,7 @@ const route = useRoute()
     const displayTasks = computed(() => {
     let filteredTasks = []
     
-    if (currentTab.value === 'team') {
+    if (currentTab.value === 'team' || currentTab.value === 'dept_report' ) {
         if (!teamSelectedEmployeeId.value) return []
         const targetId = Number(teamSelectedEmployeeId.value)
         if (targetId === currentEmployeeId) return []
@@ -564,6 +566,9 @@ const tasksByPriority = computed(() => {
 })
 
 
+
+// ------------------------------------Individual Report-----------------------------------------------------------------
+
 const report_displayTasks = computed(() => {
   // 1️⃣ Start with only user's tasks
   let filteredTasks = myTasks.value
@@ -596,8 +601,6 @@ const report_displayTasks = computed(() => {
 })
 
 
-    
-
 
 const report_tasksByPriority = computed(() => {
   const tasks = report_displayTasks.value
@@ -629,61 +632,147 @@ const report_overallProgress = computed(() => {
 
 
 
-// --- Company-wide report filtering ---
-const companyStartDate = ref(null)
-const companyEndDate = ref(null)
 
-const filterCompanyTasksByDate = () => {
-  // This triggers recomputation
-  company_report_displayTasks.value
+
+// ----------------- Department Report Logic -----------------------------------------------------------------------------------------------------------------------
+
+// -------------------- Department Report Logic --------------------
+const showDeptFilterMenu = ref(false)
+const deptFilterByEmployee = ref(false)
+const deptFilterByTask = ref(true)
+const deptSelectedEmployeeIds = ref([])
+const deptStartDate = ref(null)
+const deptEndDate = ref(null)
+
+const departmentEmployees = ref([]) // employees in currentDep
+const dept_displayTasks = ref([])
+
+watch(currentTab, (newTab) => {
+  if (newTab === 'dept_report') loadDeptReport()
+})
+
+// 1️⃣ load all dept employees & tasks initially
+function loadDeptReport() {
+  const all = availableEmployees.value || []
+  departmentEmployees.value = all.filter(
+    (emp) => emp.department === currentDep
+  )
+
+  // collect all department tasks
+  let collected = []
+  departmentEmployees.value.forEach((emp) => {
+    const empTasks = teamTasksData.value[emp.employee_name] || []
+    collected.push(...empTasks)
+  })
+
+  // ✅ Default date range: last 30 days (or within current month)
+  const today = new Date()
+  const oneMonthAgo = new Date(today)
+  oneMonthAgo.setMonth(today.getMonth() - 1)
+
+  deptStartDate.value = oneMonthAgo.toISOString().split('T')[0]
+  deptEndDate.value = today.toISOString().split('T')[0]
+
+  // ✅ Apply the date filter by default
+  const start = new Date(deptStartDate.value)
+  const end = new Date(deptEndDate.value)
+
+  const filtered = collected.filter((t) => {
+    if (!t.created_at || !t.due_date) return false
+    const created = new Date(t.created_at)
+    const due = new Date(t.due_date)
+    return created <= end && due >= start
+  })
+
+  dept_displayTasks.value = filtered.sort(sortByPriorityAndDate)
+  deptSelectedEmployeeIds.value = departmentEmployees.value.map(
+    (e) => e.employee_id
+  )
 }
 
-const company_report_displayTasks = computed(() => {
-  const start = companyStartDate.value ? new Date(companyStartDate.value) : null
-  const end = companyEndDate.value ? new Date(companyEndDate.value) : null
 
-  return allTasks.value.filter(t => {
-    const createdAt = new Date(t.created_at)
-    const dueDate = new Date(t.due_date)
+// 2️⃣ toggle filter menu
+function toggleDeptFilterMenu() {
+  showDeptFilterMenu.value = !showDeptFilterMenu.value
+}
 
-    // Include tasks if overlapping with chosen range
-    const overlaps = (!start || dueDate >= start) && (!end || createdAt <= end)
-    return overlaps
+// 3️⃣ apply filters
+function applyDeptFilters() {
+  let filtered = []
+
+  // collect all tasks for selected employees
+  departmentEmployees.value.forEach((emp) => {
+    if (
+      !deptFilterByEmployee.value ||
+      deptSelectedEmployeeIds.value.includes(emp.employee_id)
+    ) {
+      const empTasks = teamTasksData.value[emp.employee_name] || []
+      filtered.push(...empTasks)
+    }
   })
-})
 
-const company_tasksByDepartment = computed(() => {
-  const grouped = {}
-  company_report_displayTasks.value.forEach(task => {
-    const dept = task.department || 'Unassigned'
-    if (!grouped[dept]) grouped[dept] = { high: [], medium: [], low: [] }
+  // date filtering
+  const start = deptStartDate.value ? new Date(deptStartDate.value) : null
+  const end = deptEndDate.value ? new Date(deptEndDate.value) : null
 
-    const p = task.priority || 5
-    if (p >= 8) grouped[dept].high.push(task)
-    else if (p >= 5) grouped[dept].medium.push(task)
-    else grouped[dept].low.push(task)
+  if (start && end) {
+    filtered = filtered.filter((t) => {
+      if (!t.created_at || !t.due_date) return false
+      const created = new Date(t.created_at)
+      const due = new Date(t.due_date)
+      return created <= end && due >= start
+    })
+  }
+
+  dept_displayTasks.value = filtered.sort(sortByPriorityAndDate)
+  showDeptFilterMenu.value = false
+}
+
+function sortByPriorityAndDate(a, b) {
+  const pA = a.priority || 5
+  const pB = b.priority || 5
+  if (pA === pB) return new Date(a.due_date) - new Date(b.due_date)
+  return pB - pA
+}
+
+// 4️⃣ computed groupings
+const dept_tasksByPriority = computed(() => {
+  const tasks = dept_displayTasks.value
+  const groups = { high: [], medium: [], low: [] }
+  tasks.forEach((t) => {
+    const score = t.priority || 5
+    if (score >= 8) groups.high.push(t)
+    else if (score >= 5) groups.medium.push(t)
+    else groups.low.push(t)
   })
-  return grouped
+  return groups
 })
 
-const company_report_overdueTasks = computed(() => company_report_displayTasks.value.filter(t => isOverdue(t)))
+const dept_overdueTasks = computed(() =>
+  dept_displayTasks.value.filter((t) => isOverdue(t))
+)
 
-const company_overallProgress = computed(() => {
-  const count = company_report_overdueTasks.value.length
-  if (count === 0) return 'Good'
-  if (count === 1) return 'Average'
-  return 'Poor'
+const formattedDeptDateRange = computed(() => {
+  const options = { day: 'numeric', month: 'long', year: 'numeric' }
+
+  if (!deptStartDate.value && !deptEndDate.value) {
+    // fallback (shouldn't occur now since defaults are set)
+    return 'All time'
+  }
+
+  const s = deptStartDate.value
+    ? new Date(deptStartDate.value).toLocaleDateString('en-SG', options)
+    : '—'
+  const e = deptEndDate.value
+    ? new Date(deptEndDate.value).toLocaleDateString('en-SG', options)
+    : '—'
+
+  return `${s} - ${e}`
 })
 
-const companyFormattedDateRange = computed(() => {
-  if (!companyStartDate.value || !companyEndDate.value) return 'All Time'
-  return `${formatDate(companyStartDate.value)} - ${formatDate(companyEndDate.value)}`
-})
 
 
-
-
-
+// ------------------------------------SubTasks-----------------------------------------------------------------
 
 function hasTasksInSection(section) {
   const groups = report_tasksByPriority.value
@@ -1838,6 +1927,7 @@ const formattedDateRange = computed(() => {
 function updateDateFilter() {
   // Nothing needed — computed handles reactivity
 }
+
 
 
 

@@ -2236,3 +2236,30 @@ input[type="datetime-local"] {
     font-size: 0.85rem;
   }
 }
+
+.filter-menu {
+  display: block;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 0.5rem;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+}
+
+.filter-section {
+  margin-bottom: 1rem;
+}
+
+.employee-checkbox-list {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.filter-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

@@ -143,8 +143,58 @@ INSERT INTO task_collaborators (task_id, staff_id) VALUES
 (7, 1), (8, 1), (9, 1), (10, 1), (11, 1), (12, 1), (6, 34), (1, 34), (2, 34), (5, 34), (3, 34), (4, 34)
 ;
 
+INSERT INTO task_collaborators (task_id, staff_id) VALUES
+-- Admin (33)
+(13, 33), (14, 33), (15, 33),
+
+-- Finance (34–35)
+(16, 34), (17, 34), (18, 34),
+(19, 35), (20, 35), (21, 35),
+
+-- HR (36–38)
+(22, 36), (23, 36), (24, 36),
+(25, 37), (26, 37), (27, 37),
+(28, 38), (29, 38), (30, 38),
+
+-- IT (39–41, 48–50)
+(31, 39), (32, 39), (33, 39),
+(34, 40), (35, 40), (36, 40),
+(37, 41), (38, 41), (39, 41),
+(40, 48), (41, 48), (42, 48),
+(43, 49), (44, 49), (45, 49),
+(46, 50), (47, 50), (48, 50),
+
+-- Marketing (42–44)
+(49, 42), (50, 42), (51, 42),
+(52, 43), (53, 43), (54, 43),
+(55, 44), (56, 44), (57, 44),
+
+-- Operations (45–46)
+(58, 45), (59, 45), (60, 45),
+(61, 46), (62, 46), (63, 46),
+
+-- Admin (47)
+(64, 47), (65, 47), (66, 47);
+
+
 -- Insert default preferences for existing staff members
 INSERT IGNORE INTO `notification_preferences` (`staff_id`, `deadline_reminders`, `task_status_updates`, `due_date_changes`, `deadline_reminder_days`)
 SELECT `employee_id`, 1, 1, 1, '7,3,1'
 FROM `staff`
 WHERE `employee_id` NOT IN (SELECT `staff_id` FROM `notification_preferences`);
+
+
+
+INSERT INTO project_members (project_id, staff_id) VALUES
+-- Admin Project
+(4, 33), (4, 47),
+-- Finance Project
+(5, 34), (5, 35),
+-- HR Project
+(6, 36), (6, 37), (6, 38),
+-- IT Project
+(7, 39), (7, 40), (7, 41), (7, 48), (7, 49), (7, 50),
+-- Marketing Project
+(8, 42), (8, 43), (8, 44),
+-- Operations Project
+(9, 45), (9, 46);
