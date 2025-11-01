@@ -91,12 +91,46 @@
 </div>
 
 <div v-if="currentTab !== 'report' && currentTab !== 'individual_report'" class="tasks-container">
-  <!-- High Priority Tasks -->
-  <div v-if="tasksByPriority.high.length > 0" class="priority-section">
-    <div class="priority-header high-priority">
-      <i class="pi pi-exclamation-triangle"></i>
-      <span>High Priority (Range 8 - 10)</span>
-      <span class="task-count">{{ tasksByPriority.high.length }}</span>
+
+    <!-- High Priority Tasks -->
+    <div v-if="tasksByPriority.high.length > 0" class="priority-section">
+      <div class="priority-header high-priority">
+        <i class="pi pi-clock"></i>
+        <span>High Priority (Range 8 - 10)</span>
+        <span class="task-count">{{ tasksByPriority.high.length }}</span>
+      </div>
+      <div class="tasks-grid">
+        <Card v-for="task in tasksByPriority.high" :key="task.id" class="task-card" :class="{'task-overdue': isOverdue(task)}" @click="openDetails(task)">
+          <template #title>
+            <div class="task-title-row">
+              <span>{{ task.name }}</span>
+            </div>
+          </template>
+          <template #content>
+            <p class="desc">{{ task.description }}</p>
+            <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
+            <p class="meta"><i class="pi pi-calendar-times"></i> {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
+            <p v-if="task.start_date" class="meta"><i class="pi pi-calendar-plus"></i> Started: {{ formatDate(task.start_date) }}</p>
+            <Dropdown
+                v-if="isOwnerOrCollaborator(task)"
+                v-model="task.status"
+                :options="getStatusOptionsForTask(task)"
+                optionLabel="label"
+                optionValue="value"
+                class="status-pill-dropdown"
+                :class="getStatusClass(task.status)"
+                @change="updateTaskStatus(task, task.status)"
+                @click.stop
+              />
+            <p class="meta">Owner: <b>{{ getOwnerName(task.owner) || currentEmployeeName }}</b></p>
+            <p class="meta">Collaborators: <b>{{ getCollaboratorNames(task.collaborators) || 'None' }}</b></p>
+            <div v-if="task.recurrence" class="recurrence-badge">
+              <i class="pi pi-refresh"></i>
+              {{ getRecurrenceLabelFromDays(task.recurrence) }}
+            </div>
+          </template>
+        </Card>
+      </div>
     </div>
 
     <!-- Medium Priority Tasks -->
@@ -116,8 +150,8 @@
           <template #content>
             <p class="desc">{{ task.description }}</p>
             <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
-            <p class="meta"><i class="pi pi-clock"></i> {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
-            <p v-if="task.start_date" class="meta"><i class="pi pi-play"></i> Started: {{ formatDate(task.start_date) }}</p>
+            <p class="meta"><i class="pi pi-calendar-times"></i> {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
+            <p v-if="task.start_date" class="meta"><i class="pi pi-calendar-plus"></i> Started: {{ formatDate(task.start_date) }}</p>
             <Dropdown
                 v-if="isOwnerOrCollaborator(task)"
                 v-model="task.status"
@@ -157,8 +191,8 @@
           <template #content>
             <p class="desc">{{ task.description }}</p>
             <p v-if="isOverdue(task)" class="overdue-label">⚠️ Overdue</p>
-            <p class="meta"><i class="pi pi-clock"></i> {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
-            <p v-if="task.start_date" class="meta"><i class="pi pi-play"></i> Started: {{ formatDate(task.start_date) }}</p>
+            <p class="meta"><i class="pi pi-calendar-times"></i> {{ formatDate(task.due_date) }} <span class="relative-time">({{ formatDateRelative(task.due_date) }})</span></p>
+            <p v-if="task.start_date" class="meta"><i class="pi pi-calendar-plus"></i> Started: {{ formatDate(task.start_date) }}</p>
             <Dropdown
                 v-if="isOwnerOrCollaborator(task)"
                 v-model="task.status"
@@ -188,9 +222,6 @@
       <p>No tasks found</p>
     </div>
 </div>
-</div>
-
-
 
 <Dialog v-model:visible="showModal" modal
   :header="isEditing && !selectedTask ? 'New Task' : (isEditing ? 'Edit Task' : 'Task Details')" class="clean-modal">
@@ -723,8 +754,8 @@
                 <p v-if="subtask.description" class="subtask-description">{{ subtask.description }}</p>
                 <div class="subtask-details">
                   <div class="subtask-meta-row">
-                    <span v-if="subtask.due_date" class="subtask-due"><i class="pi pi-calendar"></i> {{ formatDate(subtask.due_date) }} <span class="relative-time">({{ formatDateRelative(subtask.due_date) }})</span></span>
-                    <span v-if="subtask.start_date" class="subtask-start"><i class="pi pi-play"></i> Started: {{ formatDate(subtask.start_date) }}</span>
+                    <span v-if="subtask.due_date" class="subtask-due"><i class="pi pi-calendar-times"></i> {{ formatDate(subtask.due_date) }} <span class="relative-time">({{ formatDateRelative(subtask.due_date) }})</span></span>
+                    <span v-if="subtask.start_date" class="subtask-start"><i class="pi pi-calendar-plus"></i> Started: {{ formatDate(subtask.start_date) }}</span>
                     <span class="subtask-owner">👤 {{ getOwnerName(subtask.owner) }}</span>
                     <span v-if="subtask.collaborators && subtask.collaborators.length > 0" class="subtask-collabs">
                       🤝 {{ getCollaboratorNames(subtask.collaborators) }}

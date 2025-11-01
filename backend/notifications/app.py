@@ -368,6 +368,7 @@ def _send_deadline_reminders():
         status = t.get('status')
         task_id = t.get('task_id')
         task_title = t.get('title', 'Unknown')
+        is_subtask = bool(t.get('parent_id'))
         
         print(f"\n📋 Checking task: {task_title} (ID: {task_id})")
         print(f"   Status: {status}, Deadline: {deadline_str}")
@@ -416,7 +417,8 @@ def _send_deadline_reminders():
                     exists = DeadlineNotificationLog.query.filter_by(task_id=t.get('task_id'), staff_id=staff_id, notification_type=notif_type).first()
                     if exists:
                         continue
-                    title = f"Deadline in {days} day{'s' if days > 1 else ''}: {t.get('title')}"
+                    # Make it explicit for subtasks while still using the subtask's own deadline
+                    title = f"{'Subtask ' if is_subtask else ''}Deadline in {days} day{'s' if days > 1 else ''}: {t.get('title')}"
                     message = f"Due {deadline.strftime('%Y-%m-%d %H:%M')}"
                     _create_notification(staff_id=staff_id, notif_type=notif_type, title=title, message=message, related_task_id=t.get('task_id'))
                     db.session.add(DeadlineNotificationLog(log_id=str(uuid.uuid4()), task_id=t.get('task_id'), staff_id=staff_id, notification_type=notif_type))
@@ -429,7 +431,7 @@ def _send_deadline_reminders():
                 exists = DeadlineNotificationLog.query.filter_by(task_id=t.get('task_id'), staff_id=staff_id, notification_type=notif_type).first()
                 if exists:
                     continue
-                title = f"Task overdue: {t.get('title')}"
+                title = f"{'Subtask ' if is_subtask else ''}Task overdue: {t.get('title')}"
                 message = f"Was due {deadline.strftime('%Y-%m-%d')}"
                 _create_notification(staff_id=staff_id, notif_type=notif_type, title=title, message=message, related_task_id=t.get('task_id'))
                 db.session.add(DeadlineNotificationLog(log_id=str(uuid.uuid4()), task_id=t.get('task_id'), staff_id=staff_id, notification_type=notif_type))
@@ -438,15 +440,6 @@ def _send_deadline_reminders():
 scheduler.add_job(_send_deadline_reminders, 'interval', hours=1, id='deadline_reminders')
 scheduler.start()
 
-# Manual trigger endpoint for testing
-@app.route('/api/test/deadline-reminders', methods=['POST'])
-def trigger_deadline_reminders():
-    """Manually trigger deadline reminders for testing"""
-    try:
-        _send_deadline_reminders()
-        return jsonify({'message': 'Deadline reminders triggered successfully'}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 # Add OPTIONS handler for CORS preflight
 @app.route('/api/<path:path>', methods=['OPTIONS'])
@@ -517,16 +510,6 @@ def update_preferences():
     db.session.commit()
     return jsonify(prefs.to_dict()), 200
 
-# Clear old notifications for testing
-@app.route('/api/clear-notifications', methods=['POST'])
-def clear_notifications():
-    """Clear all notifications for testing purposes"""
-    try:
-        Notification.query.delete()
-        db.session.commit()
-        return jsonify({'message': 'All notifications cleared'}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     with app.app_context():
