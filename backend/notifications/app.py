@@ -440,6 +440,31 @@ def _send_deadline_reminders():
 scheduler.add_job(_send_deadline_reminders, 'interval', hours=1, id='deadline_reminders')
 scheduler.start()
 
+# Test endpoint for manually triggering deadline reminders
+@app.route('/api/test/deadline-reminders', methods=['POST'])
+def test_deadline_reminders():
+    """Manually trigger deadline reminder check (for testing and immediate updates)"""
+    try:
+        _send_deadline_reminders()
+        return jsonify({'status': 'ok', 'message': 'Deadline reminders checked'}), 200
+    except Exception as e:
+        print(f"Error in manual deadline reminder check: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# Internal endpoint for task service to clear deadline logs when deadline changes
+@app.route('/api/internal/clear-deadline-logs/<int:task_id>', methods=['DELETE'])
+def clear_deadline_logs(task_id):
+    """Clear deadline notification logs for a task when its deadline is changed"""
+    try:
+        # Delete all deadline-related notification logs for this task
+        deleted = DeadlineNotificationLog.query.filter_by(task_id=task_id).delete()
+        db.session.commit()
+        print(f"[Internal API] Cleared {deleted} deadline notification logs for task {task_id}")
+        return jsonify({'status': 'ok', 'deleted': deleted}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"[Internal API] Error clearing deadline logs: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 # Add OPTIONS handler for CORS preflight
 @app.route('/api/<path:path>', methods=['OPTIONS'])

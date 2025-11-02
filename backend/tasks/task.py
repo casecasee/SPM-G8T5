@@ -175,6 +175,7 @@ def notify_due_date_changed(task_id, old_date, new_date, changed_by_id):
         if not task:
             return
         
+        # Send due date changed notification
         requests.post(
             f'{NOTIFICATION_SERVICE_URL}/api/events/task-updated',
             json={
@@ -185,6 +186,20 @@ def notify_due_date_changed(task_id, old_date, new_date, changed_by_id):
             timeout=3
         )
         print(f"[Notification] Sent due date change notification for task {task_id}")
+        
+        # Clear old deadline notification logs so new deadline reminders can be sent
+        try:
+            clear_resp = requests.delete(
+                f'{NOTIFICATION_SERVICE_URL}/api/internal/clear-deadline-logs/{task_id}',
+                timeout=2
+            )
+            if clear_resp.ok:
+                print(f"[Notification] Cleared deadline notification logs for task {task_id}")
+            else:
+                print(f"[Notification] Failed to clear deadline logs: {clear_resp.status_code}")
+        except Exception as e:
+            print(f"[Notification] Error clearing deadline logs: {e}")
+            
     except Exception as e:
         print(f"[Notification] Failed to send due date notification: {e}")
 
@@ -415,6 +430,8 @@ def create_task():
 
     # db.session.add(new_task)
     # db.session.commit()
+    
+    trigger_deadline_reminder_check()
 
     # id = new_task.task_id
 
@@ -1013,6 +1030,23 @@ def update_task(task_id):
                             },
                             timeout=3
                         )
+                        
+                        # If deadline was changed, clear old deadline logs and trigger new check
+                        if 'deadline' in changed:
+                            try:
+                                # Clear old deadline logs
+                                clear_resp = requests.delete(
+                                    f'{NOTIFICATION_SERVICE_URL}/api/internal/clear-deadline-logs/{subtask_id}',
+                                    timeout=2
+                                )
+                                if clear_resp.ok:
+                                    print(f"[Notification] Cleared deadline logs for subtask {subtask_id}")
+                                
+                                # Trigger immediate deadline reminder check
+                                trigger_deadline_reminder_check()
+                            except Exception as e:
+                                print(f"[Notification] Error clearing subtask deadline logs: {e}")
+                        
                     except Exception as e:
                         print(f"[Notification] Failed to send subtask update notification: {e}")
                 
