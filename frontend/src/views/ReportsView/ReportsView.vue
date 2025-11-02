@@ -696,37 +696,6 @@ function toggleDeptFilterMenu() {
   showDeptFilterMenu.value = !showDeptFilterMenu.value
 }
 
-// 3️⃣ apply filters
-// function applyDeptFilters() {
-//   let filtered = []
-
-//   // collect all tasks for selected employees
-//   departmentEmployees.value.forEach((emp) => {
-//     if (
-//       !deptFilterByEmployee.value ||
-//       deptSelectedEmployeeIds.value.includes(emp.employee_id)
-//     ) {
-//       const empTasks = teamTasksData.value[emp.employee_name] || []
-//       filtered.push(...empTasks)
-//     }
-//   })
-
-//   // date filtering
-//   const start = deptStartDate.value ? new Date(deptStartDate.value) : null
-//   const end = deptEndDate.value ? new Date(deptEndDate.value) : null
-
-//   if (start && end) {
-//     filtered = filtered.filter((t) => {
-//       if (!t.created_at || !t.due_date) return false
-//       const created = new Date(t.created_at)
-//       const due = new Date(t.due_date)
-//       return created <= end && due >= start
-//     })
-//   }
-
-//   dept_displayTasks.value = filtered.sort(sortByPriorityAndDate)
-//   showDeptFilterMenu.value = false
-// }
 
 function sortByPriorityAndDate(a, b) {
   const pA = a.priority || 5
@@ -2018,6 +1987,152 @@ const formattedDateRange = computed(() => {
 function updateDateFilter() {
   // Nothing needed — computed handles reactivity
 }
+
+// -------------------- Company Report Logic --------------------
+const companyStartDate = ref(null)
+const companyEndDate = ref(null)
+const companySelectedDept = ref('')
+const companyAllTasks = ref([])
+const companyFilteredData = ref({})
+const companyDepartmentCount = ref(0)
+watch(currentTab, async (tab) => {
+  if (tab === 'company_report') {
+    await fetchDepartments()   // ✅ ensures dropdown has departments
+    loadCompanyReport()
+  }
+})
+
+watch(currentTab, (tab) => {
+  if (tab === 'company_report') loadCompanyReport()
+})
+
+function loadCompanyReport() {
+const today = new Date()
+  const oneMonthAgo = new Date(today)
+  oneMonthAgo.setMonth(today.getMonth() - 1)
+
+  companyStartDate.value = oneMonthAgo.toISOString().split('T')[0]
+  companyEndDate.value = today.toISOString().split('T')[0]
+  
+  buildCompanyData()
+}
+
+
+function applyCompanyFilters() {
+  buildCompanyData()
+}
+
+
+
+// Computed Metrics
+const companyCompletedTasks = computed(() =>
+  companyAllTasks.value.filter(t => t.status?.toLowerCase() === 'done' || t.status?.toLowerCase() === 'completed')
+)
+
+const companyOverdueTasks = computed(() =>
+  companyAllTasks.value.filter(t => isOverdue(t))
+)
+
+const companyCompletionRate = computed(() => {
+  const total = companyAllTasks.value.length
+  const completed = companyCompletedTasks.value.length
+  return total ? Math.round((completed / total) * 100) : 0
+})
+
+// Identify top & overloaded departments
+const topProductiveDept = computed(() => {
+  let max = -1, best = ''
+  for (const [dept, data] of Object.entries(companyFilteredData.value)) {
+    if (data.completionRate > max) { max = data.completionRate; best = dept }
+  }
+  return best
+})
+
+const overloadedDept = computed(() => {
+  let max = -1, name = ''
+  for (const [dept, data] of Object.entries(companyFilteredData.value)) {
+    if (data.overdue > max) { max = data.overdue; name = dept }
+  }
+  return name
+})
+
+const formattedCompanyDateRange = computed(() => {
+  if (!companyStartDate.value || !companyEndDate.value) return 'All time'
+  const opts = { day: 'numeric', month: 'long', year: 'numeric' }
+  const s = new Date(companyStartDate.value).toLocaleDateString('en-SG', opts)
+  const e = new Date(companyEndDate.value).toLocaleDateString('en-SG', opts)
+  return `${s} - ${e}`
+})
+
+// Export functions
+function exportCompanyReport(type) {
+  if (type === 'pdf') print() // quick PDF print
+  else if (type === 'excel') {
+    const rows = []
+    for (const [dept, data] of Object.entries(companyFilteredData.value)) {
+      rows.push({
+        Department: dept,
+        Total_Tasks: data.tasks.length,
+        Completed: data.completed,
+        Overdue: data.overdue,
+        Completion_Rate: data.completionRate + '%'
+      })
+    }
+    exportToExcel(rows, 'Company_Productivity_Report.xlsx')
+  }
+}
+
+function buildCompanyData() {
+  const start = companyStartDate.value ? new Date(companyStartDate.value) : null
+  const end = companyEndDate.value ? new Date(companyEndDate.value) : null
+
+  const filtered = {}
+  let allTasks = []
+
+  for (const [deptName, deptObj] of Object.entries(companyTasksData.value || {})) {
+    // ✅ If user selected a specific department, only process that one
+    if (companySelectedDept.value && deptName !== companySelectedDept.value) continue
+    console.log(companySelectedDept.value ,"hi")
+    let deptTasks = []
+    for (const team of Object.values(deptObj || {})) {
+      for (const employeeTasks of Object.values(team || {})) {
+        deptTasks.push(...employeeTasks)
+      }
+    }
+
+    // ✅ Apply timeframe filter
+    if (start && end) {
+      deptTasks = deptTasks.filter((t) => {
+        const created = new Date(t.created_at)
+        const due = new Date(t.due_date)
+        return created <= end && due >= start
+      })
+    }
+
+    const completed = deptTasks.filter(
+      (t) => t.status?.toLowerCase() === "done" || t.status?.toLowerCase() === "completed"
+    ).length
+    const overdue = deptTasks.filter((t) => isOverdue(t)).length
+    const ontime = deptTasks.length - overdue
+    const completionRate = deptTasks.length
+      ? Math.round((completed / deptTasks.length) * 100)
+      : 0
+
+    filtered[deptName] = {
+      tasks: deptTasks,
+      completed,
+      overdue,
+      ontime,
+      completionRate,
+    }
+    allTasks.push(...deptTasks)
+  }
+
+  companyFilteredData.value = filtered
+  companyAllTasks.value = allTasks
+  companyDepartmentCount.value = Object.keys(filtered).length
+}
+
 
 
 

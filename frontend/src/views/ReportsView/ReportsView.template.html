@@ -1,6 +1,6 @@
 <div class="tasks-page">
   <div class="tasks-header">
-    <h2>Tasks</h2>
+    <h2>Reports</h2>
     <div class="header-buttons">
 
 
@@ -271,142 +271,376 @@
   </div>
 
 
- <!-- Department Report -->
-<!-- ========================= -->
 
-<!-- ================== Department Report ================== -->
-<div v-if="currentTab==='dept_report'" class="report-tab">
-   <div class="report-controls">
-     <div class="left-controls">
-      <button class="filter-btn" @click="toggleDeptFilterMenu">Filter By</button>
 
-      <div v-if="showDeptFilterMenu" class="filter-menu" @click.stop>
-         Filter by Employee 
-        <div class="filter-section">
-          <label>
-            <input type="checkbox" v-model="deptFilterByEmployee" /> Filter by Employee
-          </label>
+  <!-- ================== Department Report ================== -->
+  <div v-if="currentTab==='dept_report'" class="report-tab">
+    <div class="report-controls">
+      <div class="left-controls">
+        <button class="filter-btn" @click="toggleDeptFilterMenu">Filter By</button>
 
-          <div v-if="deptFilterByEmployee" class="employee-checkbox-list">
-            <label v-for="emp in departmentEmployees" :key="emp.employee_id">
-              <input
-                type="checkbox"
-                :value="emp.employee_id"
-                v-model="deptSelectedEmployeeIds"
-              />
-              {{ emp.employee_name }}
+        <div v-if="showDeptFilterMenu" class="filter-menu" @click.stop>
+          Filter by Employee
+          <div class="filter-section">
+            <label>
+              <input type="checkbox" v-model="deptFilterByEmployee" /> Filter by Employee
+            </label>
+
+            <div v-if="deptFilterByEmployee" class="employee-checkbox-list">
+              <label v-for="emp in departmentEmployees" :key="emp.employee_id">
+                <input type="checkbox" :value="emp.employee_id" v-model="deptSelectedEmployeeIds" />
+                {{ emp.employee_name }}
+              </label>
+            </div>
+          </div>
+
+
+
+          <div class="filter-section">
+            <label>
+              <input type="checkbox" v-model="deptFilterByTask" /> Filter by Task
             </label>
           </div>
-        </div>
 
-     
 
-        <div class="filter-section">
-          <label>
-            <input type="checkbox" v-model="deptFilterByTask" /> Filter by Task
-          </label>
-        </div>
+          <div class="filter-section">
+            <label for="start-date-dept">Start:</label>
+            <input type="date" v-model="deptStartDate" id="start-date-dept" />
+            <label for="end-date-dept">End:</label>
+            <input type="date" v-model="deptEndDate" id="end-date-dept" />
+          </div>
 
-      
-        <div class="filter-section">
-          <label for="start-date-dept">Start:</label>
-          <input type="date" v-model="deptStartDate" id="start-date-dept" />
-          <label for="end-date-dept">End:</label>
-          <input type="date" v-model="deptEndDate" id="end-date-dept" />
-        </div>
 
-        
-        <div class="filter-buttons">
-          <button class="save-task-btn" @click="applyDeptFilters">Done</button>
-          <button class="cancel-subtask-btn" @click="toggleDeptFilterMenu">
-            Cancel
-          </button>
+          <div class="filter-buttons">
+            <button class="save-task-btn" @click="applyDeptFilters">Done</button>
+            <button class="cancel-subtask-btn" @click="toggleDeptFilterMenu">
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
-    </div> 
 
-    <div class="right-controls">
-      <button class="download-btn" @click="printReport">Download Report</button>
+      <div class="right-controls">
+        <button class="download-btn" @click="printReport">Download Report</button>
+      </div>
     </div>
-  </div> 
 
-<div class="report-card">
-  <!-- === CASE 1: FILTER BY EMPLOYEE(S) === -->
-  <template v-if="deptFilterByEmployee && dept_employeeReports.length">
-    <div
-      v-for="empReport in dept_employeeReports"
-      :key="empReport.employee.employee_id"
-      class="employee-report"
-    >
-      <h2 class="report-title">
-        👤 {{ empReport.employee.employee_name }}'s Task Report
-      </h2>
+    <div class="report-card">
+      <!-- === CASE 1: FILTER BY EMPLOYEE(S) === -->
+      <template v-if="deptFilterByEmployee && dept_employeeReports.length">
+        <div v-for="empReport in dept_employeeReports" :key="empReport.employee.employee_id" class="employee-report">
+          <h2 class="report-title">
+            👤 {{ empReport.employee.employee_name }}'s Task Report
+          </h2>
 
-      <div class="report-summary">
-        <h3>Summary ({{ formattedDeptDateRange }})</h3>
-        <ul>
-          <li><strong>Department:</strong> {{ dept_overallProgress }}</li>
-          <li><strong>Total Tasks:</strong> {{ empReport.tasks.length }}</li>
-          <li>
-            <strong>Overdue Tasks:</strong>
-            {{ empReport.tasks.filter(t => isOverdue(t)).length }}
-          </li>
-          <li>
-            <strong>High Priority:</strong>
-            {{ groupTasksByPriority(empReport.tasks).high.length }}
-          </li>
-          <li>
-            <strong>Medium Priority:</strong>
-            {{ groupTasksByPriority(empReport.tasks).medium.length }}
-          </li>
-          <li>
-            <strong>Low Priority:</strong>
-            {{ groupTasksByPriority(empReport.tasks).low.length }}
-          </li>
-        </ul>
-      </div>
+          <div class="report-summary">
+            <h3>Summary ({{ formattedDeptDateRange }})</h3>
+            <ul>
+              <li><strong>Department:</strong> {{ dept_overallProgress }}</li>
+              <li><strong>Total Tasks:</strong> {{ empReport.tasks.length }}</li>
+              <li>
+                <strong>Overdue Tasks:</strong>
+                {{ empReport.tasks.filter(t => isOverdue(t)).length }}
+              </li>
+              <li>
+                <strong>High Priority:</strong>
+                {{ groupTasksByPriority(empReport.tasks).high.length }}
+              </li>
+              <li>
+                <strong>Medium Priority:</strong>
+                {{ groupTasksByPriority(empReport.tasks).medium.length }}
+              </li>
+              <li>
+                <strong>Low Priority:</strong>
+                {{ groupTasksByPriority(empReport.tasks).low.length }}
+              </li>
+            </ul>
+          </div>
 
-      <!-- PRIORITY SECTIONS -->
-      <div
-        v-for="(tasks, label) in groupTasksByPriority(empReport.tasks)"
-        :key="label"
-        class="task-section"
-      >
-        <div class="section-header"
-             :class="{
+          <!-- PRIORITY SECTIONS -->
+          <div v-for="(tasks, label) in groupTasksByPriority(empReport.tasks)" :key="label" class="task-section">
+            <div class="section-header" :class="{
                'report-high-priority-header': label === 'high',
                'report-medium-priority-header': label === 'medium',
                'report-low-priority-header': label === 'low'
              }">
-          <span>{{ label.charAt(0).toUpperCase() + label.slice(1) }} Priority</span>
-          <span class="task-count">{{ tasks.length }}</span>
+              <span>{{ label.charAt(0).toUpperCase() + label.slice(1) }} Priority</span>
+              <span class="task-count">{{ tasks.length }}</span>
+            </div>
+
+            <div class="task-details">
+              <div v-if="tasks.length" class="priority-section">
+                <Card v-for="task in tasks" :key="task.id" class="task-card horizontal-task"
+                  :class="{ 'task-overdue': isOverdue(task) }" @click="openDetails(task)">
+                  <template #title>
+                    <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
+                    <div class="task-title-row">
+                      <span>{{ task.name }}</span>
+                    </div>
+                    <p class="desc" style="font-weight: normal;">{{ task.description }}</p>
+                  </template>
+
+                  <template #content>
+                    <div class="task-body horizontal-layout">
+                      <div class="task-info">
+                        <div class="info-item">
+                          <i class="pi pi-calendar-plus"></i>
+                          <strong>Start:</strong> {{ formatDate(task.created_at) }}
+                        </div>
+
+                        <div class="info-item">
+                          <i class="pi pi-calendar-times"></i>
+                          <strong>Due:</strong> {{ formatDate(task.due_date) }}
+                          <span class="relative-time">
+                            ({{ formatDateRelative(task.due_date) }})
+                          </span>
+                        </div>
+
+                        <div class="info-item">
+                          <i class="pi pi-bolt"></i>
+                          <strong>Priority Score:</strong>
+                          {{ task.priority || 'N/A' }}
+                        </div>
+
+                        <div class="info-item">
+                          <i class="pi pi-check-circle"></i>
+                          <strong>Status:</strong>
+                          <span class="status-pill" :class="getStatusClass(task.status)">
+                            {{ task.status }}
+                          </span>
+                        </div>
+
+                        <div class="info-item">
+                          <i class="pi pi-user"></i>
+                          <strong>Owner:</strong>
+                          {{ getOwnerName(task.owner) || empReport.employee.employee_name }}
+                        </div>
+
+                        <div class="info-item">
+                          <i class="pi pi-users"></i>
+                          <strong>Collaborators:</strong>
+                          {{ getCollaboratorNames(task.collaborators) || 'None' }}
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </Card>
+              </div>
+              <p v-else class="no-tasks-message">No {{ label }} priority tasks</p>
+            </div>
+          </div>
+          <hr class="employee-divider" />
+        </div>
+      </template>
+
+      <!-- === CASE 2: DEFAULT DEPARTMENT REPORT === -->
+      <template v-else>
+        <h2 class="report-title">🏢 Department Report</h2>
+
+        <div class="report-summary">
+          <h3>Summary ({{ formattedDeptDateRange }})</h3>
+          <ul>
+            <li><strong>Department:</strong> {{ dept_overallProgress }}</li>
+            <li><strong>Total Tasks:</strong> {{ dept_displayTasks.length }}</li>
+            <li><strong>Overdue Tasks:</strong> {{ dept_overdueTasks.length }}</li>
+            <li><strong>High Priority:</strong> {{ dept_tasksByPriority.high.length }}</li>
+            <li><strong>Medium Priority:</strong> {{ dept_tasksByPriority.medium.length }}</li>
+            <li><strong>Low Priority:</strong> {{ dept_tasksByPriority.low.length }}</li>
+          </ul>
         </div>
 
-        <div class="task-details">
-          <div v-if="tasks.length" class="priority-section">
-            <Card
-              v-for="task in tasks"
-              :key="task.id"
-              class="task-card horizontal-task"
-              :class="{ 'task-overdue': isOverdue(task) }"
-              @click="openDetails(task)"
-            >
-              <template #title>
-                <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
-                <div class="task-title-row">
-                  <span>{{ task.name }}</span>
-                </div>
-                <p class="desc" style="font-weight: normal;">{{ task.description }}</p>
-              </template>
+        <!-- Same task sections as before -->
+        <div v-for="(tasks, label) in dept_tasksByPriority" :key="label" class="task-section">
+          <div class="section-header" :class="{
+             'report-high-priority-header': label === 'high',
+             'report-medium-priority-header': label === 'medium',
+             'report-low-priority-header': label === 'low'
+           }">
+            <span>{{ label.charAt(0).toUpperCase() + label.slice(1) }} Priority</span>
+            <span class="task-count">{{ tasks.length }}</span>
+          </div>
 
-              <template #content>
-                <div class="task-body horizontal-layout">
-                  <div class="task-info">
+          <div class="task-details">
+            <div v-if="tasks.length" class="priority-section">
+              <Card v-for="task in tasks" :key="task.id" class="task-card horizontal-task"
+                :class="{ 'task-overdue': isOverdue(task) }" @click="openDetails(task)">
+                <template #title>
+                  <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
+                  <div class="task-title-row">
+                    <span>{{ task.name }}</span>
+                  </div>
+                  <p class="desc" style="font-weight: normal;">{{ task.description }}</p>
+                </template>
+
+                <template #content>
+                  <div class="task-body horizontal-layout">
+                    <div class="task-info">
+                      <div class="info-item">
+                        <i class="pi pi-calendar-plus"></i>
+                        <strong>Start:</strong> {{ formatDate(task.created_at) }}
+                      </div>
+
+                      <div class="info-item">
+                        <i class="pi pi-calendar-times"></i>
+                        <strong>Due:</strong> {{ formatDate(task.due_date) }}
+                        <span class="relative-time">
+                          ({{ formatDateRelative(task.due_date) }})
+                        </span>
+                      </div>
+
+                      <div class="info-item">
+                        <i class="pi pi-bolt"></i>
+                        <strong>Priority Score:</strong>
+                        {{ task.priority || 'N/A' }}
+                      </div>
+
+                      <div class="info-item">
+                        <i class="pi pi-check-circle"></i>
+                        <strong>Status:</strong>
+                        <span class="status-pill" :class="getStatusClass(task.status)">
+                          {{ task.status }}
+                        </span>
+                      </div>
+
+                      <div class="info-item">
+                        <i class="pi pi-user"></i>
+                        <strong>Owner:</strong> {{ getOwnerName(task.owner) }}
+                      </div>
+
+                      <div class="info-item">
+                        <i class="pi pi-users"></i>
+                        <strong>Collaborators:</strong> {{ getCollaboratorNames(task.collaborators) || 'None' }}
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </Card>
+            </div>
+            <p v-else class="no-tasks-message">No {{ label }} priority tasks</p>
+          </div>
+        </div>
+      </template>
+    </div>
+
+  </div>
+
+
+  <!-- ================== Company Report (HR Only) ================== -->
+  <div v-if="currentTab==='company_report'" class="report-tab">
+    <div class="report-controls">
+      <div class="left-controls">
+        <label for="company-start">Start:</label>
+        <input type="date" v-model="companyStartDate" id="company-start" />
+        <label for="company-end">End:</label>
+        <input type="date" v-model="companyEndDate" id="company-end" />
+
+        <label for="dept-filter">Department:</label>
+        <select v-model="companySelectedDept" id="dept-filter">
+          <option value="">All Departments</option>
+          <option  v-for="(deptData, deptName) in companyFilteredData" :key="deptName" :value="deptName">
+            {{ deptName }}
+          </option>
+        </select>
+
+        <button class="filter-btn" @click="applyCompanyFilters">Apply Filter</button>
+      </div>
+
+      <div class="right-controls">
+        <button class="download-btn" @click="exportCompanyReport('pdf')">Download PDF</button>
+      </div>
+    </div>
+
+    <div class="report-card">
+      <h2 class="report-title">🏢 Organisation-wide Productivity Report</h2>
+
+      <div class="report-summary">
+        <h3>Summary ({{ formattedCompanyDateRange }})</h3>
+        <ul>
+          <li><strong>Total Departments:</strong> {{ companyDepartmentCount }}</li>
+          <li><strong>Total Tasks:</strong> {{ companyAllTasks.length }}</li>
+          <li><strong>Completed Tasks:</strong> {{ companyCompletedTasks.length }}</li>
+          <li><strong>Overdue Tasks:</strong> {{ companyOverdueTasks.length }}</li>
+          <li><strong>Completion Rate:</strong> {{ companyCompletionRate }}%</li>
+          <li><strong>Most Productive Department:</strong> {{ topProductiveDept || '—' }}</li>
+          <li><strong>Most Overloaded Department:</strong> {{ overloadedDept || '—' }}</li>
+        </ul>
+      </div>
+
+      <!-- Department Breakdown -->
+<div
+  v-for="(deptData, deptName) in companyFilteredData"
+  :key="deptName"
+  class="department-report"
+>
+  <h3 class="department-header">{{ deptName }} Department</h3>
+
+  <ul class="department-metrics">
+    <li>Total Tasks: {{ deptData.tasks.length }}</li>
+    <li>Completed: {{ deptData.completed }}</li>
+    <li>Overdue: {{ deptData.overdue }}</li>
+    <li>On Time: {{ deptData.ontime }}</li>
+  </ul>
+
+  <div class="task-summary-bar">
+    <div class="bar completed" :style="{ width: deptData.completionRate + '%' }">
+      {{ deptData.completionRate }}% Completed
+    </div>
+  </div>
+
+  <!-- ✅ Detailed per-employee breakdown when filtering a department -->
+  <div v-if="companySelectedDept">
+    <div
+      v-for="(teamObj, teamName) in companyTasksData[deptName]"
+      :key="teamName"
+      class="team-section"
+    >
+      <h4 class="team-header">{{ teamName }} Team</h4>
+
+      <div
+        v-for="(tasks, employeeName) in teamObj"
+        :key="employeeName"
+        class="employee-report"
+      >
+        <h5 class="employee-header">👤 {{ employeeName }}’s Task Report</h5>
+
+        <div
+          v-for="(groupedTasks, label) in groupTasksByPriority(tasks)"
+          :key="label"
+          class="task-section"
+        >
+          <div class="section-header"
+               :class="{
+                 'report-high-priority-header': label === 'high',
+                 'report-medium-priority-header': label === 'medium',
+                 'report-low-priority-header': label === 'low'
+               }">
+            <span>{{ label.charAt(0).toUpperCase() + label.slice(1) }} Priority</span>
+            <span class="task-count">{{ groupedTasks.length }}</span>
+          </div>
+
+          <div class="task-details">
+            <div v-if="groupedTasks.length" class="priority-section">
+              <Card
+                v-for="task in groupedTasks"
+                :key="task.id"
+                class="task-card horizontal-task"
+                :class="{ 'task-overdue': isOverdue(task) }"
+                @click="openDetails(task)"
+              >
+                <template #title>
+                  <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
+                  <div class="task-title-row">
+                    <span>{{ task.name }}</span>
+                  </div>
+                  <p class="desc">{{ task.description }}</p>
+                </template>
+
+                <template #content>
+                  <div class="task-body horizontal-layout">
                     <div class="info-item">
                       <i class="pi pi-calendar-plus"></i>
                       <strong>Start:</strong> {{ formatDate(task.created_at) }}
                     </div>
-
                     <div class="info-item">
                       <i class="pi pi-calendar-times"></i>
                       <strong>Due:</strong> {{ formatDate(task.due_date) }}
@@ -414,149 +648,40 @@
                         ({{ formatDateRelative(task.due_date) }})
                       </span>
                     </div>
-
                     <div class="info-item">
                       <i class="pi pi-bolt"></i>
-                      <strong>Priority Score:</strong>
-                      {{ task.priority || 'N/A' }}
+                      <strong>Priority Score:</strong> {{ task.priority || 'N/A' }}
                     </div>
-
                     <div class="info-item">
                       <i class="pi pi-check-circle"></i>
                       <strong>Status:</strong>
-                      <span
-                        class="status-pill"
-                        :class="getStatusClass(task.status)"
-                      >
+                      <span class="status-pill" :class="getStatusClass(task.status)">
                         {{ task.status }}
                       </span>
                     </div>
-
                     <div class="info-item">
                       <i class="pi pi-user"></i>
-                      <strong>Owner:</strong>
-                      {{ getOwnerName(task.owner) || empReport.employee.employee_name }}
+                      <strong>Owner:</strong> {{ getOwnerName(task.owner) || employeeName }}
                     </div>
-
                     <div class="info-item">
                       <i class="pi pi-users"></i>
-                      <strong>Collaborators:</strong>
-                      {{ getCollaboratorNames(task.collaborators) || 'None' }}
+                      <strong>Collaborators:</strong> {{ getCollaboratorNames(task.collaborators) || 'None' }}
                     </div>
                   </div>
-                </div>
-              </template>
-            </Card>
+                </template>
+              </Card>
+            </div>
+            <p v-else class="no-tasks-message">No {{ label }} priority tasks</p>
           </div>
-          <p v-else class="no-tasks-message">No {{ label }} priority tasks</p>
         </div>
-      </div>
-      <hr class="employee-divider" />
-    </div>
-  </template>
-
-  <!-- === CASE 2: DEFAULT DEPARTMENT REPORT === -->
-  <template v-else>
-    <h2 class="report-title">🏢 Department Report</h2>
-
-    <div class="report-summary">
-      <h3>Summary ({{ formattedDeptDateRange }})</h3>
-      <ul>
-        <li><strong>Department:</strong> {{ dept_overallProgress }}</li>
-        <li><strong>Total Tasks:</strong> {{ dept_displayTasks.length }}</li>
-        <li><strong>Overdue Tasks:</strong> {{ dept_overdueTasks.length }}</li>
-        <li><strong>High Priority:</strong> {{ dept_tasksByPriority.high.length }}</li>
-        <li><strong>Medium Priority:</strong> {{ dept_tasksByPriority.medium.length }}</li>
-        <li><strong>Low Priority:</strong> {{ dept_tasksByPriority.low.length }}</li>
-      </ul>
-    </div>
-
-    <!-- Same task sections as before -->
-    <div
-      v-for="(tasks, label) in dept_tasksByPriority"
-      :key="label"
-      class="task-section"
-    >
-      <div class="section-header"
-           :class="{
-             'report-high-priority-header': label === 'high',
-             'report-medium-priority-header': label === 'medium',
-             'report-low-priority-header': label === 'low'
-           }">
-        <span>{{ label.charAt(0).toUpperCase() + label.slice(1) }} Priority</span>
-        <span class="task-count">{{ tasks.length }}</span>
-      </div>
-
-      <div class="task-details">
-        <div v-if="tasks.length" class="priority-section">
-          <Card
-            v-for="task in tasks"
-            :key="task.id"
-            class="task-card horizontal-task"
-            :class="{ 'task-overdue': isOverdue(task) }"
-            @click="openDetails(task)"
-          >
-            <template #title>
-              <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
-              <div class="task-title-row">
-                <span>{{ task.name }}</span>
-              </div>
-              <p class="desc" style="font-weight: normal;">{{ task.description }}</p>
-            </template>
-
-            <template #content>
-              <div class="task-body horizontal-layout">
-                <div class="task-info">
-                  <div class="info-item">
-                    <i class="pi pi-calendar-plus"></i>
-                    <strong>Start:</strong> {{ formatDate(task.created_at) }}
-                  </div>
-
-                  <div class="info-item">
-                    <i class="pi pi-calendar-times"></i>
-                    <strong>Due:</strong> {{ formatDate(task.due_date) }}
-                    <span class="relative-time">
-                      ({{ formatDateRelative(task.due_date) }})
-                    </span>
-                  </div>
-
-                  <div class="info-item">
-                    <i class="pi pi-bolt"></i>
-                    <strong>Priority Score:</strong>
-                    {{ task.priority || 'N/A' }}
-                  </div>
-
-                  <div class="info-item">
-                    <i class="pi pi-check-circle"></i>
-                    <strong>Status:</strong>
-                    <span class="status-pill" :class="getStatusClass(task.status)">
-                      {{ task.status }}
-                    </span>
-                  </div>
-
-                  <div class="info-item">
-                    <i class="pi pi-user"></i>
-                    <strong>Owner:</strong> {{ getOwnerName(task.owner) }}
-                  </div>
-
-                  <div class="info-item">
-                    <i class="pi pi-users"></i>
-                    <strong>Collaborators:</strong> {{ getCollaboratorNames(task.collaborators) || 'None' }}
-                  </div>
-                </div>
-              </div>
-            </template>
-          </Card>
-        </div>
-        <p v-else class="no-tasks-message">No {{ label }} priority tasks</p>
+         <hr class="employee-divider" />
       </div>
     </div>
-  </template>
+  </div>
 </div>
 
-</div>
-
-
+    </div>
+  </div>
 
 
 

@@ -2272,3 +2272,38 @@ input[type="datetime-local"] {
   border: 0;
   border-top: 2px dashed #ccc;
 }
+
+.department-header {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  color: #333;
+}
+
+.department-metrics {
+  display: flex;
+  gap: 2rem;
+  margin: 0.5rem 0 1rem;
+  font-size: 0.95rem;
+}
+
+.task-summary-bar {
+  background-color: #eee;
+  border-radius: 6px;
+  height: 22px;
+  width: 100%;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.task-summary-bar .bar {
+  height: 100%;
+  text-align: center;
+  color: white;
+  font-size: 0.85rem;
+  line-height: 22px;
+}
+
+.task-summary-bar .bar.completed {
+  background-color: #4caf50;
+}
