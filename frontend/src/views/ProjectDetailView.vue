@@ -49,6 +49,8 @@ const mentionQuery = ref('')
 const mentionStartIdx = ref(-1)
 const mentionHighlighted = ref(0)
 
+const currentTab = ref('')
+
 // Options for dropdowns
 const statusOptions = [
   { label: 'Unassigned', value: 'unassigned' },
@@ -513,6 +515,103 @@ function hideMentionList() {
 onMounted(async () => {
   await Promise.allSettled([load(), fetchEmployees()])
 })
+
+
+
+
+// Data
+const projectReportTasks = ref([])
+const projectReportGenerating = ref(false)
+const projectReportError = ref('')
+
+// Computed
+const projectReportCompleted = computed(() =>
+  projectReportTasks.value.filter(t => t.status.toLowerCase() === 'done' || t.status.toLowerCase() === 'completed').length
+)
+const projectReportOngoing = computed(() =>
+  projectReportTasks.value.filter(t => t.status.toLowerCase() === 'ongoing').length
+)
+const projectReportOverdue = computed(() =>
+  projectReportTasks.value.filter(t => {
+    if (!t.due_date) return false
+    const due = new Date(t.due_date)
+    return due < new Date() && !['done', 'completed'].includes(t.status.toLowerCase())
+  }).length
+)
+const projectReportOverallProgress = computed(() => {
+  const total = projectReportTasks.value.length
+  if (total === 0) return 'No Data'
+  const completed = projectReportCompleted.value
+  const ratio = completed / total
+  if (ratio >= 0.7) return 'Good'
+  if (ratio >= 0.4) return 'Average'
+  return 'Poor'
+})
+
+// Helper functions
+function report_formatDate(dateStr) {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  return d.toLocaleDateString()
+}
+function report_formatDueDate(dueDate) {
+  if (!dueDate) return '-'
+  const date = new Date(dueDate)
+  const now = new Date()
+  const diffDays = Math.round((date - now) / (1000 * 60 * 60 * 24))
+  let rel = diffDays < 0 ? `${Math.abs(diffDays)} days overdue` : diffDays === 0 ? 'today' : `in ${diffDays} days`
+  return `${date.toLocaleDateString()} (${rel})`
+}
+function report_statusClass(status) {
+  switch ((status || '').toLowerCase()) {
+    case 'ongoing': return 'status-pill status-ongoing'
+    case 'under review': return 'status-pill status-review'
+    case 'done': return 'status-pill status-completed'
+    default: return 'status-pill status-default'
+  }
+}
+function report_getOwnerName(ownerId) {
+  const emp = projectTeam.value.find(e => e.employee_id === ownerId)
+  return emp ? emp.employee_name : `#${ownerId}`
+}
+function report_getCollaboratorNames(collaborators) {
+  if (!collaborators || !Array.isArray(collaborators)) return 'None'
+  return collaborators.map(id => {
+    const emp = projectTeam.value.find(e => e.employee_id === id)
+    return emp ? emp.employee_name : `#${id}`
+  }).join(', ')
+}
+
+// Export PDF
+function exportProjectReportPDF() {
+  if (!projectReportTasks.value.length) return
+  projectReportGenerating.value = true
+
+  const doc = new jsPDF()
+  doc.setFontSize(14)
+  doc.text(`Project Report: ${project.name || 'N/A'}`, 14, 20)
+
+  const rows = projectReportTasks.value.map(t => [
+    t.name,
+    getOwnerName(t.owner),
+    formatDate(t.start_date),
+    formatDueDate(t.due_date),
+    t.status,
+    getCollaboratorNames(t.collaborators)
+  ])
+
+  doc.autoTable({
+    startY: 30,
+    head: [['Task Name','Owner','Start','Due','Status','Collaborators']],
+    body: rows,
+    styles: { fontSize: 10 }
+  })
+
+  doc.save(`Project_Report_${project?.name || 'Project'}.pdf`)
+  projectReportGenerating.value = false
+}
+
+
 </script>
 
 <template>
@@ -527,6 +626,75 @@ onMounted(async () => {
       <Button v-if="canManage" label="Edit Project" class="btn" @click="openEditProject" />
     </div>
   </div>
+ 
+      <button
+  :class="['tab', currentTab==='project_report' ? 'active' : '']"
+  @click="currentTab = 'project_report'"
+>Project Report</button>
+    
+  <!-- ===========================
+  PROJECT REPORT (Current Project)
+=========================== -->
+<div v-if="currentTab === 'project_report'" class="report-tab">
+  <div class="report-controls">
+    <div class="left-controls">
+           <button
+  :class="['tab', currentTab==='' ? 'active' : '']"
+  @click="currentTab = ''"
+>Back</button>
+      <span>{{ project?.name || 'Project Report' }}</span>
+    </div>
+
+    <div class="right-controls">
+      <button class="download-btn" @click="exportProjectReportPDF" :disabled="projectReportGenerating">
+        <i class="pi pi-file-pdf"></i> Download Report
+      </button>
+    </div>
+  </div>
+
+  <div class="report-card">
+    <h2 class="report-title">📁 Project Schedule Report</h2>
+
+    <div v-if="projectReportError" class="error-message">{{ projectReportError }}</div>
+
+    <div v-if="projectReportTasks.length">
+      <div class="report-summary">
+        <ul>
+          <li><strong>Total Tasks:</strong> {{ projectReportTasks.length }}</li>
+          <li><strong>Completed:</strong> {{ projectReportCompleted }}</li>
+          <li><strong>Ongoing:</strong> {{ projectReportOngoing }}</li>
+          <li><strong>Overdue:</strong> {{ projectReportOverdue }}</li>
+          <li><strong>Overall Progress:</strong> {{ projectReportOverallProgress }}</li>
+        </ul>
+      </div>
+
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th>Task Name</th>
+            <th>Owner</th>
+            <th>Start Date</th>
+            <th>Due Date</th>
+            <th>Status</th>
+            <th>Collaborators</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="task in projectReportTasks" :key="task.id">
+            <td>{{ task.name }}</td>
+            <td>{{ report_getOwnerName(task.owner) }}</td>
+            <td>{{ report_formatDate(task.start_date) }}</td>
+            <td>{{ report_formatDueDate(task.due_date) }}</td>
+            <td :class="statusClass(task.status)">{{ task.status }}</td>
+            <td>{{ report_getCollaboratorNames(task.collaborators) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div v-else class="no-data">No tasks available for this project.</div>
+  </div>
+</div>
 
   <div v-if="loading" class="card like">Loading…</div>
   <div v-else-if="error" class="error">{{ error }}</div>

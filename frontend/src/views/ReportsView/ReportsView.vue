@@ -24,7 +24,7 @@ const route = useRoute()
     const teamTasksData = ref({}) // team tasks organized by employee name
     const companyTasksData = ref({}) 
     const projects = ref([])
-    const currentTab = ref('my')
+    const currentTab = ref('individual_report')
     const teamSearch = ref('')
     const teamSelectedEmployeeId = ref(null)
     const selectedTask = ref(null)
@@ -2134,6 +2134,227 @@ function buildCompanyData() {
 }
 
 
+
+// ---------------- Project Report Logic -----------------
+const projectReportLoading = ref(false)
+const projectReportError = ref('')
+const projectReportProjects = ref([])        // list of projects for filter dropdown
+const projectReportSelectedId = ref(null)    // selected project id for report
+const projectReportSelected = ref(null)      // selected project metadata
+const projectReportTasks = ref([])           // tasks for selected project (flattened)
+const projectReportTeamMembers = ref([])     // team members returned by timeline endpoint
+const projectReportDateRange = ref(null)     // optional project date range from timeline
+const showProjectFilterMenu = ref(false)
+const projectReportGenerating = ref(false)
+
+// Default: show recent project when loaded
+onMounted(() => {
+    // load list of projects for the filter dropdown
+    loadProjectListForReport()
+})
+
+// Load project list for the project filter dropdown
+async function loadProjectListForReport() {
+    console.log("hi")
+    projectReportLoading.value = true
+    projectReportError.value = ''
+    try {
+        // Try backend projects endpoint (adjust if you have a shared getProjects helper)
+        const res = await axios.get('http://localhost:5002/projects', { withCredentials: true })
+        projectReportProjects.value = Array.isArray(res.data) ? res.data : []
+        // default to first project if none selected
+        if (!projectReportSelectedId.value && projectReportProjects.value.length > 0) {
+            projectReportSelectedId.value = projectReportProjects.value[0].id
+            projectReportSelected.value = projectReportReportFind(projectReportSelectedId.value)
+            // load timeline for that project
+            await loadProjectReportTimeline(projectReportSelectedId.value)
+        }
+    } catch (err) {
+        console.error('Error loading projects for report:', err)
+        projectReportError.value = 'Failed to load projects'
+        projectReportProjects.value = []
+    } finally {
+        projectReportLoading.value = false
+    }
+}
+
+// Helper to find project metadata by id
+function projectReportReportFind(id) {
+    return projectReportProjects.value.find(p => p.id === id) || null
+}
+
+// Toggle project filter menu (consistent with other filter toggles)
+function toggleProjectFilterMenu() {
+    showProjectFilterMenu.value = !showProjectFilterMenu.value
+}
+
+// When user selects a project from dropdown / radio list
+async function selectProjectForReport(id) {
+    projectReportSelectedId.value = id
+    projectReportSelected.value = projectReportReportFind(id)
+    await loadProjectReportTimeline(id)
+    showProjectFilterMenu.value = false
+}
+
+// Load timeline data (tasks, team members, project_date_range) for the selected project
+async function loadProjectReportTimeline(projectId) {
+    if (!projectId) {
+        projectReportTasks.value = []
+        projectReportTeamMembers.value = []
+        projectReportDateRange.value = null
+        return
+    }
+
+    projectReportLoading.value = true
+    projectReportError.value = ''
+    try {
+        const res = await axios.get(`http://localhost:5002/projects/${projectId}/timeline`, { withCredentials: true })
+        const data = res.data || {}
+
+        // tasks come from the timeline endpoint
+        projectReportTasks.value = Array.isArray(data.tasks) ? data.tasks.map(t => ({
+            id: t.task_id ?? t.id,
+            name: t.title ?? t.name,
+            description: t.description ?? t.desc ?? '',
+            created_at: t.created_at ?? t.start_date ?? t.start,
+            due_date: t.deadline ?? t.due_date ?? t.due,
+            status: t.status ?? 'unassigned',
+            priority: t.priority ?? 5,
+            owner: t.owner ?? t.employee_id ?? null,
+            collaborators: Array.isArray(t.collaborators) ? t.collaborators.map(c => Number(c)) : []
+        })) : []
+
+        // team members and project date range
+        projectReportTeamMembers.value = Array.isArray(data.team_members) ? data.team_members : []
+        projectReportDateRange.value = data.project_date_range || null
+
+    } catch (err) {
+        console.error('Error loading project timeline for report:', err)
+        projectReportError.value = 'Failed to load project timeline'
+        projectReportTasks.value = []
+        projectReportTeamMembers.value = []
+        projectReportDateRange.value = null
+    } finally {
+        projectReportLoading.value = false
+    }
+}
+
+// Compute only tasks that are accessible (project scope) - similar to displayTasks style
+const projectReportDisplayTasks = computed(() => {
+    return projectReportTasks.value || []
+})
+
+// Compute project overall progress (percentage of completed tasks)
+const projectReportCompletedTasks = computed(() =>
+    projectReportDisplayTasks.value.filter(t => (t.status || '').toLowerCase() === 'done' || (t.status || '').toLowerCase() === 'completed')
+)
+
+const projectReportTotalTasks = computed(() => projectReportDisplayTasks.value.length)
+
+const projectReportProgress = computed(() => {
+    const total = projectReportTotalTasks.value
+    if (!total) return 0
+    return Math.round((projectReportCompletedTasks.value.length / total) * 100)
+})
+
+// Human-readable overall progress label (Good / Average / Poor), same logic as other reports
+const projectReportProgressLabel = computed(() => {
+    const total = projectReportTotalTasks.value
+    if (total === 0) return 'No Data'
+    const ratio = projectReportCompletedTasks.value.length / total
+    if (ratio >= 0.7) return 'Good'
+    if (ratio >= 0.4) return 'Average'
+    return 'Poor'
+})
+
+// Helper to format date similar to your other formatters
+function projectReportFormatDate(dateStr) {
+    if (!dateStr) return '-'
+    try {
+        const d = new Date(dateStr)
+        if (isNaN(d.getTime())) return '-'
+        return d.toLocaleDateString('en-SG', { day: 'numeric', month: 'short', year: 'numeric' })
+    } catch (_) {
+        return '-'
+    }
+}
+
+// Resolve collaborator names (uses projectReportTeamMembers first then falls back to id)
+function projectReportGetCollaboratorNames(collabIds) {
+    if (!Array.isArray(collabIds) || collabIds.length === 0) return 'None'
+    const names = collabIds.map(id => {
+        const m = projectReportTeamMembers.value.find(x => Number(x.employee_id || x.id) === Number(id))
+        if (m) return m.employee_name || m.name || `#${id}`
+        return `#${id}`
+    })
+    return names.join(', ')
+}
+
+// Export current project report to PDF
+async function exportProjectReportPDF() {
+    if (!projectReportSelectedId.value) {
+        alert('Please select a project first.')
+        return
+    }
+
+    if (!projectReportDisplayTasks.value.length) {
+        alert('No tasks to export for this project.')
+        return
+    }
+
+    projectReportGenerating.value = true
+    try {
+        const projectName = (projectReportSelected.value && (projectReportSelected.value.name || projectReportSelected.value.title)) || `Project_${projectReportSelectedId.value}`
+        const generatedOn = new Date().toLocaleString('en-SG')
+
+        const doc = new jsPDF()
+        doc.setFontSize(16)
+        doc.text('Project Schedule Report', 14, 20)
+        doc.setFontSize(11)
+        doc.text(`Project: ${projectName}`, 14, 30)
+        doc.text(`Generated: ${generatedOn}`, 14, 36)
+        doc.text(`Overall Progress: ${projectReportProgress.value}% (${projectReportProgressLabel.value})`, 14, 42)
+        doc.text(`Total Tasks: ${projectReportTotalTasks.value}`, 14, 48)
+        doc.line(14, 52, 195, 52)
+
+        const body = projectReportDisplayTasks.value.map(t => ([
+            t.name || 'Untitled Task',
+            projectReportFormatDate(t.created_at),
+            projectReportFormatDate(t.due_date),
+            t.status || '-',
+            projectReportGetCollaboratorNames(t.collaborators)
+        ]))
+
+        autoTable(doc, {
+            startY: 58,
+            head: [['Task', 'Start', 'Due', 'Status', 'Collaborators']],
+            body,
+            styles: { fontSize: 9, cellPadding: 3 },
+            headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+            columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 30 }, 2: { cellWidth: 30 }, 3: { cellWidth: 30 }, 4: { cellWidth: 50 } }
+        })
+
+        doc.save(`${projectName.replace(/\s+/g, '_')}_Schedule_Report.pdf`)
+    } catch (err) {
+        console.error('Error exporting project report PDF:', err)
+        alert('Failed to export PDF. Check console for details.')
+    } finally {
+        projectReportGenerating.value = false
+    }
+}
+
+// Auto-load when switching to the project_report tab (consistent with other report watchers)
+watch(currentTab, async (tab) => {
+    if (tab === 'project_report') {
+        // Ensure projects list is ready and timeline loaded for selected project
+        if (!projectReportProjects.value.length) {
+            await loadProjectListForReport()
+        } else if (projectReportSelectedId.value) {
+            await loadProjectReportTimeline(projectReportSelectedId.value)
+        }
+    }
+})
+// ---------------- /Project Report Logic -----------------
 
 
 
