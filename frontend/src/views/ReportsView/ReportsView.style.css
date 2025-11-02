@@ -2263,3 +2263,12 @@ input[type="datetime-local"] {
   justify-content: flex-end;
   gap: 0.5rem;
 }
+.employee-report {
+  margin-bottom: 3rem;
+}
+
+.employee-divider {
+  margin: 2rem 0;
+  border: 0;
+  border-top: 2px dashed #ccc;
+}

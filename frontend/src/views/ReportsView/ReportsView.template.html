@@ -330,13 +330,139 @@
     </div>
   </div> 
 
-  <div class="report-card">
+<div class="report-card">
+  <!-- === CASE 1: FILTER BY EMPLOYEE(S) === -->
+  <template v-if="deptFilterByEmployee && dept_employeeReports.length">
+    <div
+      v-for="empReport in dept_employeeReports"
+      :key="empReport.employee.employee_id"
+      class="employee-report"
+    >
+      <h2 class="report-title">
+        👤 {{ empReport.employee.employee_name }}'s Task Report
+      </h2>
+
+      <div class="report-summary">
+        <h3>Summary ({{ formattedDeptDateRange }})</h3>
+        <ul>
+          <li><strong>Department:</strong> {{ dept_overallProgress }}</li>
+          <li><strong>Total Tasks:</strong> {{ empReport.tasks.length }}</li>
+          <li>
+            <strong>Overdue Tasks:</strong>
+            {{ empReport.tasks.filter(t => isOverdue(t)).length }}
+          </li>
+          <li>
+            <strong>High Priority:</strong>
+            {{ groupTasksByPriority(empReport.tasks).high.length }}
+          </li>
+          <li>
+            <strong>Medium Priority:</strong>
+            {{ groupTasksByPriority(empReport.tasks).medium.length }}
+          </li>
+          <li>
+            <strong>Low Priority:</strong>
+            {{ groupTasksByPriority(empReport.tasks).low.length }}
+          </li>
+        </ul>
+      </div>
+
+      <!-- PRIORITY SECTIONS -->
+      <div
+        v-for="(tasks, label) in groupTasksByPriority(empReport.tasks)"
+        :key="label"
+        class="task-section"
+      >
+        <div class="section-header"
+             :class="{
+               'report-high-priority-header': label === 'high',
+               'report-medium-priority-header': label === 'medium',
+               'report-low-priority-header': label === 'low'
+             }">
+          <span>{{ label.charAt(0).toUpperCase() + label.slice(1) }} Priority</span>
+          <span class="task-count">{{ tasks.length }}</span>
+        </div>
+
+        <div class="task-details">
+          <div v-if="tasks.length" class="priority-section">
+            <Card
+              v-for="task in tasks"
+              :key="task.id"
+              class="task-card horizontal-task"
+              :class="{ 'task-overdue': isOverdue(task) }"
+              @click="openDetails(task)"
+            >
+              <template #title>
+                <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
+                <div class="task-title-row">
+                  <span>{{ task.name }}</span>
+                </div>
+                <p class="desc" style="font-weight: normal;">{{ task.description }}</p>
+              </template>
+
+              <template #content>
+                <div class="task-body horizontal-layout">
+                  <div class="task-info">
+                    <div class="info-item">
+                      <i class="pi pi-calendar-plus"></i>
+                      <strong>Start:</strong> {{ formatDate(task.created_at) }}
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-calendar-times"></i>
+                      <strong>Due:</strong> {{ formatDate(task.due_date) }}
+                      <span class="relative-time">
+                        ({{ formatDateRelative(task.due_date) }})
+                      </span>
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-bolt"></i>
+                      <strong>Priority Score:</strong>
+                      {{ task.priority || 'N/A' }}
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-check-circle"></i>
+                      <strong>Status:</strong>
+                      <span
+                        class="status-pill"
+                        :class="getStatusClass(task.status)"
+                      >
+                        {{ task.status }}
+                      </span>
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-user"></i>
+                      <strong>Owner:</strong>
+                      {{ getOwnerName(task.owner) || empReport.employee.employee_name }}
+                    </div>
+
+                    <div class="info-item">
+                      <i class="pi pi-users"></i>
+                      <strong>Collaborators:</strong>
+                      {{ getCollaboratorNames(task.collaborators) || 'None' }}
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </Card>
+          </div>
+          <p v-else class="no-tasks-message">No {{ label }} priority tasks</p>
+        </div>
+      </div>
+      <hr class="employee-divider" />
+    </div>
+  </template>
+
+  <!-- === CASE 2: DEFAULT DEPARTMENT REPORT === -->
+  <template v-else>
     <h2 class="report-title">🏢 Department Report</h2>
 
     <div class="report-summary">
       <h3>Summary ({{ formattedDeptDateRange }})</h3>
       <ul>
-        <li><strong>Department:</strong> {{ currentDep }}</li>
+        <li><strong>Department:</strong> {{ dept_overallProgress }}</li>
         <li><strong>Total Tasks:</strong> {{ dept_displayTasks.length }}</li>
         <li><strong>Overdue Tasks:</strong> {{ dept_overdueTasks.length }}</li>
         <li><strong>High Priority:</strong> {{ dept_tasksByPriority.high.length }}</li>
@@ -345,204 +471,89 @@
       </ul>
     </div>
 
-    <!-- High -->
-    <div class="task-section">
-      <div class="section-header report-high-priority-header">
-        <!-- <div class="tasks-grid"></div> -->
-        <span>High Priority</span>
-        <span class="task-count">{{ dept_tasksByPriority.high.length }}</span>
+    <!-- Same task sections as before -->
+    <div
+      v-for="(tasks, label) in dept_tasksByPriority"
+      :key="label"
+      class="task-section"
+    >
+      <div class="section-header"
+           :class="{
+             'report-high-priority-header': label === 'high',
+             'report-medium-priority-header': label === 'medium',
+             'report-low-priority-header': label === 'low'
+           }">
+        <span>{{ label.charAt(0).toUpperCase() + label.slice(1) }} Priority</span>
+        <span class="task-count">{{ tasks.length }}</span>
       </div>
 
       <div class="task-details">
-      <div v-if="dept_tasksByPriority.high.length" class="tasks-grid">
-        <Card
-          v-for="task in dept_tasksByPriority.high"
-          :key="task.id"
-          class="task-card"
-          :class="{ 'task-overdue': isOverdue(task) }"
-          @click="openDetails(task)"
-        >
-          <template #title>
-            <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
-            <div class="task-title-row"><span>{{ task.name }}</span></div>
-            <p class="desc">{{ task.description }}</p>
-          </template>
-          <template #content>
-            <div class="task-body">
-              <div class="task-info">
-                <div class="info-item">
-                  <i class="pi pi-calendar-plus"></i>
-                  <strong>Start:</strong> {{ formatDate(task.created_at) }}
+        <div v-if="tasks.length" class="priority-section">
+          <Card
+            v-for="task in tasks"
+            :key="task.id"
+            class="task-card horizontal-task"
+            :class="{ 'task-overdue': isOverdue(task) }"
+            @click="openDetails(task)"
+          >
+            <template #title>
+              <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
+              <div class="task-title-row">
+                <span>{{ task.name }}</span>
+              </div>
+              <p class="desc" style="font-weight: normal;">{{ task.description }}</p>
+            </template>
+
+            <template #content>
+              <div class="task-body horizontal-layout">
+                <div class="task-info">
+                  <div class="info-item">
+                    <i class="pi pi-calendar-plus"></i>
+                    <strong>Start:</strong> {{ formatDate(task.created_at) }}
+                  </div>
+
+                  <div class="info-item">
+                    <i class="pi pi-calendar-times"></i>
+                    <strong>Due:</strong> {{ formatDate(task.due_date) }}
+                    <span class="relative-time">
+                      ({{ formatDateRelative(task.due_date) }})
+                    </span>
+                  </div>
+
+                  <div class="info-item">
+                    <i class="pi pi-bolt"></i>
+                    <strong>Priority Score:</strong>
+                    {{ task.priority || 'N/A' }}
+                  </div>
+
+                  <div class="info-item">
+                    <i class="pi pi-check-circle"></i>
+                    <strong>Status:</strong>
+                    <span class="status-pill" :class="getStatusClass(task.status)">
+                      {{ task.status }}
+                    </span>
+                  </div>
+
+                  <div class="info-item">
+                    <i class="pi pi-user"></i>
+                    <strong>Owner:</strong> {{ getOwnerName(task.owner) }}
+                  </div>
+
+                  <div class="info-item">
+                    <i class="pi pi-users"></i>
+                    <strong>Collaborators:</strong> {{ getCollaboratorNames(task.collaborators) || 'None' }}
+                  </div>
                 </div>
-                <div class="info-item">
-                  <i class="pi pi-calendar-times"></i>
-                  <strong>Due:</strong> {{ formatDate(task.due_date) }}
-                </div>
-              
-                <div class="info-item">
-                <i class="pi pi-bolt"></i>
-                <strong>Priority Score:</strong>
-                {{ task.priority || 'N/A' }}
               </div>
-
-              <div class="info-item">
-                <i class="pi pi-check-circle"></i>
-                <strong>Status:</strong>
-                <span class="status-pill" :class="getStatusClass(task.status)">
-                  {{ task.status }}
-                </span>
-              </div>
-
-              <div class="info-item">
-                <i class="pi pi-user"></i>
-                <strong>Owner:</strong> {{ getOwnerName(task.owner) || 'Unassigned' }}
-              </div>
-
-              <div class="info-item">
-                <i class="pi pi-users"></i>
-                <strong>Collaborators:</strong>
-                {{ getCollaboratorNames(task.collaborators) || 'None' }}
-              </div>
-              </div>
-            </div>
-          </template>
-        </Card>
+            </template>
+          </Card>
+        </div>
+        <p v-else class="no-tasks-message">No {{ label }} priority tasks</p>
       </div>
-      <p v-else class="no-tasks-message">No high priority tasks</p>
     </div>
-    </div>
-
-    <!-- Medium -->
-    <div class="task-section">
-      <div class="section-header report-medium-priority-header">
-        <span>Medium Priority</span>
-        <span class="task-count">{{ dept_tasksByPriority.medium.length }}</span>
-      </div>
-
-      <div class="task-details">
-      <div v-if="dept_tasksByPriority.medium.length" class="tasks-grid">
-        <Card
-          v-for="task in dept_tasksByPriority.medium"
-          :key="task.id"
-          class="task-card"
-          :class="{ 'task-overdue': isOverdue(task) }"
-          @click="openDetails(task)"
-        >
-          <template #title>
-            <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
-            <div class="task-title-row"><span>{{ task.name }}</span></div>
-            <p class="desc">{{ task.description }}</p>
-          </template>
-          <template #content>
-            <div class="task-body">
-              <div class="task-info">
-                <div class="info-item">
-                  <i class="pi pi-calendar-plus"></i>
-                  <strong>Start:</strong> {{ formatDate(task.created_at) }}
-                </div>
-                <div class="info-item">
-                  <i class="pi pi-calendar-times"></i>
-                  <strong>Due:</strong> {{ formatDate(task.due_date) }}
-                </div>
-                <div class="info-item">
-                <i class="pi pi-bolt"></i>
-                <strong>Priority Score:</strong>
-                {{ task.priority || 'N/A' }}
-              </div>
-
-              <div class="info-item">
-                <i class="pi pi-check-circle"></i>
-                <strong>Status:</strong>
-                <span class="status-pill" :class="getStatusClass(task.status)">
-                  {{ task.status }}
-                </span>
-              </div>
-
-              <div class="info-item">
-                <i class="pi pi-user"></i>
-                <strong>Owner:</strong> {{ getOwnerName(task.owner) || 'Unassigned' }}
-              </div>
-
-              <div class="info-item">
-                <i class="pi pi-users"></i>
-                <strong>Collaborators:</strong>
-                {{ getCollaboratorNames(task.collaborators) || 'None' }}
-              </div>
-              </div>
-            </div>
-          </template>
-        </Card>
-      </div>
-      <p v-else class="no-tasks-message">No medium priority tasks</p>
-    </div>
-    </div>
-
-    <!-- Low -->
-    <div class="task-section">
-      <div class="section-header report-low-priority-header">
-        <span>Low Priority</span>
-        <span class="task-count">{{ dept_tasksByPriority.low.length }}</span>
-      </div>
-
-      <div class="task-details">
-      <div v-if="dept_tasksByPriority.low.length" class="tasks-grid">
-        <Card
-          v-for="task in dept_tasksByPriority.low"
-          :key="task.id"
-          class="task-card"
-          :class="{ 'task-overdue': isOverdue(task) }"
-          @click="openDetails(task)"
-        >
-          <template #title>
-            <p v-if="isOverdue(task)" class="report-overdue-label">⚠️ Overdue</p>
-            <div class="task-title-row"><span>{{ task.name }}</span></div>
-            <p class="desc">{{ task.description }}</p>
-          </template>
-          <template #content>
-            <div class="task-body">
-              <div class="task-info">
-                <div class="info-item">
-                  <i class="pi pi-calendar-plus"></i>
-                  <strong>Start:</strong> {{ formatDate(task.created_at) }}
-                </div>
-                <div class="info-item">
-                  <i class="pi pi-calendar-times"></i>
-                  <strong>Due:</strong> {{ formatDate(task.due_date) }}
-                </div>
-            
-                <div class="info-item">
-                <i class="pi pi-bolt"></i>
-                <strong>Priority Score:</strong>
-                {{ task.priority || 'N/A' }}
-              </div>
-
-              <div class="info-item">
-                <i class="pi pi-check-circle"></i>
-                <strong>Status:</strong>
-                <span class="status-pill" :class="getStatusClass(task.status)">
-                  {{ task.status }}
-                </span>
-              </div>
-
-              <div class="info-item">
-                <i class="pi pi-user"></i>
-                <strong>Owner:</strong> {{ getOwnerName(task.owner) || 'Unassigned' }}
-              </div>
-
-              <div class="info-item">
-                <i class="pi pi-users"></i>
-                <strong>Collaborators:</strong>
-                {{ getCollaboratorNames(task.collaborators) || 'None' }}
-              </div>
-              </div>
-            </div>
-          </template>
-        </Card>
-      </div>
-      <p v-else class="no-tasks-message">No low priority tasks</p>
-    </div>
-  </div>
+  </template>
 </div>
+
 </div>
 
 

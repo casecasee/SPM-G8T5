@@ -697,36 +697,36 @@ function toggleDeptFilterMenu() {
 }
 
 // 3️⃣ apply filters
-function applyDeptFilters() {
-  let filtered = []
+// function applyDeptFilters() {
+//   let filtered = []
 
-  // collect all tasks for selected employees
-  departmentEmployees.value.forEach((emp) => {
-    if (
-      !deptFilterByEmployee.value ||
-      deptSelectedEmployeeIds.value.includes(emp.employee_id)
-    ) {
-      const empTasks = teamTasksData.value[emp.employee_name] || []
-      filtered.push(...empTasks)
-    }
-  })
+//   // collect all tasks for selected employees
+//   departmentEmployees.value.forEach((emp) => {
+//     if (
+//       !deptFilterByEmployee.value ||
+//       deptSelectedEmployeeIds.value.includes(emp.employee_id)
+//     ) {
+//       const empTasks = teamTasksData.value[emp.employee_name] || []
+//       filtered.push(...empTasks)
+//     }
+//   })
 
-  // date filtering
-  const start = deptStartDate.value ? new Date(deptStartDate.value) : null
-  const end = deptEndDate.value ? new Date(deptEndDate.value) : null
+//   // date filtering
+//   const start = deptStartDate.value ? new Date(deptStartDate.value) : null
+//   const end = deptEndDate.value ? new Date(deptEndDate.value) : null
 
-  if (start && end) {
-    filtered = filtered.filter((t) => {
-      if (!t.created_at || !t.due_date) return false
-      const created = new Date(t.created_at)
-      const due = new Date(t.due_date)
-      return created <= end && due >= start
-    })
-  }
+//   if (start && end) {
+//     filtered = filtered.filter((t) => {
+//       if (!t.created_at || !t.due_date) return false
+//       const created = new Date(t.created_at)
+//       const due = new Date(t.due_date)
+//       return created <= end && due >= start
+//     })
+//   }
 
-  dept_displayTasks.value = filtered.sort(sortByPriorityAndDate)
-  showDeptFilterMenu.value = false
-}
+//   dept_displayTasks.value = filtered.sort(sortByPriorityAndDate)
+//   showDeptFilterMenu.value = false
+// }
 
 function sortByPriorityAndDate(a, b) {
   const pA = a.priority || 5
@@ -770,7 +770,98 @@ const formattedDeptDateRange = computed(() => {
   return `${s} - ${e}`
 })
 
+const dept_overallProgress = computed(() => {
+  const total = dept_displayTasks.value.length
+  if (total === 0) return 'Nil'
 
+  const overdueCount = dept_overdueTasks.value.length
+  console.log(overdueCount)
+  if (overdueCount === 0) return 'Good'
+  if (overdueCount === 1) return 'Average'
+  return 'Poor'
+})
+
+// new reactive variable
+const dept_employeeReports = ref([])
+
+function applyDeptFilters() {
+  let filtered = []
+  dept_employeeReports.value = [] // reset multi-report view
+
+  // ✅ If filter by employee and multiple are selected
+  if (deptFilterByEmployee.value && deptSelectedEmployeeIds.value.length) {
+    deptSelectedEmployeeIds.value.forEach((empId) => {
+      const emp = departmentEmployees.value.find(
+        (e) => e.employee_id === empId
+      )
+      if (!emp) return
+
+      let empTasks = teamTasksData.value[emp.employee_name] || []
+
+      // date filtering
+      const start = deptStartDate.value ? new Date(deptStartDate.value) : null
+      const end = deptEndDate.value ? new Date(deptEndDate.value) : null
+      if (start && end) {
+        empTasks = empTasks.filter((t) => {
+          if (!t.created_at || !t.due_date) return false
+          const created = new Date(t.created_at)
+          const due = new Date(t.due_date)
+          return created <= end && due >= start
+        })
+      }
+
+      // sort
+      empTasks = empTasks.sort(sortByPriorityAndDate)
+
+      // push to employee reports list
+      dept_employeeReports.value.push({
+        employee: emp,
+        tasks: empTasks,
+      })
+
+      filtered.push(...empTasks)
+    })
+
+    // still maintain master task list
+    dept_displayTasks.value = filtered.sort(sortByPriorityAndDate)
+  } else {
+    // ✅ If not filtering by employee → show all dept tasks
+    let collected = []
+    departmentEmployees.value.forEach((emp) => {
+      const empTasks = teamTasksData.value[emp.employee_name] || []
+      collected.push(...empTasks)
+    })
+
+    // date filtering
+    const start = deptStartDate.value ? new Date(deptStartDate.value) : null
+    const end = deptEndDate.value ? new Date(deptEndDate.value) : null
+
+    if (start && end) {
+      collected = collected.filter((t) => {
+        if (!t.created_at || !t.due_date) return false
+        const created = new Date(t.created_at)
+        const due = new Date(t.due_date)
+        return created <= end && due >= start
+      })
+    }
+
+    dept_displayTasks.value = collected.sort(sortByPriorityAndDate)
+    dept_employeeReports.value = [] // no multi-view
+  }
+
+  showDeptFilterMenu.value = false
+}
+
+function groupTasksByPriority(taskList) {
+  const groups = { high: [], medium: [], low: [] }
+  taskList.forEach((t) => {
+    const score = t.priority || 5
+    if (score >= 8) groups.high.push(t)
+    else if (score >= 5) groups.medium.push(t)
+    else groups.low.push(t)
+  })
+  return groups
+}
 
 // ------------------------------------SubTasks-----------------------------------------------------------------
 
