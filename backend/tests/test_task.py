@@ -89,6 +89,7 @@ class TaskApiTestCase(unittest.TestCase):
             cls.different_dept_id = different_dept.employee_id
             cls.new_collab_id = new_person.employee_id
             cls.director_id = director.employee_id
+            cls.project1_id = project1.project_id
 
     @classmethod
     def tearDownClass(cls):
@@ -1324,7 +1325,7 @@ class TaskApiTestCase(unittest.TestCase):
     def test_metadata_update_project_assignment(self):
         self.login_as(self.owner_id, "staff")
         # First, seed a project
-        project_id = self.seed_project(department_id=self.department_id, owner_id=self.owner_id)
+        project_id = self.project1_id
         payload = {
             "title": "Metadata Update Test Task (project assignment)",
             "description": "Testing metadata update with project assignment.",
