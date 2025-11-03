@@ -11,8 +11,6 @@
   <div class="tabs">
     <button :class="['tab', currentTab==='individual_report' ? 'active' : '']"
       @click ="currentTab='individual_report'">My Task Report</button>
-    <button :class="['tab', currentTab==='project_report' ? 'active' : '']"
-      @click ="currentTab==='project_report'">Project Report</button>
     
     <button :class="['tab', currentTab==='dept_report' ? 'active' : '']" @click="currentTab='dept_report'">Department
       Report</button>
@@ -339,7 +337,7 @@
           <div class="report-summary">
             <h3>Summary ({{ formattedDeptDateRange }})</h3>
             <ul>
-              <li><strong>Department:</strong> {{ dept_overallProgress }}</li>
+              <li><strong>Overall Progress:</strong> {{ dept_overallProgress }}</li>
               <li><strong>Total Tasks:</strong> {{ empReport.tasks.length }}</li>
               <li>
                 <strong>Overdue Tasks:</strong>
@@ -443,7 +441,7 @@
         <div class="report-summary">
           <h3>Summary ({{ formattedDeptDateRange }})</h3>
           <ul>
-            <li><strong>Department:</strong> {{ dept_overallProgress }}</li>
+            <li><strong>Overall Progress:</strong> {{ dept_overallProgress }}</li>
             <li><strong>Total Tasks:</strong> {{ dept_displayTasks.length }}</li>
             <li><strong>Overdue Tasks:</strong> {{ dept_overdueTasks.length }}</li>
             <li><strong>High Priority:</strong> {{ dept_tasksByPriority.high.length }}</li>
