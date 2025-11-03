@@ -100,13 +100,16 @@ class TestProjectTimelineAPI(unittest.TestCase):
     def setUp(self):
         """Set up fresh state before each test"""
         with self.app.app_context():
-            # Clean up tasks
+            # Explicitly clean up the association table first to avoid constraint issues
+            db.session.execute(db.text("DELETE FROM task_collaborators"))
             Task.query.delete()
             db.session.commit()
     
     def tearDown(self):
         """Clean up after each test"""
         with self.app.app_context():
+            # Explicitly clean up the association table first to avoid constraint issues
+            db.session.execute(db.text("DELETE FROM task_collaborators"))
             Task.query.delete()
             db.session.commit()
     
@@ -164,61 +167,82 @@ class TestProjectTimelineAPI(unittest.TestCase):
         
         with self.app.app_context():
             # Create tasks - one owned by staff, one by manager
+            # Staff's own task (should be visible)
             own_task = Task(
                 title="My Task",
                 description="My task description",
                 deadline=datetime.now(timezone.utc) + timedelta(days=5),
                 status="ongoing",
                 owner=2,  # Staff owns this
-                collaborators=[],
+                collaborators=[],  # Will add after creation
                 priority=1,
                 project_id=1
             )
             
+            # Manager's task (should NOT be visible to staff)
             manager_task = Task(
                 title="Manager Task",
                 description="Manager task description",
                 deadline=datetime.now(timezone.utc) + timedelta(days=10),
                 status="ongoing",
                 owner=1,  # Manager owns this
-                collaborators=[],
+                collaborators=[],  # Will add after creation
                 priority=1,
                 project_id=1
             )
             
             db.session.add_all([own_task, manager_task])
+            db.session.flush()  # Flush to get task IDs but don't commit yet
+            
+            # Add collaborators using relationship after flush
+            own_task.collaborators.append(self.staff1)
+            manager_task.collaborators.append(self.manager)
+            
             db.session.commit()
+            
+            # Verify manager_task does NOT have staff as collaborator
+            manager_collab_ids = [c.employee_id for c in manager_task.collaborators.all()]
+            self.assertNotIn(2, manager_collab_ids, "Staff (id=2) should not be a collaborator of manager's task")
         
         response = self.client.get('/projects/1/timeline')
         self.assertEqual(response.status_code, 200)
         
         data = response.get_json()
-        # Should only see own task
-        self.assertEqual(len(data['tasks']), 1)
+        # Should only see own task (owner=2), not manager's task
+        task_titles = [t['title'] for t in data['tasks']]
+        self.assertEqual(len(data['tasks']), 1, f"Expected 1 task but got {len(data['tasks'])}: {task_titles}")
         self.assertEqual(data['tasks'][0]['owner'], 2)
+        self.assertIn('My Task', task_titles)
+        self.assertNotIn('Manager Task', task_titles)
     
     def test_timeline_staff_access_collaboration(self):
         """Test that staff can see tasks they collaborate on"""
         self.login_as(2, 'staff', 'IT')
         
         with self.app.app_context():
-            # Create task owned by manager but with staff as collaborator
+            # Create task owned by manager, add collaborators after creation
             task = Task(
                 title="Collaboration Task",
                 description="Task description",
                 deadline=datetime.now(timezone.utc) + timedelta(days=7),
                 status="ongoing",
                 owner=1,  # Manager owns
-                collaborators=[],
+                collaborators=[],  # Will add after creation
                 priority=1,
                 project_id=1
             )
             db.session.add(task)
+            db.session.flush()  # Flush to get task_id but don't commit yet
+            
+            # Add collaborators using relationship after flush to avoid constraint issues
+            task.collaborators.append(self.manager)
+            task.collaborators.append(self.staff1)
+            
             db.session.commit()
             
-            # Add staff as collaborator
-            task.collaborators.append(self.staff1)
-            db.session.commit()
+            # Verify staff is a collaborator
+            collaborator_ids = [c.employee_id for c in task.collaborators.all()]
+            self.assertIn(2, collaborator_ids, "Staff (id=2) should be a collaborator")
         
         response = self.client.get('/projects/1/timeline')
         self.assertEqual(response.status_code, 200)
@@ -528,6 +552,207 @@ class TestProjectTimelineAPI(unittest.TestCase):
         # Should see IT department members
         for member in team_members:
             self.assertEqual(member['department'], 'IT')
+
+    # ----------------------------------------------------------------------
+    # Test Personal Timeline (GET /tasks endpoint)
+    # ----------------------------------------------------------------------
+    
+    def test_staff_personal_timeline_my_tasks(self):
+        """Test that staff can see their own tasks in personal timeline view (User Story 4)"""
+        self.login_as(2, 'staff', 'IT')
+        
+        with self.client.session_transaction() as sess:
+            sess['team'] = 'A'  # Required for /tasks endpoint
+        
+        with self.app.app_context():
+            # Create tasks: one owned by staff, one owned by manager
+            my_task = Task(
+                title="My Personal Task",
+                description="My own task",
+                deadline=datetime.now(timezone.utc) + timedelta(days=5),
+                status="ongoing",
+                owner=2,  # Staff owns this
+                collaborators=[self.staff1],  # Owner must be in collaborators for top_level_tasks_for to work
+                priority=3,
+                project_id=None  # Personal task (no project)
+            )
+            
+            other_task = Task(
+                title="Other Person's Task",
+                description="Not my task",
+                deadline=datetime.now(timezone.utc) + timedelta(days=7),
+                status="ongoing",
+                owner=1,  # Manager owns this
+                collaborators=[self.manager],  # Manager is in collaborators, staff is not
+                priority=2,
+                project_id=None
+            )
+            
+            db.session.add_all([my_task, other_task])
+            db.session.commit()
+        
+        response = self.client.get('/tasks')
+        self.assertEqual(response.status_code, 200)
+        
+        data = response.get_json()
+        # Should have 'my_tasks' key
+        self.assertIn('my_tasks', data)
+        # Staff should see at least their own task
+        self.assertGreaterEqual(len(data['my_tasks']), 1)
+        # Verify task has required fields for timeline view
+        if data['my_tasks']:
+            task = data['my_tasks'][0]
+            self.assertIn('title', task)
+            self.assertIn('status', task)
+            self.assertIn('deadline', task)
+            self.assertIn('owner', task)
+
+    def test_manager_personal_timeline_my_tasks(self):
+        """Test that manager can see their own tasks in personal timeline view (User Story 5)"""
+        self.login_as(1, 'manager', 'IT')
+        
+        with self.client.session_transaction() as sess:
+            sess['team'] = 'A'  # Required for /tasks endpoint
+        
+        with self.app.app_context():
+            # Create tasks: one owned by manager, one owned by staff
+            my_task = Task(
+                title="Manager Personal Task",
+                description="Manager's own task",
+                deadline=datetime.now(timezone.utc) + timedelta(days=3),
+                status="ongoing",
+                owner=1,  # Manager owns this
+                collaborators=[self.manager],  # Manager must be in collaborators
+                priority=5,
+                project_id=None  # Personal task
+            )
+            
+            staff_task = Task(
+                title="Staff Task",
+                description="Staff's task",
+                deadline=datetime.now(timezone.utc) + timedelta(days=4),
+                status="ongoing",
+                owner=2,  # Staff owns this
+                collaborators=[self.staff1],  # Staff is in collaborators, manager is not
+                priority=2,
+                project_id=None
+            )
+            
+            db.session.add_all([my_task, staff_task])
+            db.session.commit()
+        
+        response = self.client.get('/tasks')
+        self.assertEqual(response.status_code, 200)
+        
+        data = response.get_json()
+        # Should have 'my_tasks' key for manager
+        self.assertIn('my_tasks', data)
+        # Manager should see at least their own task
+        self.assertGreaterEqual(len(data['my_tasks']), 1)
+        # Verify task has required timeline fields
+        if data['my_tasks']:
+            task = data['my_tasks'][0]
+            required_fields = ['title', 'status', 'deadline', 'owner']
+            for field in required_fields:
+                self.assertIn(field, task)
+
+    def test_hr_director_personal_timeline_my_tasks(self):
+        """Test that HR/Senior Director can see their own tasks in personal timeline view (User Story 6)"""
+        self.login_as(4, 'senior manager', 'HR')
+        
+        with self.client.session_transaction() as sess:
+            sess['team'] = 'B'  # Required for /tasks endpoint
+        
+        with self.app.app_context():
+            # Create tasks: one owned by HR user
+            my_task = Task(
+                title="HR Personal Task",
+                description="HR's own task",
+                deadline=datetime.now(timezone.utc) + timedelta(days=2),
+                status="ongoing",
+                owner=4,  # HR user owns this
+                collaborators=[self.hr_user],  # HR user must be in collaborators
+                priority=4,
+                project_id=None  # Personal task
+            )
+            
+            db.session.add(my_task)
+            db.session.commit()
+        
+        response = self.client.get('/tasks')
+        self.assertEqual(response.status_code, 200)
+        
+        data = response.get_json()
+        # Should have 'my_tasks' key
+        self.assertIn('my_tasks', data)
+        # HR/Director should see their own tasks
+        self.assertGreaterEqual(len(data['my_tasks']), 1)
+        # Verify task structure for timeline view
+        if data['my_tasks']:
+            task = data['my_tasks'][0]
+            self.assertIn('title', task)
+            self.assertIn('status', task)
+            self.assertIn('deadline', task)
+            self.assertIn('owner', task)
+            # Verify owner matches
+            self.assertEqual(task['owner'], 4)
+
+    def test_overdue_tasks_in_project_timeline(self):
+        """Test that overdue tasks are returned in project timeline (User Story 7)"""
+        self.login_as(1, 'manager', 'IT')
+        
+        with self.app.app_context():
+            # Create tasks: one overdue (past deadline), one not overdue
+            base_date = datetime.now(timezone.utc)
+            
+            overdue_task = Task(
+                title="Overdue Task",
+                description="This task is overdue",
+                deadline=base_date - timedelta(days=2),  # 2 days ago (overdue)
+                status="ongoing",  # Not completed, so it's overdue
+                owner=1,
+                collaborators=[],
+                priority=7,
+                project_id=1
+            )
+            
+            future_task = Task(
+                title="Future Task",
+                description="This task is not overdue",
+                deadline=base_date + timedelta(days=5),  # 5 days from now
+                status="ongoing",
+                owner=1,
+                collaborators=[],
+                priority=3,
+                project_id=1
+            )
+            
+            db.session.add_all([overdue_task, future_task])
+            db.session.commit()
+        
+        response = self.client.get('/projects/1/timeline')
+        self.assertEqual(response.status_code, 200)
+        
+        data = response.get_json()
+        tasks = data['tasks']
+        
+        # Should return both tasks
+        self.assertEqual(len(tasks), 2)
+        
+        # Find overdue task
+        overdue_found = False
+        for task in tasks:
+            if task['title'] == 'Overdue Task':
+                overdue_found = True
+                # Verify task has due_date field (frontend can check if it's overdue)
+                self.assertIsNotNone(task['due_date'])
+                # Verify task is still ongoing (not done, so it's truly overdue)
+                self.assertEqual(task['status'], 'ongoing')
+                # Verify due_date is in the past (check by parsing ISO string)
+                due_date_obj = datetime.fromisoformat(task['due_date'].replace('Z', '+00:00'))
+                self.assertLess(due_date_obj.replace(tzinfo=timezone.utc), datetime.now(timezone.utc))
+        
+        self.assertTrue(overdue_found, "Overdue task should be present in timeline response")
 
 
 if __name__ == '__main__':
