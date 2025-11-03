@@ -89,7 +89,7 @@ class TaskApiTestCase(unittest.TestCase):
             cls.different_dept_id = different_dept.employee_id
             cls.new_collab_id = new_person.employee_id
             cls.director_id = director.employee_id
-            cls.project1_id = project1.project_id
+            cls.project1_id = project1.id
 
     @classmethod
     def tearDownClass(cls):
