@@ -1,3 +1,4 @@
+import inspect
 import os
 import json
 import unittest
@@ -43,11 +44,17 @@ class TaskApiTestCase(unittest.TestCase):
         app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
         # Optional guard that also helps avoid attribute refreshes (not required since we only use IDs)
         app.config["SQLALCHEMY_SESSION_OPTIONS"] = {"expire_on_commit": False}
+        print(">>> TEST DB URI:", app.config["SQLALCHEMY_DATABASE_URI"])
+
 
         cls.app = app
         cls.client = app.test_client()
         with app.app_context():
             db.create_all()
+            from sqlalchemy import inspect
+            # with app.app_context():
+            print(">>> Tables found:", inspect(db.engine).get_table_names())
+
 
             # Seed 3 users: owner (employee), collaborator (employee), manager
             owner = Staff(employee_name="Owner One", email="owner@example.com", role="staff", department="Finance", team="A", password="Test123")
@@ -62,6 +69,19 @@ class TaskApiTestCase(unittest.TestCase):
 
             # seed tasks
 
+            # seed projects
+            project1 = Project(name="Project 1", owner_id=owner.employee_id, due_date=datetime_now() + timedelta(days=30))
+            # add project members (add a bunch)
+            project1.members.append(owner)
+            project1.members.append(collab)
+            project1.members.append(manager)
+            # project1.members.append(different_dept)
+            project1.members.append(new_person)
+            project1.members.append(director)
+
+            db.session.add(project1)
+            db.session.commit()
+
             # Capture their IDs (primitive ints only)
             cls.owner_id = owner.employee_id
             cls.collab_id = collab.employee_id
@@ -69,6 +89,7 @@ class TaskApiTestCase(unittest.TestCase):
             cls.different_dept_id = different_dept.employee_id
             cls.new_collab_id = new_person.employee_id
             cls.director_id = director.employee_id
+            cls.project1_id = project1.id
 
     @classmethod
     def tearDownClass(cls):
@@ -362,10 +383,35 @@ class TaskApiTestCase(unittest.TestCase):
         response = self.client.post("/tasks", json=payload)
         self.assertEqual(response.status_code, 400, msg=f"Expected 400 for collaborator from different department, got {response.status_code}")
 
+    # test collaborators list, project not found
+    def test_create_task_collaborators_project_not_found(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Project Not Found Test Task",
+            "description": "Testing collaborators assignment.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "project_id": 9999,  # non-existent project
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 404, msg=f"Expected 404 for non-existent project, got {response.status_code}")
+
     # test collaborators list for project tasks (project members only), must include owner
     def test_create_task_collaborators_project_task(self):
-        # Need to seed a project first
-        pass
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Project Collaborators Test Task",
+            "description": "Testing collaborators assignment.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id, self.different_dept_id],  # different_dept_id is not in project members
+            "attachments": [],
+            "project_id": 1,
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for collaborator not in project members, got {response.status_code}")
 
     # test collaborators list for invalid ids
     def test_create_task_collaborators_invalid_ids(self):
@@ -382,6 +428,7 @@ class TaskApiTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 404, msg=f"Expected 400 for invalid collaborator IDs, got {response.status_code}")
 
     # test attachments ?
+    
 
     # test comments ?
 
@@ -1159,6 +1206,35 @@ class TaskApiTestCase(unittest.TestCase):
         response = self.client.put(f"/task/{task_id}", json=update_payload)
         self.assertEqual(response.status_code, 400, msg=f"Expected 400 for invalid description, got {response.status_code}")
 
+    # test update metadata, update status (should not be allowed here)
+    def test_metadata_update_with_status_change(self):
+        self.login_as(self.owner_id, "staff")
+        payload = {
+            "title": "Metadata Update Test Task (status change)",
+            "description": "Testing metadata update with status change.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Try to update metadata with status change
+        update_payload = {
+            "title": "Updated Metadata Task (status change)",
+            "description": "Updated description with status change.",
+            "priority": 3,
+            "deadline": generate_deadline(10),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "status": "done",  # status change not allowed here
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 400, msg=f"Expected 400 for status change in metadata update, got {response.status_code}")
+
     # test update metadata invalid deadline
     def test_metadata_update_invalid_deadline(self):
         self.login_as(self.owner_id, "staff")
@@ -1244,6 +1320,42 @@ class TaskApiTestCase(unittest.TestCase):
         }
         response = self.client.put(f"/task/{task_id}", json=update_payload)
         self.assertEqual(response.status_code, 404, msg=f"Expected 404 for project id not found, got {response.status_code}")
+
+    # test update metadata project (moving from lonely to project)
+    def test_metadata_update_project_assignment(self):
+        self.login_as(self.owner_id, "staff")
+        # First, seed a project
+        project_id = self.project1_id
+        payload = {
+            "title": "Metadata Update Test Task (project assignment)",
+            "description": "Testing metadata update with project assignment.",
+            "priority": 2,
+            "deadline": generate_deadline(),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+        }
+        response = self.client.post("/tasks", json=payload)
+        self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        task_id = data.get("task_id")
+        self.assertIsNotNone(task_id, msg="Response missing task_id")
+        # Try to update metadata with project assignment
+        update_payload = {
+            "title": "Updated Metadata Task (project assignment)",
+            "description": "Updated description with project assignment.",
+            "priority": 3,
+            "deadline": generate_deadline(10),
+            "collaborators": [self.collab_id],
+            "attachments": [],
+            "project_id": project_id,  # assign to project
+        }
+        response = self.client.put(f"/task/{task_id}", json=update_payload)
+        self.assertEqual(response.status_code, 200, msg=f"Project assignment update failed: {response.status_code} {response.get_data(as_text=True)}")
+        data = response.get_json()
+        with self.app.app_context():
+            task = Task.query.get(task_id)
+            self.assertIsNotNone(task, msg="Task not found in database")
+            self.assertEqual(task.project_id, project_id, msg=f"Expected project_id '{project_id}', got '{task.project_id}'")
 
     # test update metadata owner (assignment) - need to be same dept if lonely task, need to be project collaborator if project task, can only assign downwards, status needs to be updated from unassigned to ongoing if owner changed and task was unassigned, else status remains same
     def test_metadata_update_owner_assignment(self):
@@ -1781,12 +1893,140 @@ class TaskApiTestCase(unittest.TestCase):
 # staff gets task (should get all the tasks they are owner of and collaborator of, as well as all the tasks in their team)
 # return format: {my_tasks: [...], team_tasks: [...]}
 def test_get_tasks_staff(self):
-    pass
+    # create task owned by self, collaborator of self, task of manager (same team)
+    self.login_as(self.owner_id, "staff")
+    payload = {
+        "title": "Get Tasks Test Task (owner)",
+        "description": "Testing get tasks as owner.",
+        "priority": 2,
+        "deadline": generate_deadline(),
+        "collaborators": [self.collab_id],
+        "attachments": [],
+    }
+    response = self.client.post("/tasks", json=payload)
+    self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    data = response.get_json()
+    task_id = data.get("task_id")
+    self.assertIsNotNone(task_id, msg="Response missing task_id")
+
+    # Create a task as collaborator
+    self.login_as(self.collab_id, "staff")
+    payload = {
+        "title": "Get Tasks Test Task (collaborator)",
+        "description": "Testing get tasks as collaborator.",
+        "priority": 2,
+        "deadline": generate_deadline(),
+        "collaborators": [self.collab_id],
+        "attachments": [],
+    }
+    response = self.client.post("/tasks", json=payload)
+    self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    data = response.get_json()
+    collab_task_id = data.get("task_id")
+    self.assertIsNotNone(collab_task_id, msg="Response missing task_id")
+
+    # Create a task as manager (same team)
+    self.login_as(self.manager_id, "manager")
+    payload = {
+        "title": "Get Tasks Test Task (manager)",
+        "description": "Testing get tasks as manager.",
+        "priority": 2,
+        "deadline": generate_deadline(),
+        "collaborators": [self.owner_id],
+        "attachments": [],
+    }
+
+    response = self.client.post("/tasks", json=payload)
+    self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    data = response.get_json()
+    manager_task_id = data.get("task_id")
+    self.assertIsNotNone(manager_task_id, msg="Response missing task_id")
+
+    # Now test get tasks as staff
+    self.login_as(self.owner_id, "staff")
+    response = self.client.get("/tasks")
+    self.assertEqual(response.status_code, 200, msg=f"Get tasks failed: {response.status_code} {response.get_data(as_text=True)}")
+    data = response.get_json()
+    my_tasks = data.get("my_tasks", [])
+    team_tasks = data.get("team_tasks", [])
+
+    # Assert that the tasks are returned correctly
+    self.assertIn(task_id, my_tasks, msg="Task not found in my_tasks")
+    self.assertIn(collab_task_id, team_tasks, msg="Task not found in team_tasks")
+    self.assertIn(manager_task_id, team_tasks, msg="Task not found in team_tasks")
 
 
 # manager gets task (should get all the tasks they are owner of and collaborator of, as well as all the tasks in their team - same as staff)
 def test_get_tasks_manager(self):
-    pass
+    # create task owned by self, collaborator of self, task of staff (same team)
+    self.login_as(self.manager_id, "manager")
+    payload = {
+        "title": "Get Tasks Test Task (owner)",
+        "description": "Testing get tasks as owner.",
+        "priority": 2,
+        "deadline": generate_deadline(),
+        "collaborators": [],
+        "attachments": [],
+    }
+    response = self.client.post("/tasks", json=payload)
+    self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    data = response.get_json()
+    task_id = data.get("task_id")
+    self.assertIsNotNone(task_id, msg="Response missing task_id")
+    
+    # Create a task as collaborator
+    self.login_as(self.collab_id, "staff")
+    payload = {
+        "title": "Get Tasks Test Task (collaborator)",
+        "description": "Testing get tasks as collaborator.",
+        "priority": 2,
+        "deadline": generate_deadline(),
+        "collaborators": [],
+        "attachments": [],
+    }
+    response = self.client.post("/tasks", json=payload)
+    self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    data = response.get_json()
+    collab_task_id = data.get("task_id")
+    self.assertIsNotNone(collab_task_id, msg="Response missing task_id")
+
+    # Create a task as staff (same team)
+    self.login_as(self.owner_id, "staff")
+    payload = {
+        "title": "Get Tasks Test Task (staff)",
+        "description": "Testing get tasks as staff.",
+        "priority": 2,
+        "deadline": generate_deadline(),
+        "collaborators": [],
+        "attachments": [],
+    }
+    response = self.client.post("/tasks", json=payload)
+    self.assertEqual(response.status_code, 201, msg=f"Create task failed: {response.status_code} {response.get_data(as_text=True)}")
+    data = response.get_json()
+    staff_task_id = data.get("task_id")
+    self.assertIsNotNone(staff_task_id, msg="Response missing task_id")
+
+    # Now test get tasks as manager
+    self.login_as(self.manager_id, "manager")
+    response = self.client.get("/tasks")
+    self.assertEqual(response.status_code, 200, msg=f"Get tasks failed: {response.status_code} {response.get_data(as_text=True)}")
+    data = response.get_json()
+    my_tasks = data.get("my_tasks", [])
+    team_tasks = data.get("team_tasks", {})
+
+    # return as {my_tasks: [], team_tasks: [emp1: [list of tasks], emp2: [...]]}
+    # task id should be in my_tasks
+    # collab_task_id and staff_task_id should be in team_tasks under respective employees
+    self.assertIn(task_id, my_tasks, msg="Task not found in my_tasks")
+    found_collab_task = False
+    found_staff_task = False
+    for emp_id, tasks in team_tasks.items():
+        if collab_task_id in tasks:
+            found_collab_task = True
+        if staff_task_id in tasks:
+            found_staff_task = True
+    self.assertTrue(found_collab_task, msg="Collaborator task not found in team_tasks")
+    self.assertTrue(found_staff_task, msg="Staff task not found in team_tasks")
 
 # director gets task (should get all the tasks they are owner of and collaborator of, as well as all the tasks in the company (because they are senior management))
 # return as {my_tasks: [], company_tasks: {dept1: {team1: {emp1: [list of tasks], emp2: [...]}, team2: {...}}, dept2: {...}}}

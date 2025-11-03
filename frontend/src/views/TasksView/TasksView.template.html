@@ -43,8 +43,6 @@
   </div>
 </div>
 
-
-
 <!-- Department selection for Senior Managers and HR -->
 <div v-if="isSeniorManagerOrHR && currentTab==='departments'" class="department-section">
   <!-- Department selection -->
@@ -61,30 +59,23 @@
     </div>
   </div>
 
-  <!-- Employee selection within department -->
   <div v-if="selectedDepartment" class="employee-selection">
     <h3>{{ selectedDepartment }} Employees</h3>
     <!-- Search bar -->
     <InputText v-model="departmentSearch" placeholder="Search employee by name" class="input-field" />
-    <!-- Employee selection within department -->
-    <div v-if="selectedDepartment" class="employee-selection">
-      <h3>{{ selectedDepartment }} Employees</h3>
-      <!-- Search bar -->
-      <InputText v-model="departmentSearch" placeholder="Search employee by name" class="input-field" />
 
-      <!-- Employee grid -->
-      <div class="employee-grid">
-        <div
-          v-for="emp in filteredEmployeesForDepartment.length ? filteredEmployeesForDepartment : departmentEmployees.filter(e => e.employee_id !== currentEmployeeId)"
-          :key="emp.employee_id" class="employee-card"
-          :class="departmentSelectedEmployeeId === emp.employee_id ? 'selected' : ''"
-          @click="selectDepartmentEmployee(emp.employee_id)">
-          <div class="employee-avatar">
-            <i class="pi pi-user" style="font-size:1.2rem;"></i>
-          </div>
-          <div class="employee-name">{{ emp.employee_name }}</div>
-          <div class="employee-role">{{ emp.role }}</div>
+    <!-- Employee grid -->
+    <div class="employee-grid">
+      <div
+        v-for="emp in filteredEmployeesForDepartment.length ? filteredEmployeesForDepartment : departmentEmployees.filter(e => e.employee_id !== currentEmployeeId)"
+        :key="emp.employee_id" class="employee-card"
+        :class="departmentSelectedEmployeeId === emp.employee_id ? 'selected' : ''"
+        @click="selectDepartmentEmployee(emp.employee_id)">
+        <div class="employee-avatar">
+          <i class="pi pi-user" style="font-size:1.2rem;"></i>
         </div>
+        <div class="employee-name">{{ emp.employee_name }}</div>
+        <div class="employee-role">{{ emp.role }}</div>
       </div>
     </div>
   </div>

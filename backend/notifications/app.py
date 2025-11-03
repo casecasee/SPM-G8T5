@@ -38,8 +38,11 @@ socketio = SocketIO(app,
                    engineio_logger=False)
 
 # Database configuration
-# Use MySQL to match the rest of the application
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI", "mysql+mysqlconnector://root@localhost:3306/SPM")
+# Use SQLite for testing, MySQL for production
+if not os.getenv('TESTING'):
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URI", "mysql+mysqlconnector://root@localhost:3306/SPM")
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///:memory:"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 299}
 
