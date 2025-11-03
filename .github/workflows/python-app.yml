@@ -43,8 +43,4 @@ jobs:
       env:
         PYTHONPATH: ${{ github.workspace }}/backend
       run: |
-            coverage run -m unittest discover -s tests -p "test_*.py"
-            coverage report -m                  
-            coverage xml                       
-            coverage html -d cov_html          
-
+            python -m unittest discover -s tests -p "test_*.py"        
