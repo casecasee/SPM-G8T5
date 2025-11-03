@@ -283,6 +283,10 @@ async function saveEditProject() {
   }
 }
 
+ function printReport() {
+        print();
+    }
+
 async function saveTask() {
   clearValidationErrors()
   if (!validateForm()) return
@@ -636,99 +640,42 @@ function exportProjectReportPDF() {
   PROJECT REPORT (Current Project)
 =========================== -->
 <div v-if="currentTab === 'project_report'" class="report-tab">
+      <div class="right-controls">
+      <button class="download-btn" @click="printReport" :disabled="projectReportGenerating">
+        <i class="pi pi-file-pdf"></i> Download Report
+      </button>
+    </div>
+
+    <div class="tasks-grid">
+    <Card v-for="t in (activeTab==='all' ? projectTasks : myProjectTasks)" :key="t.id" class="task-card" @click="openTask(t)">
+      <template #title>
+        <div class="task-title-row">
+          <span>{{ t.name }}</span>
+          <span class="priority-badge" :class="t.priority >= 8 ? 'priority-high' : (t.priority >=5 ? 'priority-medium' : 'priority-low')">P{{ t.priority }}</span>
+        </div>
+      </template>
+      <template #content>
+        <p class="desc">{{ t.description }}</p>
+        <p class="meta">📅 {{ formatDate(t.due_date) }}</p>
+        <p class="meta"><span :class="statusClass(t.status)">{{ t.status }}</span></p>
+      </template>
+    </Card>
+  </div>
+
   <div class="report-controls">
     <div class="left-controls">
            <button
   :class="['tab', currentTab==='' ? 'active' : '']"
   @click="currentTab = ''"
 >Back</button>
-      <span>{{ project?.name || 'Project Report' }}</span>
+
+    </div>
     </div>
 
-    <div class="right-controls">
-      <button class="download-btn" @click="exportProjectReportPDF" :disabled="projectReportGenerating">
-        <i class="pi pi-file-pdf"></i> Download Report
-      </button>
-    </div>
+
   </div>
 
-  <div class="report-card">
-    <h2 class="report-title">📁 Project Schedule Report</h2>
-
-    <div v-if="projectReportError" class="error-message">{{ projectReportError }}</div>
-
-    <div v-if="projectReportTasks.length">
-      <div class="report-summary">
-        <ul>
-          <li><strong>Total Tasks:</strong> {{ projectReportTasks.length }}</li>
-          <li><strong>Completed:</strong> {{ projectReportCompleted }}</li>
-          <li><strong>Ongoing:</strong> {{ projectReportOngoing }}</li>
-          <li><strong>Overdue:</strong> {{ projectReportOverdue }}</li>
-          <li><strong>Overall Progress:</strong> {{ projectReportOverallProgress }}</li>
-        </ul>
-      </div>
-
-      <table class="report-table">
-        <thead>
-          <tr>
-            <th>Task Name</th>
-            <th>Owner</th>
-            <th>Start Date</th>
-            <th>Due Date</th>
-            <th>Status</th>
-            <th>Collaborators</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="task in projectReportTasks" :key="task.id">
-            <td>{{ task.name }}</td>
-            <td>{{ report_getOwnerName(task.owner) }}</td>
-            <td>{{ report_formatDate(task.start_date) }}</td>
-            <td>{{ report_formatDueDate(task.due_date) }}</td>
-            <td :class="statusClass(task.status)">{{ task.status }}</td>
-            <td>{{ report_getCollaboratorNames(task.collaborators) }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div v-else class="no-data">No tasks available for this project.</div>
-  </div>
-</div>
-
-  <div v-if="loading" class="card like">Loading…</div>
-  <div v-else-if="error" class="error">{{ error }}</div>
-
-  <div v-if="project" class="card details">
-    <div class="meta-grid">
-      <div>
-        <div class="label">Name</div>
-        <div class="value">{{ project.name }} <span class="pid">#{{ project.id }}</span></div>
-      </div>
-      <div>
-        <div class="label">Owner</div>
-        <div class="value">{{ project.owner || 'Unassigned' }}</div>
-      </div>
-      
-      <div>
-        <div class="label">Tasks</div>
-        <div class="value">{{ project.tasksDone }} / {{ project.tasksTotal }}</div>
-      </div>
-      <div>
-        <div class="label">Members</div>
-        <div class="value">{{ (project.memberNames && project.memberNames.length) ? project.memberNames.join(', ') : '-' }}</div>
-      </div>
-      <div>
-        <div class="label">Due Date</div>
-        <div class="value">{{ formatDueDate(project.dueDate) }}</div>
-      </div>
-      <div>
-        <div class="label">Last Updated</div>
-        <div class="value">{{ formatDate(project.updatedAt) }}</div>
-      </div>
-    </div>
-  </div>
-
+  <div v-if="currentTab===''">
   <div class="tasks-header">
     <h3 class="section-title">Tasks</h3>
     <div class="header-buttons">
@@ -917,6 +864,7 @@ function exportProjectReportPDF() {
     </div>
   </Dialog>
 </div>
+</div>
 </template>
 
 <style scoped>
@@ -999,6 +947,41 @@ function exportProjectReportPDF() {
   list-style: none;
   padding: 0;
   margin: 8px 0 0 0;
+}
+
+@media print {
+  /* Hide the navbar, buttons, and anything else not part of the report */
+  header,
+  nav,
+.tasks-header,
+
+  .download-btn,
+  .tabs, 
+  .left-controls,
+  .report-controls,
+  .filter-btn
+  {
+    display: none !important;
+  }
+
+  /* Only show the report card */
+ .report-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+}
+
+
+
+  /* Optional: Adjust text or layout for printing */
+  body {
+    background: white !important;
+  }
+
+  h1, h2, h3 {
+    color: black !important;
+  }
 }
 
 .file-list li {
